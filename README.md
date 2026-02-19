@@ -156,7 +156,7 @@ uv run pytest tests/ -v --tb=short
 ## Citation
 
 ```bibtex
-@article{reizinger2026causal,
+@article{joshi2026position,
   title={Position: Causality is Key for Interpretability Claims to Generalise},
   author={Joshi, Shruti and Mueller, Aaron and Klindt, David and Brendel, Wieland and Reizinger, Patrik and Sridhar, Dhanya},
   journal={arXiv preprint arXiv:2602.16698},
