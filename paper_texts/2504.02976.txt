@@ -1,0 +1,603 @@
+     Localized Definitions and Distributed Reasoning:
+
+ A Proof-of-Concept Mechanistic Interpretability Study via
+                    Activation Patching
+
+                                 Nooshin Bahador
+
+          Krembil Research Institute, University Health Network, Toronto, Canada.
+
+
+• The fine-tuned GPT-2 models and related resources are openly accessible on Hugging Face.
+• The source code and implementation details are available in the GitHub repository.
+
+
+
+
+Abstract
+
+This study investigates the localization of knowledge representation in fine-tuned GPT-2 models
+using Causal Layer Attribution via Activation Patching (CLAP), a method that identifies critical
+neural layers responsible for correct answer generation. The model was fine-tuned on 9,958
+PubMed abstracts (epilepsy: 20,595 mentions, EEG: 11,674 mentions, seizure: 13,921 mentions)
+using two configurations with validation loss monitoring for early stopping. CLAP involved (1)
+caching clean (correct answer) and corrupted (incorrect answer) activations, (2) computing logit
+difference to quantify model preference, and (3) patching corrupted activations with clean ones to
+assess recovery. Results revealed three findings: First, patching the  first feedforward layer
+recovered 56% of correct preference, demonstrating that associative knowledge is distributed
+across multiple layers. Second, patching the final output layer completely restored accuracy (100%
+recovery), indicating that definitional knowledge is localised. The stronger clean logit difference
+for definitional questions further supports this localized representation. Third, minimal recovery
+from convolutional layer patching (13.6%) suggests low-level features contribute marginally to
+high-level reasoning. Statistical analysis confirmed significant layer-specific effects (p<0.01).
+These findings demonstrate that factual knowledge is more localized and associative knowledge
+depends on distributed representations. We also showed that editing efficacy depends on task type.
+Our findings not only reconcile conflicting observations about localization in model editing but
+also emphasize on using task-adaptive techniques for reliable, interpretable updates.
+
+
+
+1. Introduction
+
+Model editing refers to techniques that modify a neural network’s behavior post-training—such as
+updating factual knowledge or correcting errors—without full retraining. A common assumption
+
+is that successful edits require precise localization, i.e., targeting specific layers where knowledge
+is concentrated. However, experimental results demonstrate that editing success and localization
+are actually uncorrelated, challenging the hypothesis  that precise mechanistic targeting  is
+necessary for reliable updates (Hase et  al., 2023). This aligns with the broader principle of
+distributed representations in neural systems, observed in both biological and artificial networks.
+
+Neuroscientific research supports this idea, revealing phenomena like mixed selectivity (where
+neurons respond to multiple stimulus dimensions) and sparse selectivity (where specialized regions
+function within larger distributed networks). Similarly, vision neuroscience studies show that
+object recognition is not purely hierarchical or category-based but instead relies on behaviorally
+relevant, distributed dimensions (Contier et al., 2024). Together, these findings challenge the
+traditional view that cognitive—or computational—functions must be localized, whether in
+biological brains or artificial neural networks.
+
+Another human neuroscience research supports a hybrid model of knowledge representation.
+Explicit recall (conscious retrieval) relies on domain-specific neural regions, while implicit
+recognition (automatic familiarity detection) engages distributed domain-general networks. Thus,
+the distinction between these processes depends on task demands (Shehzad et al., 2022).
+
+Like human visual knowledge representation, Question Answering (QA) tasks can be also
+categorized along a spectrum of complexity, where different question types impose varying
+computational demands. These range from simple Factual Recall (Single-Hop QA), requiring no
+reasoning—only memory or lookup—to more complex Associative Reasoning (Bridge Multi-Hop
+QA), which necessitates linking multiple facts (Balesni et al., 2024).
+
+Based on the above claims, the human brain processes knowledge in both localized and distributed
+ways, depending on whether it involves explicit recall or implicit recognition. Similarly, question
+answering exhibits comparable patterns, distinguishing between factual recall and associative
+reasoning. To explore this further, researchers have identified localized internal computations
+during factual recall (Sharma et  al., 2024). This localized activity contrasts with the more
+distributed neural networks involved in associative reasoning, which recruit broader areas to
+integrate and synthesize information. In fact, researchers have shown that model’s learned concept
+representations are not localized but distributed across multiple internal components. This means
+no  single  part holds complete knowledge;  instead, concepts emerge from interconnected
+activations (Chang et al., 2023).
+
+Recent advances in model editing have challenged the assumption that precise localization is
+necessary for modifying neural network behavior, revealing instead that successful edits can occur
+even with distributed interventions (Hase et al., 2023). Yet, the relationship between knowledge
+representation,  task  complexity, and  effective  editing  remains  poorly  understood. While
+neuroscience suggests a hybrid model of cognition—where explicit recall relies on localized
+regions and implicit recognition engages distributed networks (Shehzad et al., 2022)—it is unclear
+whether AI systems exhibit similar task-dependent encoding. This work bridges these gaps by
+
+introducing a task-aware framework for model editing, grounded in analysis of where and how
+knowledge is stored in language models. Using Causal Layer Attribution via Activation Patching
+(CLAP), we show a hierarchical knowledge organization: factual recall  is localized while
+associative reasoning involves distributed intermediate representations, with implications for
+mechanistic interpretability in domain-specific language models and targeted debugging/editing.
+
+
+
+2. Method
+
+The technique used in this work localize where in the model the "knowledge" or "reasoning" about
+the correct answer resides. By observing which patched layers restore the model's preference for
+the correct answer, we can infer which parts of the network are responsible for that behavior.
+
+
+
+2.1. Data Preparation
+
+The GPT-2 model was trained on a curated subset of 9,958 PubMed abstracts, with domain-specific
+terms occurring at high frequencies: epilepsy (20,595 mentions), EEG (11,674 mentions), and
+seizure (13,921 mentions). The dataset was systematically extracted and preprocessed using the
+pubmed_meta_analyzer tool, an automated Python-based pipeline for PubMed metadata retrieval,
+deduplication, and keyword analysis. The dataset was structured in a tabular format with the
+following columns: PMID, Title, Abstract, Journal, Keywords, and URL. The GPT-2 model was
+fine-tuned on textual abstracts extracted from the 'Abstract' column of this dataset. Rows with
+missing values (NaN) were dropped to ensure data quality, and the remaining abstracts were
+converted into Hugging Face Dataset objects with a single "text" field for streamlined processing.
+
+
+
+2.2. Model Fine-Tuning
+
+Table 1 formalizes the GPT-2 fine-tuning (Configuration I) pipeline, where text data D is tokenized
+into  sequences  ℤ𝑛    ,  optimized  via  gradient  descent  (𝜃𝑡+1 = 𝜃𝑡− 𝜂∇𝜃ℒ(𝜃𝑡))  with
+hyperparameters {𝜂= 5 × 10−5 , 𝜆= 0.01, 𝐵= 8}, and evaluated using validation loss ℒ𝑣𝑎𝑙  ,
+while memory constraints are managed through chunking (L=512) and subprocess isolation.
+
+
+
+
+
+Table 1: GPT-2 Fine-Tuning Configuration I
+
+ Component          Mathematical Representation                      Description
+
+ Base Model          𝑓𝜃∶ ℤ𝑛 → ℝ𝑛×‖𝑉‖                                    Pretrained GPT-2 (causal LM),
+                                                                    where V is the vocabulary.
+
+ Tokenization         𝑇∶𝑡𝑒𝑥𝑡 → ℤ𝑛                                     Tokenizer mapping text to token
+                                                                     IDs
+
+ Chunking                                        ⌈𝑛𝐿⁄ ⌉                       Splits text into fixed-length
+                     𝑐ℎ𝑢𝑛𝑘(𝑥, 𝐿= 512) = {𝑥𝑖:𝑖+𝐿}𝑖=0                                                                          sequences (L=512 tokens)
+
+ Padding             𝑝𝑎𝑑(𝑥) = 𝑥 ⨁ {𝑝𝑎𝑑_𝑖𝑑}𝐿− ‖𝑥‖                    Appends pad-token-id to reach
+                                                                                length L
+
+ Data Split               𝐷𝑡𝑟𝑎𝑖𝑛 , 𝐷𝑣𝑎𝑙 ∼𝑡𝑟𝑎𝑖𝑛−𝑡𝑒𝑠𝑡                        80/20 stratified split
+                                    −𝑠𝑝𝑙𝑖𝑡(𝐷, 𝜏= 0.2, 𝑠𝑒𝑒𝑑= 42)
+
+ Batch Processing      𝐵𝑡𝑟𝑎𝑖𝑛= 8 , 𝐵𝑣𝑎𝑙= 2                               Batch sizes for
+                                                                                     training/validation
+
+ Training Loop         epochs=30, early-stop(k=3)                          Stops if validation loss doesn’t
+                                                                     improve for 3 epochs.
+
+ Learning Rate     𝜂= 5 × 10−5                         AdamW optimizer with fixed
+                                                                                 learning rate.
+
+ Weight Decay     𝜆= 0.01                                  L2 regularization strength
+
+ Warmup Steps      𝜂𝑡= 𝜂 . 𝑚𝑖𝑛(𝑡500⁄         , 1)                              Linear warmup over 500 steps
+
+ Optimization          𝜃𝑡+1 = 𝜃𝑡− 𝜂∇𝜃ℒ(𝜃𝑡)                   AdamW + FP16 + gradient
+                                                                          accumulation (4 steps).
+
+ Early Stopping         Stop if ℒ𝑣𝑎𝑙 doesn’t improve for k = 3 epochs         Monitors validation loss for
+                                                                           convergence.
+
+ Evaluation Metric               1                                       Cross-entropy loss on validation
+                   ℒ𝑣𝑎𝑙= −     ∑log 𝑃(𝑥)                               ‖𝐷𝑣𝑎𝑙‖                                              set.
+                                               𝑥𝜖𝐷𝑣𝑎𝑙
+
+ Memory           𝐶𝑙𝑒𝑎𝑟−𝑚𝑒𝑚𝑜𝑟𝑦(): 𝐺𝑃𝑈 𝑐𝑎𝑐ℎ𝑒← ∅               Regular GPU cache clearing
+ Management                                                         and garbage collection.
+
+ Parallelism           Num-proc=4                                         Multi-processing for dataset
+                                                                                   tokenization.
+
+
+Table 2 formalizes the GPT-2 fine-tuning (Configuration II) pipeline, where text data D is
+tokenized into sequences ℤ𝑛  , optimized via gradient descent (𝜃𝑡+1 = 𝜃𝑡− 𝜂∇𝜃ℒ(𝜃𝑡)) with
+hyperparameters {𝜂= 2 × 10−5 , 𝜆= 0.1, 𝐵= 8}, and evaluated using validation loss ℒ𝑣𝑎𝑙 , while
+memory constraints are managed through chunking (L=512) and subprocess isolation.
+
+Table 2: GPT-2 Fine-Tuning Configuration II
+
+Component          Mathematical Representation                      Description
+
+Base Model          𝑓𝜃∶ ℤ𝑛 → ℝ𝑛×‖𝑉‖                                    Pretrained GPT-2 (causal LM),
+                                                                   where V is the vocabulary.
+
+Tokenization         𝑇∶𝑡𝑒𝑥𝑡 → ℤ𝑛                                     Tokenizer mapping text to token
+                                                                    IDs
+
+Chunking                                        ⌈𝑛𝐿⁄ ⌉                       Splits text into fixed-length
+                    𝑐ℎ𝑢𝑛𝑘(𝑥, 𝐿= 512) = {𝑥𝑖:𝑖+𝐿}𝑖=0                                                                        sequences (L=512 tokens)
+
+Padding             𝑝𝑎𝑑(𝑥) = 𝑥 ⨁ {𝑝𝑎𝑑_𝑖𝑑}𝐿− ‖𝑥‖                    Appends pad-token-id to reach
+                                                                              length L
+
+Data Split               𝐷𝑡𝑟𝑎𝑖𝑛 , 𝐷𝑣𝑎𝑙 ∼𝑡𝑟𝑎𝑖𝑛−𝑡𝑒𝑠𝑡                        80/20 stratified split
+                                   −𝑠𝑝𝑙𝑖𝑡(𝐷, 𝜏= 0.2, 𝑠𝑒𝑒𝑑= 42)
+
+Batch Processing      𝐵𝑡𝑟𝑎𝑖𝑛= 8 , 𝐵𝑣𝑎𝑙= 2                               Batch sizes for
+                                                                                    training/validation
+
+Training Loop         epochs=10, early-stop(k=5)                          Stops if validation loss doesn’t
+                                                                    improve for 5 epochs.
+
+Learning Rate     𝜂= 2 × 10−5                         AdamW optimizer with fixed
+                                                                                learning rate.
+
+Weight Decay     𝜆= 0.1                                   L2 regularization strength
+
+Warmup Steps      𝜂𝑡= 𝜂 . 𝑚𝑖𝑛(𝑡500⁄         , 1)                              Linear warmup over 500 steps
+
+Optimization          𝜃𝑡+1 = 𝜃𝑡− 𝜂∇𝜃ℒ(𝜃𝑡)                   AdamW (no FP16) + grad
+                                                               accum (4 steps)
+
+Early Stopping         Stop if ℒ𝑣𝑎𝑙 doesn’t improve for k = 5 epochs         Monitors validation loss for
+                                                                          convergence.
+
+Evaluation Metric               1                                       Cross-entropy loss on validation
+                  ℒ𝑣𝑎𝑙= −     ∑log 𝑃(𝑥)                              ‖𝐷𝑣𝑎𝑙‖                                              set.
+                                             𝑥𝜖𝐷𝑣𝑎𝑙
+
+Memory           𝐶𝑙𝑒𝑎𝑟−𝑚𝑒𝑚𝑜𝑟𝑦(): 𝐺𝑃𝑈 𝑐𝑎𝑐ℎ𝑒← ∅               Regular GPU cache clearing
+Management                                                         and garbage collection.
+
+Parallelism           Num-proc=4                                         Multi-processing for dataset
+                                                                                  tokenization.
+
+Figure 1: Flowchart of the Causal Layer Attribution via Activation Patching (CLAP) algorithm. The process involves:
+(1) running clean and corrupted inputs through the model to cache activations, (2) computing the logit difference (Δ)
+to quantify model preference, and (3) patching corrupted activations with clean ones to identify which layers causally
+restore the correct behavior. Layers that significantly recover Δ when patched are deemed critical for the model’s
+decision.
+
+2.3. Causal Layer Attribution via Activation Patching (CLAP)
+
+CLAP identifies which neural network layers causally influence a model's preference for correct
+vs. incorrect answers by surgically replacing corrupted activations with clean ones and measuring
+the recovery in logit difference. As illustrated in the Figure 1, the algorithm tests how patching
+activations from a "clean" run (correct answer) into a "corrupted" run (incorrect answer) restores
+model performance and the logit difference metric quantifies the effect.
+
+Step 1) Model and Tokenizer Setup
+
+Let:
+
+ • 𝑇𝑜𝑘𝑒𝑛𝑖𝑧𝑒𝑟= 𝑇: 𝑡𝑒𝑥𝑡→ℤ𝑛 (𝑚𝑎𝑝𝑠 𝑡𝑒𝑥𝑡 𝑡𝑜 𝑡𝑜𝑘𝑒𝑛 𝐼𝐷𝑠)
+ • 𝑀𝑜𝑑𝑒𝑙= 𝑓𝜃: ℤ𝑛→ℝ𝑛×∣𝑉∣ (𝑚𝑎𝑝𝑠 𝑡𝑜𝑘𝑒𝑛 𝐼𝐷𝑠 𝑡𝑜 𝑙𝑜𝑔𝑖𝑡𝑠, 𝑤ℎ𝑒𝑟𝑒 |𝑉| 𝑖𝑠 𝑣𝑜𝑐𝑎𝑏𝑢𝑙𝑎𝑟𝑦 𝑠𝑖𝑧𝑒)
+
+
+Step 2) Input Construction
+
+For question 𝑞 correct answer 𝑎𝑐, corrupted answer 𝑎𝑤:
+
+   •  𝑥𝑐𝑙𝑒𝑎𝑛= 𝑇(𝑞⊕𝑎𝑐) (𝑐𝑙𝑒𝑎𝑛 𝑖𝑛𝑝𝑢𝑡 𝑠𝑒𝑞𝑢𝑒𝑛𝑐𝑒)
+   •  𝑥𝑐𝑜𝑟𝑟𝑢𝑝𝑡= 𝑇(𝑞⊕𝑎𝑤) (𝑐𝑜𝑟𝑟𝑢𝑝𝑡𝑒𝑑 𝑖𝑛𝑝𝑢𝑡 𝑠𝑒𝑞𝑢𝑒𝑛𝑐𝑒)
+
+
+
+Step 3) Forward Pass with Activation Caching
+
+For any input 𝑥, the model computes:
+
+ • ℎ(0) = 𝐸(𝑥)(𝑡𝑜𝑘𝑒𝑛 𝑒𝑚𝑏𝑒𝑑𝑑𝑖𝑛𝑔𝑠)
+ •  ℎ(𝑙) = 𝑇𝑟𝑎𝑛𝑠𝑓𝑜𝑟𝑚𝑒𝑟𝐵𝑙𝑜𝑐𝑘(𝑙)(ℎ(𝑙−1))    𝑓𝑜𝑟   𝑙= 1, … , 𝐿
+ • 𝑙𝑜𝑔𝑖𝑡𝑠= 𝑊ℎ𝑒𝑎𝑑ℎ(𝐿)
+
+ 𝑤ℎ𝑒𝑟𝑒 𝐿= 𝑛𝑢𝑚𝑏𝑒𝑟 𝑜𝑓 𝑙𝑎𝑦𝑒𝑟𝑠.
+
+ Activation Cache stores:
+
+             𝐿                               𝐿
+ 𝐴= {ℎ(𝑙)}𝑙=1 ∪{𝑎𝑡𝑡𝑒𝑛𝑡𝑖𝑜𝑛_𝑤𝑒𝑖𝑔ℎ𝑡𝑠(𝑙)}𝑙=1
+
+
+Step 4) Logit Difference Metric
+
+For target token sets 𝑡𝑐 (correct) and 𝑡𝑤 (incorrect):
+
+          1                 1
+𝑙𝑜𝑔𝑖𝑡𝑑𝑖𝑓𝑓=    ∑𝑙𝑜𝑔𝑖𝑡𝑠[−1, 𝑖] −    ∑𝑙𝑜𝑔𝑖𝑡𝑠[−1, 𝑖]
+               |𝑡𝑐|                     |𝑡𝑤|
+                     𝑖∈𝑡𝑐                       𝑖∈𝑡𝑤
+
+   •  𝑚𝑒𝑎𝑛 𝑐𝑜𝑟𝑟𝑒𝑐𝑡 𝑙𝑜𝑔𝑖𝑡∶ { 1 ∑ 𝑖∈𝑡𝑐 𝑙𝑜𝑔𝑖𝑡𝑠[−1, 𝑖]                                               |𝑡𝑐|
+   •  𝑚𝑒𝑎𝑛 𝑖𝑛𝑐𝑜𝑟𝑟𝑒𝑐𝑡 𝑙𝑜𝑔𝑖𝑡∶{ 1 ∑ 𝑖∈𝑡𝑤 𝑙𝑜𝑔𝑖𝑡𝑠[−1, 𝑖]                                          |𝑡𝑤|
+
+This measures how much the model favors the correct phrase over the incorrect one.
+
+
+
+Step 5) Activation Patching
+
+For layer 𝑙:
+
+    1. Run corrupted input 𝑥𝑐𝑜𝑟𝑟𝑢𝑝𝑡 but replace 𝐴(𝑙) with the clean version
+    2. Compute the resulting logit difference
+
+Mathematically, we compute:
+
+   •  𝑙𝑜𝑔𝑖𝑡_𝑑𝑖𝑓𝑓(𝑙) = 𝑚𝑒𝑡𝑟𝑖𝑐 (𝑓𝜃(𝑥corrupt; 𝐴(𝑙) ← 𝐴𝑐𝑙𝑒𝑎𝑛(𝑙)  ))
+
+Where the notation means we substitute the 𝑙𝑡ℎ layer's activations from the clean run during the
+corrupted input processing.
+
+
+
+3. Results
+
+We fine-tuned GPT-2 on a dataset of 9,958 PubMed abstracts, evaluating two distinct training
+configurations. The training performance was analyzed for each configuration to assess loss
+dynamics.
+
+For Configuration I, the initial parallel decline in losses (Figure 2) indicates effective learning, but
+the post-epoch-7 divergence—where training loss falls more sharply than validation loss—
+suggests the model starts memorizing training specifics rather than generalizing.
+
+   Figure 2. Training and validation loss curves alongside gradient norms for fine-tuned GPT-2 (Configuration I)
+
+
+
+For Configuration II, the training metrics visualization (Figure 3) reveals that both training and
+validation losses decrease monotonically while maintaining a consistent gap, indicating effective
+learning without overfitting, as supported by stable gradient norms throughout the optimization
+process.
+
+
+
+
+
+Figure 3. Training dynamics of GPT-2 fine-tuning (Configuration II) showing training loss (blue), validation loss
+(red), and gradient norm (teal) across epochs. The parallel decline in training and validation loss indicates successful
+model convergence, while stable gradient norms suggest well-behaved optimization.
+
+For activation patching experiments, we used a fine-tuned GPT-2 model (Configuration  I,
+optimized for lower train and validation losses) to investigate the representational encoding of
+epilepsy-related knowledge  in  the  network. We  conducted  multiple  activation  patching
+experiments on fine-tuned GPT-2, with representative examples shown below.
+
+Table 3 presents activation patching results on GPT-2, analyzing how knowledge of interictal
+epileptiform discharges  is representationally encoded. The table demonstrates that replacing
+corrupted activations (𝛥= −0.34) with clean ones (𝛥= 0.76) in the first feedforward layer
+recovered 56% of correct answer preference (𝛥= 0.43).
+
+
+
+Table 3: Activation Patching Analysis of Medical Fact Retrieval in GPT-2
+
+ Component                 Description                    Mathematical Syntax
+
+ Question (q)               "What is the presence of interictal    -
+                                epileptiform discharges associated
+                              with?
+
+ Correct Answer (𝑎ₐ)           "Increased seizure risk in both       𝑡ₐ = 𝑡𝑜𝑘𝑒𝑛𝑖𝑧𝑒𝑟(𝑎ₐ)
+                                 focal and generalized epilepsy."
+
+ Corrupted Answer (𝑎ₓ)        "Cognitive dysfunction risk in       𝑡ₓ = 𝑡𝑜𝑘𝑒𝑛𝑖𝑧𝑒𝑟(𝑎ₓ)
+                              both focal and generalized
+                                  epilepsy."
+
+ Input Construction           Clean vs. corrupted inputs           𝑥𝑐𝑙𝑒𝑎𝑛 = 𝑇(𝑞 ⊕ 𝑎ₐ), 𝑥𝑐𝑜𝑟𝑟𝑢𝑝𝑡
+                                                = 𝑇(𝑞 ⊕ 𝑎ₓ)
+
+ Target Layer                     First feedforward layer                 ℎ⁽ˡ⁾ 𝑤ℎ𝑒𝑟𝑒 𝑙 = 𝑚𝑙𝑝. 𝑐_𝑓𝑐
+                            (𝑚𝑙𝑝. 𝑐_𝑓𝑐)
+
+ Logit Difference Metric       Measures model's preference for    𝛥(𝑥) = 𝔼[𝑓𝜃(𝑥)[−1, 𝑡ₐ]]
+                                 correct answer                      − 𝔼[𝑓𝜃(𝑥)[−1, 𝑡ₓ]]
+
+ Clean Run                   Model's output on correct answer    𝛥(𝑥𝑐𝑙𝑒𝑎𝑛) = 0.76
+ Corrupted Run               Model's output on corrupted       𝛥( 𝑥𝑐𝑜𝑟𝑟𝑢𝑝𝑡) = −0.34
+                            answer
+
+ Activation Patching          Replace corrupted activations       𝑓𝜃( 𝑥𝑐𝑜𝑟𝑟𝑢𝑝𝑡; ℎ⁽ˡ⁾ ← ℎ𝑐𝑙𝑒𝑎𝑛⁽ˡ⁾)
+                              with clean ones
+
+ Patched Result                  Partial recovery of correct          𝛥𝑝𝑎𝑡𝑐ℎ𝑒𝑑 = 0.43 (56% 𝑟𝑒𝑐𝑜𝑣𝑒𝑟𝑦: (0.43
+                               preference after patching                − (−0.34))/(0.76
+                                                − (−0.34)) = 0.56)
+
+
+As shown in Table 4, activation patching of GPT-2's final output layer (𝑊𝑜𝑢𝑡∈ ℝ{768×50257})
+completely restored the model's ability to correctly define IEDs - patching this single layer
+increased the logit difference from Δ=0.9691 (corrupted) to Δ=2.1928 (clean), achieving 100%
+recovery. This demonstrates that: (1) the final projection layer alone mediated the model's
+definitional knowledge in this case, as evidenced by the perfect Δ restoration (𝜕𝛥/𝜕𝑊𝑜𝑢𝑡 ≈ 1);
+(2) the higher clean Δ (2.19 vs previous 0.76) indicates stronger baseline confidence in medical
+
+facts than associations; and (3) unlike the partial recovery (56%) seen when patching intermediate
+layers in the epilepsy risk experiment, this full recovery suggests compressed representation of
+definitional knowledge in the output weights.
+
+
+
+Table 4: Activation Patching Results for Medical Abbreviation Knowledge in GPT-2
+
+ Component                 Description                    Mathematical Syntax
+
+ Question (q)               "What is IEDs?"                         -
+
+ Correct Answer (aₐ)          "IEDs stands for interictal            𝑡ₐ = 𝑡𝑜𝑘𝑒𝑛𝑖𝑧𝑒𝑟(𝑎ₐ)
+                                epileptiform discharges, which
+                                 are abnormal electrical patterns
+                             observed on an EEG that occur
+                            between seizures in individuals
+                              with epilepsy."
+
+ Corrupted Answer (aₓ)        "IEDs stands for intracranial         𝑡ₓ = 𝑡𝑜𝑘𝑒𝑛𝑖𝑧𝑒𝑟(𝑎ₓ)
+                                 electrode diagnostics, which are
+                               devices used to monitor brain
+                                    activity during surgical
+                                procedures."
+
+ Input Construction           Clean vs. corrupted inputs           𝑥𝑐𝑙𝑒𝑎𝑛 = 𝑇(𝑞 ⊕ 𝑎ₐ), 𝑥𝑐𝑜𝑟𝑟𝑢𝑝𝑡
+                                                = 𝑇(𝑞 ⊕ 𝑎ₓ)
+ Target Layer                   Final output layer                𝑊𝑜𝑢𝑡 ∈ ℝ{768×50257}
+ Logit Difference Metric       Measures model's preference for    𝛥(𝑥) = 𝔼[𝑓𝜃(𝑥)[−1, 𝑡ₐ]]
+                                 correct answer                      − 𝔼[𝑓𝜃(𝑥)[−1, 𝑡ₓ]]
+
+ Clean Run                   Model's output on correct answer    Δ(𝑥clean) = 2.1928
+ Corrupted Run               Model's output on corrupted         Δ(𝑥corrupt) = 0.9691
+                            answer
+
+ Activation Patching          Replace corrupted output weights    𝑓𝜃(𝑥corrupt; 𝑊𝑜𝑢𝑡← 𝑊𝑜𝑢𝑡_𝑐𝑙𝑒𝑎𝑛)
+                              with clean ones
+
+ Patched Result              Recovery of correct preference       𝛥𝑝𝑎𝑡𝑐ℎ𝑒𝑑
+                                    after patching             = 2.1928 (100% 𝑟𝑒𝑐𝑜𝑣𝑒𝑟𝑦: (2.1928
+                                       − 0.9691)/(2.1928 − 0.9691) = 1.0)
+
+
+Table 5 quantifies the effect of activation patching on GPT-2's ability to recover the correct
+association of interictal epileptiform discharges when corrupted weights in a convolutional layer
+are replaced with clean weights, showing only partial (13.6%) recovery of the original logit
+difference.
+
+Table 5: Activation Patching Results for Epileptiform Discharge Associations in GPT-2
+
+ Component                 Description                    Mathematical Syntax
+
+ Question (q)               "What is the presence of interictal    -
+                                epileptiform discharges associated
+                              with?"
+
+ Correct Answer (aₐ)           "Increased seizure risk in both       𝑡ₐ = 𝑡𝑜𝑘𝑒𝑛𝑖𝑧𝑒𝑟(𝑎ₐ)
+                                 focal and generalized epilepsy."
+
+ Corrupted Answer (aₓ)         "Cognitive dysfunction risk in       𝑡ₓ = 𝑡𝑜𝑘𝑒𝑛𝑖𝑧𝑒𝑟(𝑎ₓ)
+                              both focal and generalized
+                                  epilepsy."
+
+ Input Construction           Clean vs. corrupted inputs           𝑥𝑐𝑙𝑒𝑎𝑛 = 𝑇(𝑞 ⊕ 𝑎ₐ), 𝑥𝑐𝑜𝑟𝑟𝑢𝑝𝑡
+                                                = 𝑇(𝑞 ⊕ 𝑎ₓ)
+ Target Layer             𝐶𝑜𝑛𝑣1𝐷(𝑛𝑓= 3072, 𝑛𝑥= 768)   𝑊𝑐𝑜𝑛𝑣 ∈ 𝑅{768×3072}
+ Logit Difference Metric       Measures model's preference for    𝛥(𝑥) = 𝐸[𝑓𝜃(𝑥)[−1, 𝑡ₐ]]
+                                 correct answer                      − 𝐸[𝑓𝜃(𝑥)[−1, 𝑡ₓ]]
+
+ Clean Run                   Model's output on correct answer    𝛥(𝑥clean) = 0.1261
+ Corrupted Run               Model's output on corrupted         𝛥(𝑥corrupt) = −1.4626
+                            answer
+
+ Activation Patching          Replace corrupted conv weights     𝑓𝜃 (𝑥corrupt; 𝑊𝑐𝑜𝑛𝑣 ← 𝑊𝑐𝑜𝑛𝑣_𝑐𝑙𝑒𝑎𝑛)
+                              with clean ones
+
+ Patched Result                  Partial recovery after patching       𝛥𝑝𝑎𝑡𝑐ℎ𝑒𝑑
+                                      = −0.0899 (𝑅𝑒𝑐𝑜𝑣𝑒𝑟𝑦: (0.1261
+                                      − (−0.0899)) / (0.1261 − (−1.4626))
+                                       ≈ 13.6%
+
+
+4. Discussion
+
+The lack of transparency in AI systems presents critical challenges for model adaptation to new
+domains, particularly regarding issues of bias, fairness, and reliability that demand accountability.
+In response to these challenges, mechanistic interpretability has emerged as a key approach to
+reverse-engineer complex AI models—especially transformers—by uncovering  their  inner
+workings to ensure trust and robustness (Golgoon et al., 2024). This methodology has proven
+particularly valuable in studying how large language models perform compositional relational
+reasoning. Through careful examination of model internals (including attention patterns and
+activation pathways), researchers can reveal the computational mechanisms underlying logical
+operations, hierarchical dependencies, and reasoning processes (Ni et al., 2024). At its core,
+mechanistic interpretability seeks to explain model behaviors by identifying specific, interpretable
+features—which often manifest as low-dimensional subspaces within activations (Makelov et al.,
+2023). Among the established techniques in this field are logit attribution, attention pattern
+visualization, and activation patching (Lieberum et al., 2023).
+
+A particularly important technique in this toolkit is activation patching, which identifies critical
+subspaces—specific directions in activation space—that significantly influence model decisions.
+This approach works by strategically manipulating model behavior through subspace interventions
+to attribute underlying features to specific activation patterns (Makelov et al., 2023). Beyond mere
+identification, activation patching serves as a causal mediation technique that rigorously evaluates
+whether proposed explanations genuinely support the model's predicted outputs (Yeo et al., 2024).
+The technique's utility extends to automated circuit discovery methods, where it helps identify
+task-solving subnetworks (circuits). When compared to linear approximations of this approach that
+estimate edge importance in computational subgraphs, Attribution Patching (AtP) has been shown
+to outperform Automated Circuit Discovery in certain contexts (Syed et al., 2023). Complementary
+approaches like vocabulary projection can be combined with activation patching to precisely
+isolate information-encoding hidden states responsible for correct answer prediction (Wiegreffe et
+al., 2024).
+
+Despite these advantages, recent research has raised important questions about the reliability of
+activation patching. Studies demonstrate that subspace activation patching can sometimes produce
+misleading interpretations, especially in factual recall tasks. This limitation stems from the
+mechanistic connection to rank-1 fact editing, where modifications to single activation directions
+may alter model behavior without necessarily revealing true causal pathways. These findings
+highlight a crucial distinction between fact editing (successful output manipulation) and fact
+localization (accurate identification of knowledge storage in the network), helping explain
+inconsistencies in previous work. While activation patching remains a valuable tool, these results
+emphasize that  its interpretations can be potentially deceptive, warning researchers against
+overinterpreting apparent subspace importance. Practitioners must therefore carefully consider
+potential false positives—instances where patched activations seem influential but lack genuine
+causal significance (Makelov et al., 2023).
+
+The application of activation patching can be further enhanced through the use of clean and
+corrupted prompts—a methodological pairing that helps localize task-relevant components when
+combined with this causal intervention approach (Golgoon et al., 2024). It's important to note that
+standard activation patching can be computationally intensive, requiring iterative modification of
+neuron activations across numerous forward passes to properly assess their impact. For more
+efficient analysis, attribution-based methods offer an alternative by quantifying the importance of
+neurons or attention paths in just a single forward pass (Ferrando et al., 2024). Among these
+alternatives, Attribution Patching (AtP) provides a  faster, gradient-based approximation to
+traditional activation patching, though it comes with its own limitations as it can produce false
+negatives in certain scenarios (Kramár et al., 2024). Another complementary approach, direct logit
+attribution, analyzes how individual layers and their attention heads influence logit differences in
+the residual stream, offering additional insights for mechanistic interpretability of large language
+models (Golgoon et al., 2024).
+
+In our current work, we implemented Causal Layer Attribution via Activation Patching (CLAP) to
+investigate knowledge localization in fine-tuned GPT-2 models. Our findings reveal a hierarchical
+organization where factual recall appears localized while associative reasoning depends on
+distributed  intermediate  representations. However,  several  important  limitations must  be
+acknowledged: (1) our analysis focused exclusively on PubMed epilepsy-related  abstracts,
+potentially limiting generalizability to broader knowledge tasks; (2) while informative, activation
+patching may generate false positives due to indirect causal pathways; and (3) the exclusive focus
+on GPT-2 leaves open questions about scalability to other architectures. These limitations suggest
+some directions for future research, including (1) cross-domain comparisons to better understand
+task-dependent representation patterns, (2) methodological integration to improve efficiency, and
+(3) extensions to multimodal models where knowledge distribution mechanisms may differ
+significantly.
+
+
+
+References
+
+Hase P, Bansal M, Kim B, Ghandeharioun A. Does Localization Inform Editing? Surprising
+Differences in Causality-Based Localization vs. Knowledge Editing in Language Models. In:
+Thirty-Seventh   Conference   on   Neural   Information   Processing   Systems.;   2023.
+https://openreview.net/forum?id=EldbUlZtbd.
+
+Contier O, Baker CI, Hebart MN. Distributed representations of behaviour-derived object
+dimensions   in  the  human  visual  system.  Nat Hum  Behav.  2024;8(11):2179-2193.
+doi:10.1038/s41562-024-01980-y.
+
+Shehzad Z, Taylor J, McCarthy G. Localized and distributed representations of person knowledge
+for faces. bioRxiv. Published online 28 March 2022. doi:10.1101/2022.03.27.485948.
+
+Balesni M, Korbak T, Evans O. The Two-Hop Curse: LLMs trained on A→B, B→C fail to learn
+A→C. arXiv [csCL]. Published online 25 November 2024. http://arxiv.org/abs/2411.16353.
+
+Sharma AS, Atkinson D, Bau D. Locating and editing factual associations in Mamba. arXiv
+[csCL]. Published online 4 April 2024. http://arxiv.org/abs/2404.03646.
+
+Chang W, Kwon D, Choi J. Understanding distributed representations of concepts in deep neural
+networks  without  supervision. arXiv  [csCV].  Published  online  28  December  2023.
+http://arxiv.org/abs/2312.17285.
+
+Golgoon A, Filom K, Kannan AR. Mechanistic interpretability of large language models with
+applications to the financial services industry. arXiv [csLG]. Published online 15 July 2024.
+http://arxiv.org/abs/2407.11215.
+
+Makelov A, Lange G, Nanda N. Is this the subspace you are looking for? An interpretability
+illusion for subspace activation patching. arXiv [csLG]. Published online 28 November 2023.
+http://arxiv.org/abs/2311.17030.
+
+Ni R, Xiao D, Meng Q, Li X, Zheng S, Liang H. Benchmarking and Understanding Compositional
+Relational  Reasoning  of LLMs.  arXiv  [csCL].  Published  online  17  December  2024.
+http://arxiv.org/abs/2412.12841.
+
+Lieberum T, Rahtz M, Kramár J, et al. Does circuit analysis interpretability scale? Evidence from
+multiple choice  capabilities  in Chinchilla. arXiv [csLG]. Published online 18 July 2023.
+http://arxiv.org/abs/2307.09458.
+
+Syed A, Rager C, Conmy A. Attribution patching outperforms automated circuit discovery. arXiv
+[csLG]. Published online 16 October 2023. http://arxiv.org/abs/2310.10348.
+
+Ferrando J, Voita E. Information flow routes: Automatically interpreting language models at scale.
+arXiv [csCL]. Published online 26 February 2024. http://arxiv.org/abs/2403.00824.
+
+Kramár J, Lieberum T, Shah R, Nanda N. AtP*: An efficient and scalable method for localizing
+LLM  behaviour   to  components.  arXiv  [csLG].  Published  online  1  March  2024.
+http://arxiv.org/abs/2403.00745.
+
+Wiegreffe S, Tafjord O, Belinkov Y, Hajishirzi H, Sabharwal A. Answer, assemble, ace:
+Understanding how LMs answer multiple choice questions. arXiv [csCL]. Published online 20
+July 2024. http://arxiv.org/abs/2407.15018.
+
+Yeo WJ, Satapathy R, Cambria E. Towards faithful Natural Language Explanations: A study using
+activation patching in large Language Models. arXiv [csCL]. Published online 17 October 2024.
+http://arxiv.org/abs/2410.14155.

@@ -1,0 +1,1763 @@
+    A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability:
+                        Piecewise Biconvexity and Spurious Minima
+
+
+
+               Yiming Tang# 1 Harshvardhan Saini 2 Zhaoqian Yao 3 Zheng Lin 4 Yizhen Liao 1 Qianxiao Li 1
+                                      Mengnan Du 5 Dianbo Liu# 1
+
+
+                         Abstract                            and real neural representations.
+
+           As AI models achieve remarkable capabilities
+               across diverse domains, understanding what rep-
+                resentations they learn and how they encode con-        1. Introduction2026                cepts has become increasingly important for both
+                                                     As artificial intelligence systems scale to frontier capabili-                  scientific progress and trustworthy deployment.
+                                                                                         ties, understanding their internal mechanisms has become              Recent works in mechanistic interpretability haveJan                                                                             essential for safe deployment (Lipton, 2017; Rudin, 2019).              widely reported that neural networks represent
+                                        A central insight from mechanistic interpretability is that              meaningful concepts as linear directions in their29                                                                 neural networks encode interpretable concepts as linear di-                representation spaces and often encode diverse
+                                                                          rections in superposition (Park et al., 2024; Elhage et al.,               concepts in superposition. Various sparse dictio-
+                                                                    2022), where individual neurons respond to multiple unre-              nary learning (SDL) methods, including sparse
+                                                                           lated concepts—a phenomenon known as polysemanticity               autoencoders, transcoders, and crosscoders, are
+                                                                   (Bricken et al., 2023; Templeton et al., 2024). To disen-                 utilized to address this by training auxiliary mod-
+                                                                         tangle these superposed representations, Sparse Dictionary                 els with sparsity constraints to disentangle these[cs.LG]                                                           Learning methods, including sparse autoencoders (SAEs)              superposed concepts into monosemantic features.
+                                                          (Cunningham et al., 2023), transcoders (Dunefsky et al.,              These methods are the backbone of modern mech-
+                                                                       2024), and crosscoders (Lindsey et al., 2024), have emerged                  anistic interpretability, yet in practice they consis-
+                                                                      as the dominant paradigm, achieving remarkable empiri-                 tently produce polysemantic features, feature ab-
+                                                                           cal success on frontier language models (Templeton et al.,                 sorption, and dead neurons, with very limited the-
+                                                                 2024; Gao et al., 2024) and enabling applications from fea-                 oretical understanding of why these phenomena
+                                                                            ture steering (Wang et al., 2025) to circuit analysis (Marks                occur. Existing theoretical work is limited to tied-
+                                                                                  et al., 2025) and medical diagnosis (Abdulaal et al., 2024).              weight sparse autoencoders, leaving the broader
+               family of SDL methods without formal grounding.        Despite this empirical success across diverse applications,
+          We develop the first unified theoretical framework      SDL methods consistently exhibit persistent failure modes:
+                  that casts all major SDL variants as a single piece-         learned features remain polysemantic (Chanin et al., 2025),
+              wise biconvex optimization problem, and charac-        ”dead neurons” fail to activate on any data samples (Bricken
+                 terize its global solution set, non-identifiability,          et al., 2023), and ”feature absorption” occurs where one neu-
+             and spurious optima. This analysis yields princi-        ron captures specific sub-concepts while another respondsarXiv:2512.05534v3         pled explanations for feature absorption and dead          to the remaining related concepts (Chanin et al., 2025). Prac-
+               neurons. To expose these pathologies under full          titioners have developed techniques to address these issues,
+                ground-truth access, we introduce the Linear Rep-         including neuron resampling (Bricken et al., 2023), auxiliary
+                resentation Bench.  Guided by our theory, we          losses (Gao et al., 2024), and careful hyperparameter tuning,
+              propose feature anchoring, a novel technique that         yet these fixes remain ad-hoc engineering solutions without
+                 restores SDL identifiability, substantially improv-         principled justification. Critically, these phenomena persist
+               ing feature recovery across synthetic benchmarks        even with careful training on clean data, suggesting they are
+                                                                    not mere implementation artifacts but reflect fundamental
+               1National University of Singapore 2Indian Institute of Technol-
+                                                                                structural properties of the SDL optimization problem itself.          ogy (ISM), Dhanbad 3Chinese University of Hong Kong 4Hong
+         Kong University of Science and Technology 5New Jersey Insti-                                            We argue that the root cause of these failure modes is the
+             tute of Technology.  Correspondence to: Yiming Tang <yim-
+                                                                             non-identifiability of SDL methods: even under the ideal-           ing@nus.edu.sg>, Dianbo Liu <dianbo@nus.edu.sg>.
+                                                                       ized Linear Representation Hypothesis, SDL optimization
+            Preprint. January 30, 2026.                                  admits multiple solutions achieving perfect reconstruction
+
+                                                         1
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+loss, some recovering no interpretable ground-truth features        • We propose a novel technique, feature anchoring, that
+at all, necessitating comprehensive theoretical analysis on        can achieve largely improved feature recovery perfor-
+SDL methods. While classical dictionary learning theory       mance applicable for all SDL methods. We validate
+provides identifiability guarantees under strict conditions         the effectiveness of feature anchoring with extensive
+(Spielman et al., 2012; Gribonval & Schnass, 2010), and         experiments across diverse SDL methods and settings.
+recent work establishes necessary conditions for tied-weight
+SAEs (Cui et al., 2025), no unified theoretical framework ex-                                                        2. Preliminaries
+plains why diverse SDL methods, SAEs, transcoders, cross-
+coders, and their variants, systematically fail in predictable    In this section, we present a unified theoretical framework
+ways. Without theoretical grounding, the development of     for Sparse Dictionary Learning (SDL). We begin with the
+improved SDL methods remains largely empirical, poten-    formal definitions of foundational concepts and the linear
+tially leaving highly effective techniques underexplored.       representation hypothesis. Then we introduce our frame-
+                                                 work and how various SDL methods instantiate it.
+In this work, we develop a unified theoretical framework that
+formalizes SDL as a general optimization problem, encom-
+                                                                    2.1. Input Distribution and Model Representationpassing various SDL methods (Bussmann et al., 2024; 2025;
+Tang et al., 2025b) as special cases. We demonstrate how    Definition 2.1 (Input Distribution). Let D denote the dis-
+these diverse methods instantiate our framework through     tribution over possible inputs, X, to a neural network. For
+different choices of input-output representation pairs, activa-    example, D could be the distribution of natural images or the
+tion functions, and loss designs. We establish rigorous con-    distribution of text sequences (Notations in Appendix B).
+ditions under which SDL methods provably recover ground-
+                                                            Definition 2.2 (Model Representation). For a given model
+truth interpretable features, characterizing the roles of fea-
+                                                              representation x, let n ∈N be its dimensionality. For each
+ture sparsity, latent dimensionality, and activation functions.
+                                                      s ∼D, the network produces a representation vector x(s),
+Through detailed analysis of the optimization landscape,
+                                                    which is directly observable by running the model on s.
+we demonstrate that global minima correspond to correct
+feature recovery and provide necessary and sufficient condi-
+                                                                    2.2. The Linear Representation Hypothesistions for achieving zero loss. We establish the prevalence
+of spurious partial minima exhibiting un-disentangled pol-    Empirical studies in mechanistic interpretability have ob-
+ysemanticity, providing novel theoretical explanations for    served that neural network representations encode mean-
+feature absorption (Chanin et al., 2025) and the effective-    ingful concepts as linear directions, often in superposition
+ness of neuron resampling (Bricken et al., 2023). We design    (Marks & Tegmark, 2024; Nanda et al., 2023; Jiang et al.,
+the Linear Representation Bench, a synthetic benchmark    2024; Park et al., 2025). Following Elhage et al. (2022) and
+that strictly follows the Linear Representation Hypothesis,    Park et al. (2024), we formalize the hypothesis as follows.
+to evaluate SDL methods with fully accessible ground-truth
+                                                 Assumption 2.3 (Linear Representation Hypothesis). A
+features.  Motivated by our theoretical insights, we pro-
+                                                  model representation xp ∈Rnp satisfies the Linear Repre-pose feature anchoring, a technique applicable to all SDL
+                                                                sentation Hypothesis (LRH) if there exists a feature function
+methods which achieves improved feature recovery by con-
+                                          x : X →Rn and a feature matrix Wp ∈Rnp×n such that:straining learned features to known anchor directions.
+
+Our main contributions are as follows:                            1. Linear Decomposition: For all s ∼D,
+
+   • We build the first theoretical framework for SDL in                        xp(s) = Wpx(s).
+     mechanistic interpretability as a general optimization
+    problem encompassing diverse SDL methods.               2. Non-negativity: x(s) ∈Rn+.
+
+   • We theoretically prove that SDL optimization is bi-      3. Sparsity: There exists S ∈[0, 1] such that ∀i ∈[n],
+     convex, bridging mechanistic interpretability methods
+    with traditional biconvex optimization theory.                             s∼D(xi(s)Pr    = 0) ≥S.
+
+   • We characterize SDL optimization landscape and prove
+                                                                      4. Interpretability: Each component xi of x corresponds
+       its non-identifiability, providing novel explanations for
+                                                                      to a human-interpretable concept.
+     various phenomena observed empirically.
+
+   • We design the Linear Representation Bench, a bench-  We refer to x(s) as the ground-truth features, where each
+    mark with fully accessible ground-truth features, en-    xi(s) represents the activation level of concept i for input s.
+     abling fully transparent evaluation of SDL methods.    Wp encodes how these features are represented in xp.
+
+                                                2
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+Assumption 2.4 (Representation Assumptions). Follow-    2.4. Instantiations: Existing SDL Methods
+ing recent works (Elhage et al., 2022; Park et al., 2024),
+                                       We now demonstrate how existing SDL methods instantiate
+we assume the following conditions on the model repre-
+                                                         our framework through adopting different choices of input-
+sentations satisfying the Linear Representation Hypothesis,
+                                                                    target pairs (xp, xr) and activation functions σ, and propos-which align with practical use cases:
+                                                           ing variants on the loss function LSDL (See Appendix A).
+  1. Unit Norm: The feature matrix Wp ∈Rnp×n has    Sparse Autoencoders (SAEs). SAEs (Cunningham et al.,
+     unit-norm columns:                                2023) decompose polysemantic activations into monose-
+                                                       mantic components through sparsity constraints.  In our                ∥Wp[:, i]∥2 = 1  ∀i ∈[n]
+                                                      framework, SAEs are characterized by setting xr = xp
+  2. Extreme Sparsity: The sparsity level S approaches 1:    (self-reconstruction).  The encoder projects to a higher-
+                                                         dimensional sparse latent space, encouraging xq(s) to cap-
+                   S →1
+                                                                 ture the underlying ground-truth features x(s) (Figure 1).
+
+  3. Independence: The ground-truth features satisfy: For
+    any input s ∼D, the features {xi(s)}ni=1 are mutually
+     independent and independent of the sparsity level S.
+
+  4. Bounded Interference: Define the maximum interfer-
+    ence as:
+
+       M := max⟨Wp[:, i], Wp[:, j]⟩
+                                i̸=j
+
+where Wp[:, i] denotes the i-th column of Wp. In typical
+superposition scenarios, M > 0 but remains small (close to    Figure 1. Sparse Autoencoder: encoder WE maps xp to sparse
+zero), characterizing a regime where many interpretable fea-     latents xq, decoder WD reconstructs from xq.
+tures are compressed into fewer dimensions with bounded
+mutual interference.
+                                                      Transcoders. Transcoders (Dunefsky et al., 2024; Paulo
+2.3. General Optimization Framework for SDL              et al., 2025) capture interpretable features in layer-to-layer
+                                                             transformations. Unlike SAEs, transcoders approximate
+Now we formalize SDL as an optimization problem under    the input-output function of a target component, such as a
+the Linear Representation Hypothesis (Assumption 2.3) and   MLP, using a sparse bottleneck. In our proposed theoretical
+the Representation Assumptions (Assumption 2.4).           framework, transcoders set xp = xmid(s) and xr = xpre(s),
+Definition 2.5 (Sparse Dictionary Learning). A SDL model    where xmid(s) denotes the inputs of one MLP block, and
+maps an input representation xp(s) ∈Rnp to a target repre-    xpre(s) denotes the prediction of MLP’s outputs (Figure 2).
+sentation xr(s) ∈Rnr through a two-layer architecture:
+
+  (i) An encoder layer that maps xp(s) to a latent space:
+
+                  xq(s) = σ(WExp(s))             (1)
+
+ (ii) A decoder layer that maps the latents to xr(s):
+
+                       ˆxr(s) = WDxq(s)               (2)
+
+where xq(s) ∈Rnq, WE ∈Rnq×np, WD ∈Rnr×nq, and
+σ : Rnq →Rnq is a sparsity-inducing activation function.
+                                                               Figure 2. Transcoder: encoder WE maps xp(s) to sparse latents
+The SDL objective minimizes mean square error:              xq(s), decoder WD gives xr(s) as a prediction of MLP’s output.
+     LSDL = Es∼D ∥xr(s) −WDσ(WExp(s))∥22     (3)
+                                                       Crosscoders.  Crosscoders (Lindsey et  al., 2024) dis-
+Under the Linear Representation Hypothesis (Assump-                                                           cover shared features across multiple representation sources
+tion 2.3), both representations admit linear decompositions                                                  by jointly encoding and reconstructing concatenated rep-
+xp(s) = Wpx(s) and xr(s) = Wrx(s) in terms of ground-    resentations.  In our framework, crosscoders set xp =
+truth features x(s). The loss can thus be expressed as:          [x(1)p  ; . . . ; x(m)p   ] and xr = [x(1)r   ; . . . ; x(m)r    ] where each su-
+  LSDL = Es∼D ∥Wrx(s) −WDσ(WEWpx(s))∥22   (4)    perscript denotes a different source (Figure 3).
+
+                                                3
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+                                                          subsequent theoretical analysis to apply to the entire family
+                                                            of SDL methods, rather than just a single architecture. We
+                                                               also state a key property for SDL activation functions:
+
+
+                                                                         σ(z)i ∈{0, zi}  ∀i ∈[nq]           (10)
+
+                                                        This property holds for ReLU, JumpReLU, Top-k, Batch
+Figure 3. Crosscoder: encoder WE maps concatenated multi-layer    Top-k, and their compositions, the primary sparsity mech-
+input xp to xq, decoder WD reconstructs multi-layer output xr.     anisms in practice. Notably, all these activation functions
+                                                        can be expressed in the form σJump(z; c) for some threshold
+                                                           c ≥0: σJump(z; c)i = zi · 1(zi > c).
+Variants of SDL Methods.  Various SDL methods  fit
+into our theoretical framework but differ in their choices
+                                                        3. Theoretical Resultsof activation functions and loss designs.  Bricken et al.
+(2023) and Templeton et al. (2024) use ReLU activation                                                         Despite the empirical success of SDL methods across di-
+σReLU(z) = max(0, z) with L1 regularization on latents:      verse applications, a significant gap exists between their
+                                                                   practical use and our theoretical understanding of their opti-
+L = Es∼D ∥xr(s) −WDσReLU(WExp(s))∥22 + λ∥xq(s)∥1                                                         mization dynamics. This gap has important consequences:
+                                                          (5)
+                                                                 practitioners employ techniques like dead neuron resam-
+Rajamanoharan et al. (2024b) propose to utilize JumpReLU
+                                                            pling (Bricken et al., 2023) and observe phenomena like
+as the activation function:
+                                                                 feature absorption (Chanin et al., 2025) without rigorous ex-
+              σJumpReLU(z) = z · H(z −θ)            (6)    planations for why these occur or how to systematically ad-
+                                                               dress them. Without theoretical grounding, the development
+combined with a smoothed Heaviside function to directly    of improved SDL methods remains largely empirical, poten-
+penalize the L0 norm. Makhzani & Frey (2014) introduce     tially leaving highly effective techniques underexplored.
+Top-k activation:
+                                                Our theoretical analysis bridges this gap by characterizing
+       (                                                the SDL optimization landscape under the Linear Represen-                 zi   if zi is among the k largest components
+σTop-k(z)i =                                                      tation Hypothesis. Section 3.1 establishes a loss approxima-
+            0   otherwise                                                                 tion enabling tractable analysis (Theorem 3.1). Section 3.2
+                                                          (7)    proves SDL exhibits piecewise biconvex structure within
+Bussmann et al. (2024) extend this to Batch Top-k activa-    activation pattern regions (Theorem 3.2). Section 3.3 char-
+tion, which applies Top-k selection across a batch to allow    acterizes the global minimum and shows the optimization
+different samples to have different numbers of activated fea-     is underdetermined (Theorem 3.3 and  3.4). Section 3.4
+tures. Rajamanoharan et al. (2024a) use ReLU activation    establishes the prevalence of spurious partial minima ex-
+with an additional Heaviside gating function. Gao et al.    hibiting polysemanticity (Theorem 3.7). Section 3.5 shows
+(2024) employ Top-k activation and introduce an auxiliary     that hierarchical concept structures naturally induce feature
+loss using Top-kaux dead latents:                             absorption patterns that manifest as partial minima (Theo-
+                                                 rem 3.10). We provide full proofs in Appendix I.
+               h    L = Es∼D ∥xr(s) −WDσTop-k(WExp(s))∥22
+                                                          (8)     3.1. Approximate Loss with Feature Reconstruction
+                                                 ′                   i        +λaux∥xp(s) −W DσTop-kaux(WExp(s))∥22                                                    Under extreme sparsity, the SDL loss decomposes into inde-
+                                                        pendent per-feature reconstruction terms.
+to resurrect dead neurons. Bussmann et al. (2025) and Tang
+                                             Theorem 3.1 (Loss Approximation). Under Assump-et al. (2025b) use multiple k values with a multi-scale loss:
+                                                                 tions 2.3 and 2.4, define the approximate loss as:
+     m
+                                                                       n
+ L = X        λiEs∼D ∥xr(s) −WDσTop-ki(WExp(s))∥22                                                       ˜LSDL(WD, WE) := X                                                    Md wdr −WDσ(WEwdp) 2       i=1
+                                                          (9)                       d=1
+                                                                                                                 (11)
+that sums reconstruction errors of different sparsity levels.
+                                                    where Md = Pr(x(s) = xd(s)ed) · E[xd(s)2|xd(s) > 0].
+The variants described above demonstrate that diverse SDL   Then
+methods can be unified under our general framework (Defi-                |LSDL −˜LSDL| ≤O((1 −S)2)          (12)
+nition 2.5) through specific choices of activation functions
+σ and loss modifications. Critically, this unification enables    This approximation isolates the contribution of each ground-
+
+
+                                                4
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+truth feature, making the optimization landscape amenable   Theorem 3.3 provides a constructive global minimum that
+to convex analysis techniques applied subsequently.           recovers ground-truth features, while Theorem 3.4 reveals
+                                                              the complete solution space. This system of n vector equa-
+3.2. SDL Optimization is Piecewise Biconvex                tions is underdetermined when nq > n, admitting multi-
+                                                             ple solutions beyond the feature-recovering configuration.
+While the SDL loss is non-convex globally due to activation                                                                      Critically, some solutions achieve zero reconstruction loss
+discontinuities, it exhibits favorable convex structure within                                                          without recovering any ground-truth features (Figure 4).
+regions of fixed activation patterns.
+Theorem 3.2 (Bi-convex Structure of SDL). Consider the     3.4. Characterizing Spurious Partial Minima of SDL
+approximate SDL loss ˜LSDL(WD, WE).  Define the acti-
+vation pattern region as ΩA = {WE ∈Rnq×np  : ∀d ∈   Beyond the global minimum, SDL optimization exhibits
+[n], A(d) = {i ∈[nq] : ⟨wiE, wdp⟩> c}} where c ≥0 is    spurious partial minima where neurons exhibit polyseman-
+the activation threshold and A(d) ⊆[nq] denotes neurons    ticity—responding to multiple unrelated features.
+activated by feature d.                              Example 3.5 (Spurious Partial Minimum). Consider n =
+Then ˜LSDL exhibits bi-convex structure over Rnr×nq × ΩA:   np = nq = nr = 2, σ = σTop-1 · σReLU, S →1, and
+                                     M1 = M2 = 1. Let:
+  1. For any fixed WE ∈ΩA, WD 7→˜LSDL(WD, WE) is            1          0          1          0
+                                                                                                                                                        ,  w2r =                                                                                                                                   ,  w1r =                                                                                                               ,  w2p =                                              w1p =     convex in WD.                                                                                             1                                                                                  0                                                                       1                                                           0
+  2. For any fixed WD ∈Rnrnq, WE 7→˜LSDL(WD, WE)                                                         (17)
+      is convex in WE over ΩA.                             Consider the configuration where neuron 1 activates for both
+                                                                features while neuron 2 remains dead:
+This establishes SDL as a biconvex optimization problem,
+                                                                                  1/2  0                                                                   1  1
+                                                                                                                 (18)                                                                                                                                 , WD∗ =bridging mechanistic interpretability with classical bicon-      W E∗ =                                                                   0  0           1/2  0vex optimization theory. This characterization enables both
+theoretical analysis of the optimization landscape and im-
+plementation of specialized biconvex methods for SDL.      Within the activation pattern region ΩA = {WE    :
+                                                  ⟨w1E, w1p⟩> 0, ⟨w1E, w2p⟩> 0}, direct calculation shows
+3.3. Characterizing the Global Minimum of SDL      ∇WD ˜L = 0 and ∇WE ˜L = 0. By traditional biconvex opti-
+                                                           mization theory (Gorski et al., 2007), (W D,∗ WE)∗  is a partialCharacterizing the global minimum reveals both the success
+                                                    optimum. However, this configuration exhibits polyseman-
+conditions for SDL training and the fundamental underde-                                        ∗    ∗                                                                          ticity with suboptimal loss: ˜LSDL(W D, WE) = 1 > 0.termined nature of the optimization problem.
+                                                           Definition 3.6 (Activation Pattern). An activation patternTheorem  3.3  (Successful  Reconstruction  Achieves
+                                                                           is a collection P = (F1, . . . , FN) where Fi ⊆[n] denotesNear-Zero Loss). Consider the approximate SDL loss
+                                                              the set of ground-truth features that activate neuron i.
+                  n
+ ˜LSDL(WD, WE) = X Md wdr −WDσ(WEwdp) 2 (13)   An activation pattern P is called:
+                  d=1
+                                                                            • Polysemantic if ∃i ∈[N] such that |Fi| ≥2 (at leastwhere Md = Pr(x(s) = xd(s)ed) · E[xd(s)2|xd(s) > 0].
+                                                         one neuron responds to multiple features).
+When nq ≥n and σ satisfies σ(z)i ∈{0, zi} for all i, the
+                                                                            • Realizable if there exists an encoder σ(WE(·)) ∈configuration
+                                               RN×np such that:
+               ∗                 ∗  W p⊤
+      W D = [Wr, 0], W E =                (14)                  n                 o                             0                        ∀i ∈[N],  Fi =  d ∈[n] : σ(WEwdp)  i > 0
+                                                                                                                 (19)
+where 0 denotes zero padding to dimension nq, satisfies:
+                                                           That is, neuron i activates for exactly the features in
+          ˜LSDL(W D,∗ WE)∗ = O((1 −S)M 2)       (15)       Fi when they appear in isolation.
+where M is the maximum interference.                  Theorem 3.7 (Prevalence of Spurious Partial Minima). Un-
+                                                        der Assumptions 2.3 and 2.4 with n ≥2 and nq ≥n, forTheorem 3.4 (Necessary and Sufficient Conditions for Zero
+                                                      any activation pattern P = (F1, . . . , Fnq) that is realizable,Loss). The approximate loss satisfies ˜LSDL(WD, WE) = 0
+                                                           polysemantic, and forms a partition of [n], there exists a
+if and only if                                                                      ∗    ∗                                                                   partial minimum (W D, WE) of ˜LSDL exhibiting this pattern
+       wdr = WDσ(WEwdp)   for all d ∈[n]      (16)    with positive loss.
+
+                                                5
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+
+
+
+
+Figure 4. Zero reconstruction loss without recovering ground-truth features. We design the Linear Representation Bench that enable
+full knowledge of the ground truth features to study SDL methods. We observe one concerning phenomenon that these methods can
+achieve zero loss without recovering any ground truth features. Left: Four ground-truth feature directions. Middle: Learned encoder
+directions fail to align with ground truth. Right: Learned decoder directions are rotated accordingly. Although ˜LSDL ≈0, the learned
+features bear no correspondence to interpretable ground-truth concepts, demonstrating the underdetermined nature of SDL optimization.
+
+
+This establishes that partial minima are pervasive in SDL      If the activation pattern P = (F1, . . . , FM) is realizable,
+optimization: every realizable polysemantic activation pat-    then ∀i∗∈[M], ∃j∗∈[ki∗] such that the following activa-
+tern corresponds to a partial optima point where gradient     tion pattern exhibiting feature absorption is realizable:
+descent can become trapped, a persistent challenge for SDL.
+                                                    P′ = (F1, . . . , Fi∗\ {di∗,j∗}, {di∗,j∗}, . . . , FM)  (20)
+
+3.5. Theoretical Explanation for Feature Absorption
+                                                  Theorem 3.10 explains why feature absorption persists even
+Feature absorption—where one neuron captures, or ”ab-                                                        with careful training: hierarchical concept structures natu-
+sorbs”, a specific sub-concept while another responds to                                                                     rally induce realizable polysemantic patterns that manifest
+remaining related concepts—frequently occurs in SDL train-    as partial minima, providing theoretical grounding for this
+ing (Chanin et al., 2025). Though prevalently encountered                                                        widely observed empirical phenomenon.
+and unwanted, researchers have limited understanding about
+why feature absorption occurs in SDL training. Here we
+                                                        4. Methodshow hierarchical concept structures naturally introduce re-
+alizable activation patterns exhibiting feature absorption and   Our theoretical analysis reveals a fundamental challenge
+therefore connected with the framework’s partial minima.                                                                in SDL optimization: the underdetermined nature of the
+                                                                  loss landscape (Theorem 3.4), and the solution space admitsExample 3.8 (Feature Absorption). Consider a represen-
+                                                            multiple configurations—some achieving zero reconstruc-tation space with a parent concept ”Dog” and four sub-
+                                                                 tion loss without recovering any interpretable ground-truthconcepts: ”Border Collie”, ”Golden Retriever”, ”Husky”,
+                                                                features (Figure 4). These theoretical findings motivate ourand ”German Shepherd”.  Ideally, SDL learns separate
+                                                      method, feature anchoring, a technique that constrains amonosemantic neurons for Dog, Cat, Horse, and Elephant,
+                                                             subset of features to align with known semantic directions.with each dog breed activating only the Dog neuron. How-
+ever, feature absorption can result in the pattern in Fig-
+ure 5: one neuron exclusively captures ”Border Collie” (ab-    4.1. Anchor Feature Extraction
+sorbed feature), while another responds to the remaining                                                          Feature anchoring requires identifying k anchor features
+three breeds collectively (main line interpretation).                                                   { ˜w(i)p  , ˜w(i)r }ki=1 that represent semantically meaningful di-
+Definition 3.9 (Hierarchical Concept Structure). A set of     rections in the representation space. We present two meth-
+ground-truth features exhibits hierarchical structure if it is    ods for obtaining these anchors:
+composed of a parent concept p and a set of sub-concepts
+c1, . . . , ck satisfying: p(x) > 0 ⇐⇒∃i ∈[k], ci(x) > 0.    Ground-Truth Features (Linear Representation Bench).
+                                           When ground-truth features are available—as in our Linear
+Theorem 3.10 (Feature Absorption from Hierarchical Struc-                                                          Representation Bench where features are known by con-
+ture). Suppose there exist M parent concepts with hi-                                                     struction—we directly use a random subset of k ground-
+erarchical decompositions into sub-concepts:  for each                                                                   truth feature directions:
+i ∈[M], parent concept di decomposes into sub-concepts
+Fi = {di,1, . . . , di,ki} where ki ≥2.                                    ˜w(i)p = Wptrue [:, i],    ˜w(i)r = Wrtrue [:, i],   i ∈K   (21)
+
+                                                6
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+               SDL without Feature Absorption                       SDL with Feature Absorption
+                                                                    SDL Feature: Border Collie         SDL Feature: Dog
+                                SDL Feature: Dog                        (Absorbed Feature)               (Main Line Interpretation)
+
+                                                                                   Border Collie   Golden Retriever
+           SDL Feature:                                                                          Husky
+            Elephant                       Dogs
+                             Elephants
+                                                                                      German Shepherd                           O                                    O
+
+                                                 Cats                                                       Cats
+                                Horses                          SDL Feature: Horse     Horses        SDL Feature: Horse
+                                               SDL Feature: Cat                                      SDL Feature: Cat
+
+
+Figure 5. Feature absorption emerges from hierarchical concept structure. Left: Ideal SDL features without absorption. Right:
+hierarchical concept structure exists and only a proportion of the sub-concepts of ”Dog” can activate the SDL feature.
+
+
+where K ⊂[n] is a randomly selected subset of size k.          etc.) since it only constrains the encoder WE and decoder
+                                WD matrices that are common to all SDL architectures.
+Subpopulation Mean Embeddings.  For  real-world    This universality makes feature anchoring a broadly useful
+datasets where ground-truth features are unknown, we iden-    technique for improving performance across SDL methods.
+tify semantic subpopulations Luo et al. (2024) and compute
+their mean representations.  Specifically, given a labeled    5. Experimental Results
+dataset D = {(sj, yj)}Nj=1, where yj ∈{1, . . . , C}, we
+compute the mean of representations for each class:       We first evaluate feature anchoring with various SDL meth-
+                                                      ods on the Linear Representation Bench (Section 5.1), a
+                     1
+               ¯x(c)p =     X xp(sj)       (22)    synthetic benchmark with fully accessible ground-truth fea-
+                    |{j : yj = c}|                                   j:yj=c                        tures that precisely instantiates our theoretical assumptions.
+                                                         Second, we validate feature anchoring on real-world data by
+Then we normalize each mean representation to obtain an-    training SDL methods on CLIP embeddings of ImageNet-
+chor directions:                                       1K. Third, we provide empirical evidence showing that dead
+                                        ¯x(c)p                         neuron resampling helps escape spurious local minima in                       ˜w(c)p =                         (23)
+                                  ∥¯x(c)p ∥2                           large language models. We provide comprehensive ablation
+                                                                studies in Appendix G.
+4.2. SDL Loss Function with Feature Anchoring
+                                                                    5.1. Results on The Linear Representation Bench
+Given k anchor features {˜w(i)p  , ˜w(i)r }ki=1, we modify the
+SDL optimization objective to include an anchoring penalty   To validate our theoretical predictions, we design the Linear
+that constrains the first k encoder rows and decoder columns    Representation Bench, a benchmark that precisely instanti-
+to align with these anchors.                                      ates Assumptions 2.3 and 2.4 with fully known GT features.
+The complete anchored SDL objective is:                 Data Generation. We generate synthetic representations
+                                                       xp(s) = Wptrue x(s) where ground-truth features x(s) ∈Rn
+            LSDL-FA = LSDL + λanchorLanchor         (24)    follow shifted exponential distributions with sparsity S. The
+                                                               feature matrix W ptrue ∈Rnp×n is constructed via gradient-
+where LSDL is the standard SDL loss (Equation 3) and the    based optimization (Detailed in Appendix C).
+anchoring loss is:
+                                                           Metrics. Given learned features W plearned = W E⊤ ∈Rnp×nq
+     Lanchor = ∥WE[1:k, :] −[˜w(1)p  , . . . , ˜w(k)p  ]⊤∥2F            and ground truth features W ptrue ∈Rnp×n (columns are unit-
+                                                     (25)   norm feature directions), we compute the similarity matrix
+       + ∥WD[:, 1:k] −[˜w(1)r   , . . . , ˜w(k)r  ]∥2F                           learned⊤    true                                        S = |W p   W p   | ∈Rnq×n. For each ground truth
+                                                                feature i ∈[n], we find its best match: si = maxj Sji.
+This feature anchoring technique (Equation 25) reduces the
+underdetermined nature of SDL training, and is method-
+agnostic:  it applies equally to SAEs, transcoders, cross-        • GT Recovery is the fraction of ground truth features
+coders, and their variants (TopK SAEs, Matryoshka SAEs,        with si > τ, MGT(W plearned ) = n1 Pni=1 1{si > τ}.
+
+                                                7
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+Table 1. Feature recovery on the Linear Representation Bench           Table 2. Feature recovery on the CLIP embeddings.
+(n = 1000, np = nr = 768, nq = 16000, S = 0.99). Feature
+anchoring (FA) consistently improves GT Recovery and Maximum    Method         MGT ↑  MIP ↑  L0-norm↓
+Inner Product (MIP) across all SDL methods.
+                                              TopK SAE             0.00%    0.517      64.0
+ Method         MGT ↑  MIP ↑  L0-norm↓      + Feature Anchoring  24.13%   0.851      64.0
+ ReLU SAE            0.00%    0.205     2787.4      BatchTopK SAE        0.00%    0.508      64.0
+   + Feature Anchoring   0.00%    0.246     1715.1       + Feature Anchoring  24.13%    0.847      64.0
+
+ JumpReLU SAE        0.00%    0.237     1572.3      Matryoshka SAE        0.00%    0.683     128.0
+   + Feature Anchoring   0.00%    0.333     1139.6       + Feature Anchoring  24.45%    0.858     128.0
+
+ TopK SAE            84.90%    0.983      54.1
+   + Feature Anchoring  87.63%   0.986      54.1
+                                                To validate this, we train SAEs on Llama 3.1 8B Instruct
+ BatchTopK SAE        84.80%    0.981      65.0       (layer 12, dimension 4096) with latent dimension 131,072
+   + Feature Anchoring  89.38%    0.988      60.1       for 30,000 steps on FineWeb-Edu (Penedo et al., 2024),
+                                                          processing 4096 token activations per step. We compare Matryoshka SAE       83.70%    0.982      58.9
+                                                             standard training against feature resampling after 5000 steps.   + Feature Anchoring  87.32%    0.985      57.9
+                                             As shown in Figure 6, resampling enables the optimizer to
+ Transcoder            23.60%    0.838      50.6      escape spurious local minima, achieving lower final loss.
+   + Feature Anchoring  25.05%   0.838      49.5
+                                                                          Loss Comparison
+ Crosscoder            56.42%    0.940      83.4              5
+   + Feature Anchoring  57.71%   0.941     116.3                                           resample
+                                                                                                   no_resample
+                                                                4
+
+   • Maximum Inner Product is the mean of best matches:           3
+   MIP(W plearned ) = n1 Pni=1 si.
+                                                                2
+
+As shown in Table 1, feature anchoring significantly im-
+proves feature recovery performance for all SDL methods.               0        100       200       300
+
+5.2. Results on CLIP Embeddings of ImageNet             Figure 6. Feature resampling accelerates convergence and im-
+                                                           proves final loss. Training curves on Llama 3.1 8B comparing
+To validate that feature anchoring generalizes beyond syn-    standard SAE training (blue) with periodic dead neuron resampling
+                                                                             after 5000 steps (in the plot x axis is scaled by 100).thetic benchmarks to real-world representations, we apply
+our method to CLIP embeddings of ImageNet-1K (Rus-
+sakovsky et al., 2015). We extract CLIP-ViT-B/32 (Rad-    6. Conclusion
+ford et al., 2021) image embeddings for all ImageNet train-
+ing images and compute ground-truth anchor features as   We develop the first unified theoretical framework for Sparse
+normalized class mean embeddings: ˜w(c)p = ¯x(c)p  /∥¯x(c)p ∥2    Dictionary Learning in mechanistic interpretability, demon-
+where ¯x(c)p   is the mean embedding over all images in class     strating how diverse SDL methods instantiate a single opti-
+                                                           mization problem. We prove that SDL exhibits piecewise bi-c. We train TopK, BatchTopK, and Matryoshka SAEs with
+                                                       convex structure, bridging mechanistic interpretability withnp = nr = 768, nq = 16, 384, and use k = 30 anchors
+                                                                  classical optimization theory. We characterize the globalwith λanchor = 1.0. Table 2 shows feature anchoring consis-
+                                             minimum and establish that the optimization is fundamen-tently improves feature recovery (Examples in Appendix H).
+                                                                         tally underdetermined, admitting solutions that achieve zero
+                                                               reconstruction loss without recovering interpretable features.
+5.3. Neuron Resampling Helps Escape Partial Minima
+                                       We demonstrate that spurious partial minima exhibiting pol-
+Our partial minima analysis (Theorem 3.7) proves the preva-    ysemanticity are pervasive, and prove that hierarchical con-
+lence of spurious partial minima and connects them to dead    cept structures naturally induce feature absorption patterns
+neurons (Fi = ∅). To address this, we utilize neuron resam-    that manifest as partial minima. To validate our theory, we
+pling (Bricken et al., 2023) to help SDL training overcome    design the Linear Representation Bench with fully accessi-
+these partial minima. We argue that resampling reinitial-    ble ground-truth features, and propose feature anchoring—a
+izes dead neurons toward under-reconstructed directions,    technique applicable to all SDL methods that addresses the
+perturbing the optimization away from the partial minima.    underdetermined nature of optimization.
+
+                                                8
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+Impact Statement                                      Cui, J., Zhang, Q., Wang, Y., and Wang, Y. On the theoreti-
+                                                                     cal understanding of identifiable sparse autoencoders and
+This paper presents work whose goal is to advance the field                                                         beyond, 2025. URL https://arxiv.org/abs/
+of Machine Learning. There are many potential societal                                              2506.15963.
+consequences of our work, none which we feel must be
+specifically highlighted here.                           Cunningham, H., Ewart, A., Riggs, L., Huben, R., and
+                                                               Sharkey, L. Sparse autoencoders find highly interpretable
+Code Availability                                           features in language models, 2023. URL https://
+                                             arxiv.org/abs/2309.08600.
+We provide  full  scripts of the Linear Representation
+                                                    Donoho, D. L. Compressed sensing. IEEE Transactions onBench and feature anchoring in this GitHub repository:
+                                                             information theory, 52(4):1289–1306, 2006.The Linear Representation Bench.
+
+                                                        Dunefsky, J., Chlenski, P., and Nanda, N. Transcoders find
+References                                                    interpretable llm feature circuits, 2024. URL https:
+                                             //arxiv.org/abs/2406.11944.
+Abdulaal, A., Fry, H., Monta˜na-Brown, N., Ijishakin, A.,
+  Gao, J., Hyland, S., Alexander, D. C., and Castro, D. C.    Elhage, N., Hume, T., Olsson, C., Schiefer, N., Henighan,
+  An x-ray is worth 15 features: Sparse autoencoders for        T., Kravec, S., Hatfield-Dodds, Z., Lasenby, R., Drain,
+   interpretable radiology report generation, 2024. URL       D., Chen, C., Grosse, R., McCandlish, S., Kaplan, J.,
+  https://arxiv.org/abs/2410.03334.           Amodei, D., Wattenberg, M., and Olah, C. Toy models
+                                                               of superposition, 2022. URL https://arxiv.org/
+Aharon, M., Elad, M., and Bruckstein, A. K-svd: An algo-     abs/2209.10652.
+  rithm for designing overcomplete dictionaries for sparse
+   representation. IEEE Transactions on signal processing,    Engels,  J., Michaud, E.  J., Liao,  I., Gurnee, W., and
+  54(11):4311–4322, 2006.                               Tegmark, M. Not all language model features are one-
+                                                           dimensionally linear, 2025. URL https://arxiv.
+Bereska, L. and Gavves, E. Mechanistic interpretability     org/abs/2405.14860.
+   for ai safety – a review, 2024. URL https://arxiv.
+                                                    Gao, L., la Tour, T. D., Tillman, H., Goh, G., Troll, R.,
+  org/abs/2404.14082.
+                                                           Radford, A., Sutskever, I., Leike, J., and Wu, J. Scaling
+                                                        and evaluating sparse autoencoders, 2024. URL https:
+Bricken, T., Templeton, A., Batson, J., Chen, B., Jermyn,
+                                             //arxiv.org/abs/2406.04093.
+  A., Conerly,  T., Turner, N. L., Anil,  C., Denison,
+   C.,  Askell,  A., Lasenby,  R., Wu,  Y., Kravec,  S.,   Ge, R., Lee, J. D., and Ma, T. Matrix completion has no
+   Schiefer, N., Maxwell,  T., Joseph, N., Tamkin, A.,      spurious local minimum, 2018. URL https://arxiv.
+  Nguyen, K., McLean,  B., Burke,  J. E., Hume,  T.,     org/abs/1605.07272.
+   Carter,  S., Henighan,  T., and Olah, C.   Towards
+  monosemanticity: Decomposing language models with    Gorski, J., Pfeuffer, F., and Klamroth, K. Biconvex sets
+   dictionary  learning.   Transformer  Circuits Thread,     and optimization with biconvex functions: a survey and
+  2023. URL https://transformer-circuits.      extensions. Mathematical methods of operations research,
+  pub/2023/monosemantic-features.                66(3):373–407, 2007.
+
+                                                           Gribonval, R. and Schnass, K.  Dictionary identificationBussmann, B., Leask, P., and Nanda, N. Batchtopk sparse
+                                                                             - sparse matrix-factorisation via ℓ1-minimisation, 2010.  autoencoders, 2024. URL https://arxiv.org/
+                                        URL https://arxiv.org/abs/0904.4774.  abs/2412.06410.
+
+                                                              Gujral, O., Bafna, M., Alm, E., and Berger, B. Sparse au-
+Bussmann, B., Nabeshima, N., Karvonen, A., and Nanda, N.                                                             toencoders uncover biologically interpretable features in
+  Learning multi-level features with matryoshka sparse au-                                                                 protein language model representations. Proceedings of
+   toencoders, 2025. URL https://arxiv.org/abs/                                                                  the National Academy of Sciences, 122(34):e2506316122,
+  2503.17547.                                                           2025.
+
+Chanin, D., Wilken-Smith, J., Dulka, T., Bhatnagar, H.,    Jain, P. and Kar, P. Non-convex optimization for machine
+  Golechha, S., and Bloom, J. A is for absorption: Study-       learning. Foundations and Trends® in Machine Learn-
+  ing feature splitting and absorption in sparse autoen-       ing, 10(3–4):142–336, 2017.  ISSN 1935-8245.  doi:
+   coders, 2025.  URL https://arxiv.org/abs/      10.1561/2200000058. URL http://dx.doi.org/
+  2409.14507.                                 10.1561/2200000058.
+
+                                                9
+
+A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+Jiang, Y., Rajendran, G., Ravikumar, P., Aragam, B., and      and editing interpretable causal graphs in language mod-
+  Veitch, V. On the origins of linear representations in large        els, 2025. URL https://arxiv.org/abs/2403.
+  language models, 2024. URL https://arxiv.org/     19647.
+  abs/2403.03867.
+                                                     Mienye, I. D. and Jere, N. A survey of decision trees:
+Karvonen, A., Wright, B., Rager, C., Angell, R., Brinkmann,      Concepts, algorithms, and applications. IEEE access, 12:
+   J., Smith, L., Verdun, C. M., Bau, D., and Marks, S.     86716–86727, 2024.
+  Measuring progress in dictionary learning for language
+                                                    Nanda, N., Lee, A., and Wattenberg, M. Emergent linear
+  model interpretability with board game models, 2024.
+                                                                representations in world models of self-supervised se-  URL https://arxiv.org/abs/2408.00113.
+                                                       quence models, 2023. URL https://arxiv.org/
+Koh, P. W., Nguyen, T., Tang, Y. S., Mussmann, S., Pierson,     abs/2309.00941.
+   E., Kim, B., and Liang, P.  Concept bottleneck mod-
+                                                           Olah, C., Cammarata, N., Schubert, L., Goh, G., Petrov, M.,
+   els, 2020. URL https://arxiv.org/abs/2007.
+                                                       and Carter, S. Zoom in: An introduction to circuits. Dis-
+  04612.
+                                                                                                  till, 2020. doi: 10.23915/distill.00024.001. URL https:
+Lee, D. D., Pham, P., Largman, Y., and Ng, A. Advances     //distill.pub/2020/circuits/zoom-in/.
+   in neural information processing systems 22. Tech Rep,
+                                                         Olsson, C., Elhage, N., Nanda, N., Joseph, N., DasSarma,
+  2009.
+                                                               N., Henighan, T., Mann, B., Askell, A., Bai, Y., Chen,
+Lindsey, J., Templeton, A., Marcus, J., Conerly, T., Batson,      A., Conerly, T., Drain, D., Ganguli, D., Hatfield-Dodds,
+   J., and Olah, C. Sparse crosscoders for cross-layer fea-       Z., Hernandez, D., Johnston, S., Jones, A., Kernion, J.,
+   tures and model diffing. Transformer Circuits Thread,       Lovitt, L., Ndousse, K., Amodei, D., Brown, T., Clark,
+  2024. URL https://transformer-circuits.        J., Kaplan, J., McCandlish, S., and Olah, C. In-context
+  pub/2024/crosscoders/index.html.               learning and induction heads, 2022. URL https://
+                                             arxiv.org/abs/2209.11895.
+Lipton, Z. C. The mythos of model interpretability, 2017.
+                                                            Park, K., Choe, Y. J., and Veitch, V. The linear representa-  URL https://arxiv.org/abs/1606.03490.
+                                                                    tion hypothesis and the geometry of large language mod-
+Lundberg, S. and Lee, S.-I. A unified approach to interpret-        els, 2024. URL https://arxiv.org/abs/2311.
+  ing model predictions, 2017. URL https://arxiv.    03658.
+  org/abs/1705.07874.
+                                                            Park, K., Choe, Y. J., Jiang, Y., and Veitch, V. The ge-
+Luo, Y., An, R., Zou, B., Tang, Y., Liu, J., and Zhang, S. Llm      ometry of categorical and hierarchical concepts in large
+  as dataset analyst: Subpopulation structure discovery with      language models, 2025. URL https://arxiv.org/
+  large language model, 2024. URL https://arxiv.    abs/2406.01506.
+  org/abs/2405.02363.
+                                                           Paulo, G., Shabalin, S., and Belrose, N. Transcoders beat
+Mairal, J., Bach, F., Ponce, J., and Sapiro, G. Online dic-      sparse autoencoders for interpretability, 2025. URL
+  tionary learning for sparse coding. In Proceedings of the     https://arxiv.org/abs/2501.18823.
+  26th annual international conference on machine learn-
+                                                         Penedo, G., Kydl´ıˇcek, H., allal, L. B., Lozhkov, A., Mitchell,
+   ing, pp. 689–696, 2009.
+                                                        M., Raffel, C., Werra, L. V., and Wolf, T. The fineweb
+Makhzani, A. and Frey, B. k-sparse autoencoders, 2014.       datasets:  Decanting the web for the finest text data
+  URL https://arxiv.org/abs/1312.5663.           at scale, 2024. URL https://arxiv.org/abs/
+                                              2406.17557.
+Mao, Z., Xu, J., Zheng, Z., Zheng, H., Sheng, D., Jin, Y., and
+  Yang, G. Sparse autoencoders bridge the deep learning    Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G.,
+  model and the brain, 2025. URL https://arxiv.     Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark,
+  org/abs/2506.11123.                                               J., Krueger, G., and Sutskever, I. Learning transferable
+                                                                 visual models from natural language supervision, 2021.
+Marks, S. and Tegmark, M. The geometry of truth: Emer-    URL https://arxiv.org/abs/2103.00020.
+  gent linear structure in large language model represen-
+                                                     Rajamanoharan, S., Conmy, A., Smith, L., Lieberum, T.,   tations of true/false datasets, 2024. URL https://
+                                                      Varma, V., Kram´ar, J., Shah, R., and Nanda, N.  Im-  arxiv.org/abs/2310.06824.
+                                                          proving dictionary learning with gated sparse autoen-
+Marks, S., Rager, C., Michaud, E. J., Belinkov, Y., Bau,      coders, 2024a. URL https://arxiv.org/abs/
+  D., and Mueller, A. Sparse feature circuits: Discovering     2404.16014.
+
+                                                10
+
+A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+Rajamanoharan, S., Lieberum, T., Sonnerat, N., Conmy, A.,    Tang, Y., Lagzian, A., Anumasa, S., Zou, Q., Zhu, Y., Zhang,
+  Varma, V., Kram´ar, J., and Nanda, N. Jumping ahead:       Y., Nguyen, T., Tham, Y.-C., Adeli, E., Cheng, C.-Y., Du,
+  Improving reconstruction fidelity with jumprelu sparse        Y., and Liu, D. Human-like content analysis for generative
+  autoencoders, 2024b. URL https://arxiv.org/        ai with language-grounded sparse encoders, 2025a. URL
+  abs/2407.14435.                            https://arxiv.org/abs/2508.18236.
+
+Rudin, C.  Stop explaining black box machine learning    Tang, Y., Sinha, A., and Liu, D. How does my model fail?
+  models for high stakes decisions and use interpretable      automatic identification and interpretation of physical
+  models instead, 2019. URL https://arxiv.org/       plausibility failure modes with matryoshka transcoders,
+  abs/1811.10154.                                    2025b.  URL https://arxiv.org/abs/2511.
+                                                10094.
+Russakovsky, O., Deng, J., Su, H., Krause, J., Satheesh, S.,
+  Ma, S., Huang, Z., Karpathy, A., Khosla, A., Bernstein,    Templeton, A., Conerly, T., Marcus, J., Lindsey, J., Bricken,
+  M., Berg, A. C., and Fei-Fei, L. Imagenet large scale        T., Chen, B., Pearce, A., Citro, C., Ameisen, E., Jones,
+  visual recognition challenge, 2015. URL https://      A., Cunningham, H., Turner, N., McDougall, C., Mac-
+  arxiv.org/abs/1409.0575.                         Diarmid, M., Freeman, C. D., Sumers, T. R., Rees, E.,
+                                                              Batson, J., Jermyn, A., Carter, S., Olah, C., and Henighan,
+Safran, I. and Shamir, O. Spurious local minima are com-
+                                                                    T. Scaling monosemanticity: Extracting interpretable fea-
+  mon in two-layer relu neural networks, 2018. URL
+                                                                     tures from claude 3 sonnet. Transformer Circuits Thread,
+  https://arxiv.org/abs/1712.08968.
+                                                         2024. URL https://transformer-circuits.
+Selvaraju, R. R., Cogswell, M., Das, A., Vedantam, R.,     pub/2024/scaling-monosemanticity/.
+  Parikh, D., and Batra, D. Grad-cam: Visual explana-
+                                                     Visweswaran, V. and Floudast, C. A global optimization   tions from deep networks via gradient-based localiza-
+                                                              algorithm (gop) for certain classes of nonconvex nlps—ii.   tion.  International Journal of Computer Vision, 128
+                                                                application of theory and test problems. Computers &  (2):336–359, October 2019.  ISSN 1573-1405.  doi:
+                                                           chemical engineering, 14(12):1419–1434, 1990.  10.1007/s11263-019-01228-7. URL http://dx.doi.
+  org/10.1007/s11263-019-01228-7.                                                Wang, M., la Tour, T. D., Watkins, O., Makelov, A., Chi,
+                                                          R. A., Miserendino, S., Wang, J., Rajaram, A., Heidecke,Sharkey, L., Chughtai, B., Batson,  J., Lindsey,  J., Wu,
+                                                                                       J., Patwardhan, T., and Mossing, D. Persona features   J., Bushnaq, L., Goldowsky-Dill, N., Heimersheim, S.,
+                                                                control emergent misalignment, 2025. URL https:  Ortega, A., Bloom, J., Biderman, S., Garriga-Alonso,
+                                             //arxiv.org/abs/2506.19823.  A., Conmy, A., Nanda, N., Rumbelow, J., Wattenberg,
+  M., Schoots, N., Miller, J., Michaud, E. J., Casper, S.,
+  Tegmark, M., Saunders, W., Bau, D., Todd, E., Geiger,
+  A., Geva, M., Hoogland, J., Murfet, D., and McGrath,
+  T. Open problems in mechanistic interpretability, 2025.
+  URL https://arxiv.org/abs/2501.16496.
+
+Shu, D., Wu, X., Zhao, H., Rai, D., Yao, Z., Liu, N., and
+  Du, M. A survey on sparse autoencoders: Interpreting
+  the internal mechanisms of large language models, 2025.
+  URL https://arxiv.org/abs/2503.05613.
+
+Simon, E. and Zou, J. Interplm: Discovering interpretable
+  features in protein language models via sparse autoen-
+  coders, 2024.  URL https://arxiv.org/abs/
+  2412.12101.
+
+Spielman, D. A., Wang, H., and Wright, J. Exact recovery
+  of sparsely-used dictionaries, 2012. URL https://
+  arxiv.org/abs/1206.5882.
+
+Sun, R. and Luo, Z.-Q. Guaranteed matrix completion via
+  non-convex factorization. IEEE Transactions on Informa-
+   tion Theory, 62(11):6535–6579, November 2016. ISSN
+  1557-9654. doi: 10.1109/tit.2016.2598574. URL http:
+  //dx.doi.org/10.1109/TIT.2016.2598574.
+
+                                                11
+
+A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+A. Taxonomy for Sparse Dictionary Learning in Mechanistic Interpretability
+
+
+
+
+
+              Figure 7. Hierarchical taxonomy of Sparse Dictionary Learning research in Mechanistic Interpretability.
+
+
+
+
+                                                12
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+B. Notations
+
+We summarize the key notations used throughout this paper.
+
+
+                    Notation            Description
+
+                       Distributions and Indexing
+            D                     Distribution over inputs
+             X                    Input space
+                   s                  Sample drawn from D
+                   ed                   Standard basis vector (1 in position d, 0 elsewhere)
+
+                      Representations and Dimensions
+                   x(s)                 Ground-truth features for input s ∼D
+                   xp(s)                Input representation to SDL model (observed)
+                    xr(s)                 Target/output representation for SDL model
+                    xq(s)                Latent activations in SDL bottleneck
+               n                Number of ground-truth features (dimension of x)
+                  np                 Dimension of input representation xp
+                  nr                 Dimension of target representation xr
+                  nq                 Dimension of latent space xq
+
+                SDL Architecture
+            WE                Encoder matrix (nq × np)
+           WD                Decoder matrix (nr × nq)
+                      σ(·)                  Sparsity-inducing activation function
+                wiE                     i-th row of encoder WE (encodes to neuron i)
+                wiD                     i-th column of decoder WD (decodes from neuron i)
+
+                     Linear Representation Hypothesis
+             Wp                  Feature matrix for xp (np × n)
+              Wr                   Feature matrix for xr (nr × n)
+              wdp                   d-th column of Wp (feature direction for feature d)
+              wdr                    d-th column of Wr (feature direction for feature d)
+          Wptrue                Ground-truth feature matrix (Linear Representation Bench)
+          Wplearned             Learned feature matrix (WE⊤ )
+
+                       Sparsity and Interference
+               S                     Sparsity level: Pr(xi(s) = 0) ≥S
+         M              Maximum interference: maxi̸=j⟨Wp[:, i], Wp[:, j]⟩
+             Md                Weight for feature d: Pr(x(s) = xd(s)ed) · E[xd(s)2|xd(s) > 0]
+
+                     Feature Anchoring
+                 k                Number of anchor features
+                          ˜w(i)p  , ˜w(i)r                i-th anchor feature pair
+                           λanchor              Anchoring loss weight
+            K                    Set of indices for selected anchor features
+
+                    Loss Functions
+                   LSDL                Standard SDL reconstruction loss
+                       ˜LSDL               Approximate SDL loss (extreme sparsity regime)
+                          Lanchor                Feature anchoring penalty
+                      LSDL-FA             Anchored SDL objective: LSDL + λanchorLanchor
+
+                      Activation Patterns
+             P = (F1, . . . , FN)   Activation pattern
+                  Fi                   Set of ground-truth features activating neuron i
+                 A(d)                 Set of neurons activated by feature d
+             ΩA                   Activation pattern region (fixed activation structure)
+                     c                     Activation threshold for σ
+
+                     Evaluation Metrics
+              MGT           GT Recovery: fraction of features with > τ alignment
+                MIP             Maximum Inner Product: mean best alignment per feature
+                    τ                    Threshold for GT Recovery (typically τ = 0.9 or 0.95)
+              S                      Similarity matrix: |Wplearned⊤ Wptrue |
+
+
+
+                                                13
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+C. The Linear Representation Bench
+
+The Linear Representation Bench is a synthetic benchmark designed to precisely instantiate the Linear Representation
+Hypothesis (Assumption 2.3) and Representation Assumptions (Assumption 2.4) with fully accessible ground-truth features
+(See Figure 8 for a visualization of the benchmark). This enables rigorous evaluation of SDL methods under controlled
+conditions where feature recovery can be directly measured.
+
+             Ground-Truth Features                                Data Samples
+
+
+
+
+
+Figure 8. Visualization of the Linear Representation Bench. The figure illustrates a D = 3 dimensional representation space generated
+using N = 4 feature directions (Wp).
+
+
+C.1. Ground-Truth Feature Matrix Generation
+We construct the feature matrix Wp ∈Rnp×n to satisfy the unit-norm and bounded interference conditions (Assumption 2.4).
+
+Initialization.   Initialize Wp with random Gaussian entries and normalize each column to unit ℓ2-norm:
+
+                                    wdp
+                              wdp ←            ,  ∀d ∈[n]                                          (26)
+                                                 ∥wdp∥2
+
+
+Interference Minimization.  We minimize pairwise interference via projected gradient descent. Define the soft-thresholded
+interference loss:
+
+                Lint(Wp) = X max  0, ⟨wip, wjp⟩−(M −ϵ)  2 + λ X max  0, ⟨wip, wjp⟩  2               (27)
+                                           i̸=j                                                    i̸=j
+
+where ϵ > 0 is a tolerance margin and λ > 0 is a small regularization weight encouraging negative interference.
+
+At each iteration, we compute the gradient with respect to Wp, perform a gradient step, and project back to the unit sphere:
+
+                                             wdp
+                Wp ←Wp −η∇WpLint,  wdp ←            ,  ∀d ∈[n]                            (28)
+                                                              ∥wdp∥2
+
+This procedure continues until the maximum interference satisfies maxi̸=j⟨wip, wjp⟩≤M.
+
+C.2. Sparse Coefficient Generation
+For each sample i ∈[N], we generate sparse ground-truth features x(i) ∈Rn+ as follows:
+
+                                                14
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+Sparsity Mask.  Each feature d ∈[n] is independently activated with probability (1 −S):
+
+                                           m(i)d  ∼Bernoulli(1 −S)                                           (29)
+
+
+Feature Magnitudes.  Active features follow a shifted exponential distribution:
+
+                                                  x(i)d = m(i)d   · (cmin + Exp(β))                                        (30)
+
+where cmin ≥0 is a minimum activation threshold and β > 0 is the scale parameter.
+
+This construction ensures:
+
+   • Non-negativity: x(i)d ≥0 for all d, i
+   • Sparsity: Pr(x(i)d = 0) = S for all d
+   • Independence: Features {x(i)d }nd=1 are mutually independent
+
+C.3. Data Synthesis
+
+The observed representations are computed via linear combination:
+
+                                                     n
+                                                 x(i)p = Wpx(i) = X x(i)d wdp                                         (31)
+                                                      d=1
+
+
+By construction, this dataset exactly satisfies Assumptions 2.3 and 2.4, enabling evaluation of SDL methods with complete
+knowledge of ground-truth features.
+
+
+C.4. Default Configuration
+
+Table 3 lists the default parameters used in our experiments.
+
+                               Table 3. Default configuration for the Linear Representation Bench.
+
+                           Parameter             Symbol   Default Value
+
+                         Number of features         n         1000
+                               Representation dimension     np         768
+                                Superposition ratio         n/np       1.30×
+                         Number of samples      N        100,000
+                                 Sparsity level            S          0.99
+                       Maximum interference    M           0.1
+
+
+
+This controlled setting enables direct measurement of feature recovery metrics with ground-truth access, complementing
+evaluations on real neural network representations where true features are unknown.
+
+
+
+
+
+                                                15
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+D. Related Works
+
+D.1. Mechanistic Interpretability
+
+Interpretability is crucial for deploying AI in high-stakes domains such as medical diagnosis and financial modeling, where
+understanding model decisions is essential for safety and trust (Simon & Zou, 2024; Abdulaal et al., 2024). Traditional
+approaches include interpretability-by-design methods like Concept Bottleneck Models (Koh et al., 2020) and decision trees
+(Mienye & Jere, 2024), and post-hoc explanation methods like GradCAM (Selvaraju et al., 2019) and SHAP (Lundberg &
+Lee, 2017). Mechanistic interpretability (Sharkey et al., 2025; Bereska & Gavves, 2024) aims to reverse-engineer neural
+networks by understanding their internal computational mechanisms. SAEs (Shu et al., 2025) and related dictionary learning
+methods (Tang et al., 2025a; Dunefsky et al., 2024) decompose neural activations into sparse, interpretable features. Circuit
+analysis (Olah et al., 2020; Olsson et al., 2022) investigates how these features compose into computational algorithms.
+
+
+D.2. Sparse Dictionary Learning
+
+Sparse dictionary learning has a rich history predating its application to mechanistic interpretability. K-SVD (Aharon et al.,
+2006) established foundational methods for learning overcomplete dictionaries, while theoretical work in compressed sensing
+(Donoho, 2006) characterized recovery conditions, with Spielman et al. (2012) providing polynomial-time algorithms for
+exact reconstruction under sparsity assumptions. Safran & Shamir (2018) demonstrated that spurious local minima are
+common even in simple two-layer ReLU networks, highlighting optimization challenges that persist in modern applications.
+Recent work has adapted these principles to mechanistic interpretability. SAEs (Cunningham et al., 2023) apply dictionary
+learning to language model activations. Various variants are further developed, including transcoders (Dunefsky et al., 2024),
+crosscoders (Gao et al., 2024), Matryoshka SAEs (Bussmann et al., 2025), and hybrid approaches like Language-Grounded
+Sparse Encoders (Tang et al., 2025a). These methods have found applications beyond language models, including protein
+structure analysis (Simon & Zou, 2024; Gujral et al., 2025), medical imaging (Abdulaal et al., 2024), model evaluation
+(Tang et al., 2025b), board game analysis (Karvonen et al., 2024), and fMRI data analysis Mao et al. (2025).
+
+
+D.3. Biconvex Optimization
+
+Biconvex optimization studies problems where the objective is convex in each variable block when the other is fixed.
+Gorski et al. (2007) provide a comprehensive survey establishing theoretical foundations and algorithmic approaches,
+while Visweswaran & Floudast (1990) develop the GOP algorithm providing global optimality guarantees via branch-and-
+bound. Matrix factorization problems exhibit similar bilinear structure; Lee et al. (2009) introduce non-negative matrix
+factorization with multiplicative updates, and subsequent work establishes landscape properties, with Ge et al. (2018) proving
+matrix completion has no spurious local minima and Sun & Luo (2016) providing convergence guarantees for alternating
+minimization. More broadly, Jain & Kar (2017) survey non-convex optimization in machine learning, while Safran &
+Shamir (2018) demonstrate that spurious local minima are common in two-layer ReLU networks. Our work bridges these
+optimization-theoretic foundations with mechanistic interpretability by proving SDL exhibits biconvex structure, enabling
+the application of established algorithms and analysis techniques to this emerging field.
+
+
+
+
+
+                                                16
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+E. Limitations
+
+While our theoretical framework provides valuable insights into SDL methods, several limitations warrant discussion:
+
+
+   • Assumption Violations. Our analysis relies on Assumptions 2.3 and 2.4, which may not hold perfectly in real-world
+     neural networks. In particular, there exists features that are not one-dimentional linear (Engels et al., 2025) .
+
+   • Extreme Sparsity. Several key results, including Theorem 3.1, rely on the extreme sparsity assumption (S →1). The
+    bounds may degrade substantially for moderate sparsity levels commonly observed in practice.
+
+   • Feature Independence. We assume mutual independence among ground-truth features, but real-world concepts often
+     exhibit correlations that our analysis does not capture.
+
+   • Convergence Guarantees. We characterize global and partial minima of the optimization landscape but do not provide
+     guarantees on whether gradient-based methods converge to global minima.
+
+   • Anchor Availability. Feature anchoring requires access to known semantic directions, which may not always be
+     available. The quality and coverage of anchors significantly impact performance.
+
+F. Future Works
+
+Our theoretical framework opens several avenues for future research:
+
+
+   • Global Optimization via GOP. Having established that SDL is piecewise biconvex (Theorem 3.2), applying Global
+     Optimization for biconvex Problems (GOP) (Gorski et al., 2007) could provide certificates of global optimality and
+     systematically escape spurious partial minima.
+
+   • Alternating Convex Search. Alternating convex search (ACS) (Gorski et al., 2007) directly exploits biconvex structure
+    by alternately solving convex subproblems for WD and WE. This may offer faster convergence and better solutions
+     than standard gradient descent.
+
+   • Convergence and Sample Complexity. Building on our landscape characterization, future work should establish
+     convergence rates for gradient descent and sample complexity bounds for feature recovery.
+
+   • Moderate Sparsity Analysis. Extending results beyond the S →1 regime to handle feature co-activation would
+    broaden practical applicability.
+
+   • Classical Dictionary Learning. Adapting established algorithms like K-SVD (Aharon et al., 2006) and online
+     dictionary learning (Mairal et al., 2009) to the SDL setting could yield improved optimization methods.
+
+   • Automatic Anchor Discovery. Developing methods to automatically discover high-quality anchors without external
+     supervision would make feature anchoring more practical.
+
+
+
+
+
+                                                17
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+G. Ablation Studies
+
+Our theoretical analysis reveals that SDL optimization becomes increasingly underdetermined as the number of ground-truth
+features n grows relative to the representation dimension np (Theorem 3.4). To comprehensively validate our theoretical
+framework and assess the robustness of feature anchoring across different conditions, we conduct extensive ablation studies
+on the Linear Representation Bench, systematically varying superposition ratio, interference level, sparsity, and activation
+function parameters.
+
+
+Effect of Superposition Ratio.  We first examine how feature anchoring performs under varying degrees of superposition
+by training ReLU SAEs with nq = 16, 000 latent dimensions while varying the number of ground-truth features n ∈
+{800, 900, 1000, 1100, 1200, 1300, 1400}. The representation dimension is fixed at np = nr = 768, yielding superposition
+ratios from 1.04× to 1.82×. For feature anchoring, we randomly select k = 100 ground-truth features as anchors with
+λanchor = 0.1.
+
+As shown in Table 4, standard SAE training achieves 0% GT Recovery across all feature counts, demonstrating the severity
+of the underdetermined optimization problem. With feature anchoring, GT Recovery reaches 100% at n = 800 and remains
+high (98.89%) at n = 900, confirming that anchoring a small subset of features (12.5% and 11.1% respectively) provides
+sufficient constraint to guide optimization toward the global minimum. As superposition increases, GT Recovery gradually
+decreases (85.50% at 1.30×, 58.09% at 1.43×, 30.58% at 1.56×), aligning with our theoretical expectation that higher
+superposition expands the space of spurious solutions. Notably, feature anchoring consistently improves Maximum Inner
+Product across all settings, indicating better feature quality even when full recovery is not achieved.
+
+Table 4. Feature recovery under varying superposition ratios. We fix np = nr = 768 and vary n from 800 to 1400. Feature anchoring
+uses k = 100 randomly selected anchors with λanchor = 0.1.
+
+             Method          Num Features  GT Recovery ↑  Max Inner Product ↑
+
+           SAE                      800          0.00%              0.361
+              + Feature Anchoring       800         100.00%             0.436
+
+           SAE                      900          0.00%              0.298
+              + Feature Anchoring       900         98.89%              0.345
+
+           SAE                     1000          0.00%              0.254
+              + Feature Anchoring      1000         85.50%              0.292
+
+           SAE                     1100          0.00%              0.223
+              + Feature Anchoring      1100         58.09%              0.258
+
+           SAE                     1200          0.00%              0.203
+              + Feature Anchoring      1200         30.58%              0.233
+
+           SAE                     1300          0.00%              0.192
+              + Feature Anchoring      1300         15.23%              0.216
+
+           SAE                     1400          0.00%              0.181
+              + Feature Anchoring      1400         8.57%              0.207
+
+
+
+Effect of Maximum Interference.  To examine how feature anchoring performs under different interference levels, we
+fix n = 1000 features in np = nr = 768 dimensions and vary the maximum interference M ∈{0.05, 0.1, 0.2, 0.5} during
+ground-truth feature matrix generation. Recall from Assumption 2.4 that M := maxi̸=j⟨Wp[:, i], Wp[:, j]⟩quantifies the
+maximum dot product between distinct feature directions, characterizing the degree of feature overlap in the representation
+space.
+
+Table 5 presents results across different interference levels. For TopK, BatchTopK, and Matryoshka SAEs, feature anchoring
+consistently improves GT Recovery across all interference values, with improvements ranging from 2-7 percentage points.
+For instance, at M = 0.5, BatchTopK SAE improves from 83.7% to 89.6% with anchoring. ReLU and JumpReLU SAEs,
+which struggle with feature recovery even with anchoring (0% GT Recovery), still show improved Maximum Inner Product
+(e.g., ReLU at M = 0.2: 0.204 →0.245), indicating better feature alignment. Interestingly, performance degrades slightly
+
+
+                                                18
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+at very low interference (M = 0.05) compared to moderate interference (M = 0.1, 0.2), likely because extremely low
+interference creates near-orthogonal features that are easier to recover without additional constraints, making the anchoring
+less critical.
+
+Table 5. Feature recovery under varying maximum interference M. All experiments use n = 1000 features with np = nr = 768 and
+k = 100 anchors.
+
+            Method           Max Interference  GT Recovery ↑  Max Inner Product ↑
+
+           Low Interference (M = 0.05)
+          ReLU SAE                    0.05            0.0%               0.205
+             + Feature Anchoring         0.05            0.0%               0.246
+           JumpReLU SAE               0.05            0.0%               0.239
+             + Feature Anchoring         0.05            0.0%               0.326
+           TopK SAE                     0.05            84.3%              0.982
+             + Feature Anchoring         0.05           87.3%              0.985
+             BatchTopK SAE               0.05            86.1%              0.984
+             + Feature Anchoring         0.05           87.5%              0.986
+             Matryoshka SAE               0.05            83.8%              0.982
+             + Feature Anchoring         0.05           85.8%              0.985
+
+             Moderate Interference (M = 0.2)
+          ReLU SAE                      0.2            0.0%               0.204
+             + Feature Anchoring          0.2            0.0%               0.245
+           JumpReLU SAE                 0.2            0.0%               0.237
+             + Feature Anchoring          0.2            0.0%               0.333
+           TopK SAE                      0.2            85.2%              0.984
+             + Feature Anchoring          0.2           86.8%              0.986
+             BatchTopK SAE                 0.2            84.7%              0.981
+             + Feature Anchoring          0.2           90.7%              0.989
+             Matryoshka SAE                0.2            84.7%              0.983
+             + Feature Anchoring          0.2           87.6%              0.986
+
+             High Interference (M = 0.5)
+          ReLU SAE                      0.5            0.0%               0.203
+             + Feature Anchoring          0.5            0.0%               0.243
+           JumpReLU SAE                 0.5            0.0%               0.237
+             + Feature Anchoring          0.5            0.0%               0.325
+           TopK SAE                      0.5            84.2%              0.982
+             + Feature Anchoring          0.5           88.2%              0.987
+             BatchTopK SAE                 0.5            83.7%              0.981
+             + Feature Anchoring          0.5           89.6%              0.987
+             Matryoshka SAE                0.5            83.9%              0.982
+             + Feature Anchoring          0.5           86.4%              0.985
+
+
+
+Effect of Feature Sparsity. We investigate how feature sparsity S affects SDL performance by varying S ∈
+{0.005, 0.01, 0.05, 0.1} where S denotes the probability that each feature is inactive (Assumption 2.3). Lower S val-
+ues correspond to denser activation patterns, while higher S approaches the extreme sparsity regime analyzed in our
+theoretical results.
+
+Table 6 reveals several key insights. At very low sparsity (S = 0.005), where features co-activate frequently, feature
+anchoring provides the most dramatic improvements. JumpReLU SAE improves from 11.8% to 74.8% GT Recovery, and
+all TopK-family methods show 2-6 percentage point gains. This validates that anchoring is particularly valuable when
+the extreme sparsity assumption is violated and feature co-occurrence complicates optimization. At moderate sparsity
+(S = 0.05), performance drops significantly across all methods, as increased co-activation creates more complex interference
+patterns. At high sparsity (S = 0.1), approaching our theoretical regime, TopK-family methods achieve near-perfect recovery
+
+
+                                                19
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+(98.8%-99.7%), with anchoring providing marginal improvements. Interestingly, Matryoshka SAE benefits least from
+anchoring at extreme sparsity, likely because its multi-scale architecture already provides sufficient constraints to recover
+features.
+
+Table 6. Feature recovery under varying sparsity levels S. All experiments use n = 1000 features with np = nr = 768 and k = 100
+anchors.
+
+               Method                Sparsity  GT Recovery ↑  Max Inner Product ↑
+
+                   Very Low Sparsity (S = 0.005)
+              ReLU SAE               0.005        0.0%               0.231
+                 + Feature Anchoring    0.005        0.0%               0.326
+              JumpReLU SAE          0.005       11.8%              0.890
+                 + Feature Anchoring    0.005       74.8%              0.970
+               TopK SAE               0.005       82.2%              0.978
+                 + Feature Anchoring    0.005       84.3%              0.981
+                BatchTopK SAE          0.005       80.5%              0.976
+                 + Feature Anchoring    0.005       83.2%              0.980
+                 Matryoshka SAE          0.005       79.3%              0.974
+                 + Feature Anchoring    0.005       86.1%              0.983
+
+                 Moderate Sparsity (S = 0.01)
+              ReLU SAE                0.01        0.00%              0.205
+                 + Feature Anchoring     0.01        0.00%              0.246
+              JumpReLU SAE           0.01        0.00%              0.237
+                 + Feature Anchoring     0.01        0.00%              0.333
+               TopK SAE                0.01       84.90%              0.983
+                 + Feature Anchoring     0.01       87.63%              0.986
+                BatchTopK SAE           0.01       84.80%              0.981
+                 + Feature Anchoring     0.01       89.38%              0.988
+                 Matryoshka SAE          0.01       83.70%              0.982
+                 + Feature Anchoring     0.01       87.32%              0.985
+
+                 High Sparsity (S = 0.1)
+              ReLU SAE                 0.1         0.0%               0.186
+                 + Feature Anchoring      0.1         0.0%               0.191
+              JumpReLU SAE            0.1         0.0%               0.191
+                 + Feature Anchoring      0.1         0.0%               0.193
+               TopK SAE                  0.1        98.8%              0.981
+                 + Feature Anchoring      0.1        98.4%              0.979
+                BatchTopK SAE            0.1        95.6%              0.975
+                 + Feature Anchoring      0.1        96.2%              0.976
+                 Matryoshka SAE           0.1        99.7%              0.991
+                 + Feature Anchoring      0.1        99.7%              0.991
+
+
+
+Effect of TopK Sparsity Parameter.   Finally, we examine how the sparsity-inducing parameter k in TopK activation
+affects feature recovery. We train TopK SAEs with k ∈{32, 64, 128}, corresponding to average activation rates of 0.2%,
+0.4%, and 0.8% of the nq = 16, 000 latent dimensions.
+
+As shown in Table 7, both standard and anchored TopK SAEs achieve perfect (100%) GT Recovery at k = 32, where
+extreme sparsity closely matches our theoretical assumptions. At k = 64, GT Recovery remains high (93.4%-93.9%) with
+minimal difference between standard and anchored training, indicating that moderate sparsity provides sufficient constraint
+for feature recovery without additional anchoring. At k = 128, where activation density increases, feature anchoring
+becomes beneficial again, improving GT Recovery from 86.7% to 88.0%. The Maximum Inner Product remains consistently
+high (> 0.985) across all settings, confirming that TopK activation is generally effective for feature recovery, with anchoring
+providing incremental benefits at higher k values where the optimization becomes more challenging.
+
+                                                20
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+Table 7. Feature recovery under varying TopK sparsity parameter k. All experiments use n = 1000 features with np = nr = 768,
+nq = 16, 000, and k = 100 anchors.
+
+           Method            TopK Parameter k  GT Recovery ↑  Max Inner Product ↑
+
+           TopK SAE                   32            100.0%              0.999
+             + Feature Anchoring         32            100.0%              0.999
+
+           TopK SAE                   64             93.9%              0.992
+             + Feature Anchoring         64             93.4%              0.991
+
+           TopK SAE                   128            86.7%              0.986
+             + Feature Anchoring         128           88.0%              0.987
+
+
+
+Theoretical Interpretation.  These comprehensive ablation studies validate our theoretical framework across diverse
+conditions. The consistent failure of ReLU and JumpReLU SAEs without sufficient sparsity constraints corroborates
+Theorem 3.4: the underdetermined solution space admits infinitely many configurations achieving low reconstruction loss
+without recovering interpretable features. Feature anchoring addresses this by constraining encoder-decoder pairs, reducing
+degrees of freedom and steering optimization away from spurious partial minima (Theorem 3.7). The varying effectiveness
+across interference levels, sparsity regimes, and activation functions reflects the fundamental trade-off in Assumption 2.4:
+more severe feature compression (higher M), denser activations (lower S), or insufficient activation sparsity (higher k)
+create more complex optimization landscapes where even anchored methods struggle to disentangle all features completely.
+
+
+
+
+
+                                                21
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+H. Qualitative Examples
+
+Beyond quantitative metrics, we provide qualitative evidence demonstrating how feature anchoring improves feature
+monosemanticity. Figure 9 shows features learned by Matryoshka SAE with feature anchoring on CLIP embeddings of
+ImageNet, while Figure 10 shows features from the same architecture trained without feature anchoring.
+
+With Feature Anchoring. As shown in Figure 9, the learned features exhibit clear monosemanticity: each feature responds
+to a single, well-defined visual concept. The “African Grey” feature activates exclusively on African Grey parrots, the
+“American Black Bear” feature captures only black bears, and the “Digital Clock” feature responds specifically to digital
+time displays. This monosemantic behavior aligns with our theoretical prediction that feature anchoring reduces the
+underdetermined nature of SDL optimization (Theorem 3.4).
+
+Without Feature Anchoring. In contrast, Figure 10 illustrates the polysemanticity that emerges without anchoring. Features
+respond to multiple unrelated concepts: one activates on “Various Boxes” (dishwashers, file cabinets, chests), another on
+“Various Screens” (slot machines, scoreboards, televisions). While achieving low reconstruction loss, these features fail to
+capture semantically meaningful concepts—exactly the spurious partial minima characterized in Theorem 3.7.
+
+
+
+
+
+             Feature from Matryoshka SAE with Feature Anchoring: African Grey.
+
+
+
+
+             Feature from Matryoshka SAE with Feature Anchoring: American Black Bear.
+
+
+
+
+            Feature from Matryoshka SAE with Feature Anchoring: Digital Clock.
+
+Figure 9. Features learned with feature anchoring exhibit monosemanticity. Each row shows the top-activating images for a single
+feature from Matryoshka SAE trained on CLIP embeddings with feature anchoring.
+
+
+
+
+
+             Feature from Matryoshka SAE without Feature Anchoring: Cab.
+
+
+
+
+             Feature from Matryoshka SAE without Feature Anchoring: Various Screens (slot, scoreboard, television).
+
+
+
+
+            Feature from Matryoshka SAE without Feature Anchoring: Various Boxes (dishwaser, file, chest).
+
+Figure 10. Features learned without feature anchoring exhibit polysemanticity. Each row shows the top-activating images for a single
+feature from Matryoshka SAE trained without feature anchoring.
+
+
+                                                22
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+I. Proofs of the Theorems
+
+I.1. Proof of Theorem 3.1
+
+Proof. We establish how the loss decomposes when S →1. Let Wr = [w1r, w2r, . . . , wnr ] and Wp = [w1p, w2p, . . . , wnp ]
+denote the column representations of the reconstruction and projection matrices.
+
+Under extreme sparsity (S →1), we only need to consider situations where at most one component xd(s) is active for any
+given input. The expectation decomposes over sparsity levels:
+
+                LSDL = Es ∥Wrx(s) −WDσ(WEWpx(s))∥2                                                  (32)
+                        n
+             = X Pr(∥x(s)∥0 = m) · E[∥xr(s) −WDσ(WExp(s))∥2 | ∥x(s)∥0 = m]               (33)
+                    m=0
+
+When ∥x(s)∥0 = 0, both xr(s) = 0 and the reconstruction WDσ(WExp(s)) = 0, contributing zero to the loss.
+
+When ∥x(s)∥0 = 1, exactly one feature is active: x(s) = xd(s)ed for some d ∈[n]. In this case:
+
+                                        xr(s) = Wrx(s) = xd(s)wdr                                         (34)
+                                        xp(s) = Wpx(s) = xd(s)wdp                                         (35)
+
+
+Therefore:
+
+                 n
+     X Pr(x(s) = xd(s)ed) · E[∥xr(s) −WDσ(WExp(s))∥2 | x(s) = xd(s)ed]                    (36)
+
+                 d=1
+                   n
+          = X Pr(x(s) = xd(s)ed) · Exd(s) h xd(s)2 wdr −WDσ(WEwdp) 2 | xd(s) > 0i               (37)
+                   d=1
+                   n
+          = X Md wdr −WDσ(WEwdp) 2                                                            (38)
+                   d=1
+
+where Md := Pr(x(s) = xd(s)ed) · E[xd(s)2|xd(s) > 0].
+When ∥x(s)∥0 ≥2, by Assumption 2.4 (extreme sparsity), Pnm=2 Pr(∥x(s)∥0 = m) ≤(1 −S)2. Since the reconstruction
+error is bounded by a constant C (due to bounded norms), this contribution is O((1 −S)2).
+
+Combining all terms:
+                                  n
+                          LSDL = X Md wdr −WDσ(WEwdp) 2 + O((1 −S)2)                           (39)
+                                  d=1
+
+
+
+I.2. Proof of Theorem 3.2
+
+Proof. Notation. Recall that A(d) ⊆[nq] denotes the set of neurons activated when feature d is active in isolation. Formally,
+for WE ∈ΩA:
+                                 A(d) = {i ∈[nq] : ⟨wiE, wdp⟩> c}                                      (40)
+
+where c ≥0 is the activation threshold.
+Preliminary observation. Within ΩA, the activation zd(WE) := σ(WEwdp) satisfies:
+
+                           (⟨wiE, wdp⟩   if i ∈A(d)                                 zd(WE)i =                                                              (41)
+                                             0              if i /∈A(d)
+
+Therefore, zd(WE) is a linear function of WE within ΩA.
+
+                                                23
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+Per-feature loss decomposition. Define the per-feature reconstruction loss:
+
+                             fd(WD, WE) := ∥wdr −WDσ(WEwdp)∥2                                   (42)
+
+The approximate SDL loss is a non-negative weighted sum:
+
+                                                  n
+                                 ˜LSDL(WD, WE) = X Mdfd(WD, WE)                                   (43)
+                                                   d=1
+
+where Md > 0 for all d ∈[n].
+
+We prove biconvexity by establishing that each fd is biconvex, from which the result follows since positive linear combina-
+tions preserve biconvexity.
+
+Part 1: fd is convex in WD for fixed WE ∈ΩA.
+
+Fix WE ∈ΩA and let zd := zd(WE) be the fixed activation vector. Then:
+
+                                 fd(WD) = ∥wdr −WDzd∥2                                         (44)
+
+Gradient. The gradient with respect to WD is:
+
+                             ∇WDfd = −2(wdr −WDzd)z⊤d                                        (45)
+
+Hessian. The Hessian (treating WD as vectorized) is:
+
+                               ∇2WDfd = 2Inr ⊗(zdz⊤d )                                          (46)
+
+Since zdz⊤d ⪰0, the Kronecker product with Inr is PSD, confirming fd is convex in WD.
+
+Part 2: fd is convex in WE for fixed WD, within ΩA.
+Fix WD ∈Rnr×nq. Within ΩA, using the linearity of zd(WE):
+
+                        WDzd(WE) = X ⟨wiE, wdp⟩wiD =: ud(WE)                                (47)
+                                                   i∈A(d)
+
+where ud(WE) is linear (hence affine) in WE. Thus:
+
+                                 fd(WE) = ∥wdr −ud(WE)∥2                                        (48)
+
+Since the squared norm of an affine function is convex, fd is convex in WE.
+Verification via Hessian. For each encoder row wiE with i ∈A(d), the gradient is:
+                             ∇wiEfd = −2(wdr −ud(WE))⊤wiD · wdp                                   (49)
+
+The Hessian is:
+                              ∇2wiEfd = 2∥wiD∥2(wdp(wdp)⊤)                                        (50)
+
+Since wdp(wdp)⊤⪰0 and ∥wiD∥2 ≥0, we have ∇2wiEfd ⪰0. For i /∈A(d), neuron i does not affect fd, so ∇2wiEfd = 0. The
+full Hessian ∇2WEfd is block-diagonal with PSD blocks, hence ∇2WEfd ⪰0.
+Conclusion. Since each fd is biconvex and Md > 0 for all d, the weighted sum:
+
+                                                  n
+                                 ˜LSDL(WD, WE) = X Mdfd(WD, WE)                                   (51)
+                                                   d=1
+
+is biconvex over Rnr×nq × ΩA, as positive linear combinations preserve biconvexity.
+
+                                                24
+
+A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+I.3. Proof of Theorem 3.3
+Proof. We analyze the approximate loss ˜LSDL(W D,∗ WE)∗  by examining the reconstruction error for each ground-truth
+feature when active in isolation.
+Consider feature d ∈[n] active in isolation. The encoder output is WEwd∗  p = W p⊤ wdp with k-th component:
+
+                              (W Ewd∗  p)k = ⟨wkp, wdp⟩                                            (52)
+
+Under Assumption 2.4, the unit-norm condition gives (W Ewd∗  p)d = 1. For k ̸= d, the bounded interference condition implies
+⟨wkp, wdp⟩≤M, where M is the maximum interference. Combined with the Cauchy-Schwarz inequality, we have:
+
+                                   ⟨wkp, wdp⟩∈[−1, M]  ∀k ̸= d                                        (53)
+
+Define the set of activated neurons for feature d:
+
+                             Ad = {k ∈[n] : σ(WEwd∗  p)k > 0}                                      (54)
+
+Since σ(z)i ∈{0, zi} and typical activation functions satisfy σ(z)i > 0 ⇐⇒zi > c for some threshold c ≥0, we have:
+
+                              Ad = {k ∈[n] : ⟨wkp, wdp⟩> c}                                       (55)
+
+Note that d ∈Ad since (W Ewd∗  p)d = 1 > c ≥0. For k ̸= d, neuron k activates only if ⟨wkp, wdp⟩> c ≥0, which requires
+positive interference. Therefore:
+                          Ad \ {d} ⊆{k ∈[n] : 0 < ⟨wkp, wdp⟩≤M}                                 (56)
+
+Let Kd = |Ad| denote the number of activated neurons.
+The activation output satisfies σ(W Ewd∗  p)k = ⟨wkp, wdp⟩for k ∈Ad and zero otherwise, since σ(z)i ∈{0, zi}. The
+reconstruction is therefore W Dσ(W∗   Ewd∗  p) = Pk∈Ad⟨wkp, wdp⟩wkr. The reconstruction error for feature d is
+
+                      wdr −W Dσ(W∗   Ewd∗  p) = wdr − X ⟨wkp, wdp⟩wkr                                     (57)
+                                                  k∈Ad
+                            = wdr −wdr − X  ⟨wkp, wdp⟩wkr                           (58)
+                                                           k∈Ad\{d}
+                            = − X  ⟨wkp, wdp⟩wkr                                     (59)
+                                                   k∈Ad\{d}
+
+Under the unit-norm assumption, ∥wkr∥= 1 for all k. For k ∈Ad \ {d}, we have ⟨wkp, wdp⟩> 0 (since negative interference
+does not activate) and ⟨wkp, wdp⟩≤M by the bounded interference condition. Therefore, using the triangle inequality:
+
+                    wdr −W Dσ(W∗   Ewd∗  p) ≤ X   |⟨wkp, wdp⟩| · ∥wkr∥                                  (60)
+                                               k∈Ad\{d}
+                           = X  ⟨wkp, wdp⟩· 1   (positive terms)                       (61)
+                                               k∈Ad\{d}
+                           ≤ X M                                                 (62)
+
+                                               k∈Ad\{d}
+                           = M(Kd −1)                                                 (63)
+
+Squaring both sides: ∥wdr −W Dσ(W∗   Ewd∗  p)∥2 ≤M 2(Kd −1)2. The approximate loss is
+
+                                      n                        n
+                      ˜LSDL(W D,∗ WE)∗ = X Md · M 2(Kd −1)2 ≤M 2 X Md(Kd −1)2                     (64)
+                                       d=1                       d=1
+
+                                                25
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+Since Kd ≥1 for all d and typically Kd = O(1) for most features (as the activation function provides sparsity), we
+have (Kd −1)2 = O(1). Under the feature independence and stability assumptions (Assumption 2.4), Pnd=1 Md =
+Pnd=1 Pr(x(s) = xd(s)ed) · E[xd(s)2|xd(s) > 0] = O(1 −S), since the probability that exactly one feature is active is
+(1 −S) under extreme sparsity. Therefore:
+                                    ˜LSDL(W D,∗ WE)∗ = O(M 2(1 −S))                                      (65)
+
+This completes the proof.
+
+
+I.4. Proof of Theorem 3.4
+
+Proof. We prove both directions of the equivalence.
+Sufficient condition (⇒). Suppose wdr = WDσ(WEwdp) for all d ∈[n]. By definition of the approximate loss:
+
+                                              n
+                             ˜LSDL(WD, WE) = X Md∥wdr −WDσ(WEwdp)∥2                              (66)
+                                              d=1
+                                              n
+                           = X Md∥wdr −wdr∥2                                         (67)
+                                              d=1
+                           = 0                                                           (68)
+
+Necessary condition (⇐). Suppose ˜LSDL(WD, WE) = 0. Then:
+
+                                    n
+            X Md∥wdr −WDσ(WEwdp)∥2 = 0                                     (69)
+                                    d=1
+
+Since Md > 0 for all d ∈[n] (by definition, Md = Pr(x(s) = xd(s)ed) · E[xd(s)2|xd(s) > 0] where both factors are
+positive under Assumptions 2.3 and 2.4):
+
+                              ∥wdr −WDσ(WEwdp)∥2 = 0  ∀d ∈[n]                                   (70)
+
+Therefore:
+                               wdr = WDσ(WEwdp)  ∀d ∈[n]                                       (71)
+
+
+
+
+I.5. Proof of Theorem 3.7
+
+Proof. We construct a configuration (W D,∗ WE)∗  exhibiting the polysemanticity pattern and explicitly verify that both
+gradients vanish.
+Step 1: Given encoder W E∗ from realizability.
+
+Since the activation pattern P = (F1, . . . , Fnq) is realizable and forms a partition of [n], by Definition 3.6, there exists an
+encoder W E∗ ∈Rnq×np such that:
+
+                                 n               ∗       o                                ∀i ∈[nq],  Fi =  d ∈[n] : σ(W Ewdp)  i > 0                                (72)
+
+Fix this W E∗ and define the activation vectors:
+                                     zd := σ(WEwd∗  p) ∈Rnq,  d = 1, . . . , n                                   (73)
+
+Since P forms a partition, for each feature d there exists a unique neuron i(d) such that d ∈Fi(d), and:
+
+                                            zd = ⟨w∗,i(d)E     , wdp⟩· ei(d)                                           (74)
+
+                                                26
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+That is, only neuron i(d) activates for feature d.
+Step 2: Construct optimal decoder W D.∗
+For each neuron i ∈[nq], we construct the decoder column W D∗,i by minimizing the loss over features activating that neuron.
+Dead neurons: If Fi = ∅, set W D∗,i = 0.
+
+Active neurons: If Fi ̸= ∅, solve:
+
+                                     min                X Md wdr −W D(zd)ii       2                               (75)               W D∗,i = arg                                                                            i                          W D∈Rnr                                                   d∈Fi
+
+This is a least squares problem with solution:
+
+                                                                ∗,i Pd∈Fi Md(zd)iwdr
+                    W D =                                                             (76)                      P                                                     d∈Fi Md(zd)2i
+
+Step 3: Verify ∇WD ˜LSDL(W D,∗ WE)∗ = 0.
+The loss is ˜LSDL(WD, WE) = Pnd=1 Md∥wdr −WDzd∥2. The gradient with respect to column W Di  is:
+
+                                               n
+                                                                i ˜LSDL = −2 X Md(wdr −WDzd)(zd)i                                 (77)                   ∇W D
+                                               d=1
+
+Since P is a partition, (zd)i ̸= 0 only when i = i(d), i.e., when d ∈Fi. Therefore:
+
+                                                    i ˜LSDL(W D,∗ WE)∗ = −2 X Md(wdr −W D∗,i (zd)i)(zd)i                          (78)               ∇W D
+                                                     d∈Fi
+
+By construction (76), W D∗,i satisfies the normal equation:
+            X Md(zd)i(wdr −W D∗,i (zd)i) = 0                                     (79)
+                                      d∈Fi
+
+                      i ˜LSDL(W D, WE) = 0 for all i ∈[nq].Therefore ∇W D         ∗    ∗
+Step 4: Verify ∇WE ˜LSDL(W D,∗ WE)∗ = 0.
+
+Within the activation pattern region ΩA, for feature d ∈Fi, the activation is:
+                                               zd = ⟨wiE, wdp⟩· ei                                              (80)
+
+The gradient with respect to encoder row wiE is:
+
+                                            n
+                                                                                                                 (81)                            ∇wiE ˜LSDL = X Md∇wiE wdr −WDzd  2
+                                             d=1
+
+Only features d ∈Fi have non-zero contribution. For such d:
+
+                                            ∂zd
+                              = wdp ⊗ei                                               (82)
+                                       ∂wiE
+
+where ⊗denotes outer product. Therefore:
+
+                                                   2                       ∂zd
+                     ∇wiE wdr −WDzd  = −2(wdr −WDzd)⊤WD                                      (83)                                                           ∂wiE
+                           = −2(wdr −W D∗,i ⟨w∗,iE  , wdp⟩)⊤W D∗,i wdp                         (84)
+
+
+                                                27
+
+A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+The total gradient is:
+                   ∇wiE ˜LSDL = −2 X Md(wdr −W D∗,i ⟨w∗,iE  , wdp⟩)⊤W D∗,i wdp                               (85)
+                                       d∈Fi
+                   = −2(WD∗,i )⊤X Md⟨w∗,iE  , wdp⟩(wdr −W D∗,i ⟨w∗,iE  , wdp⟩)                      (86)
+                                               d∈Fi
+
+From the normal equation in Step 3 with (zd)i = ⟨w∗,iE  , wdp⟩:
+           X Md⟨w∗,iE  , wdp⟩(wdr −W D∗,i ⟨w∗,iE  , wdp⟩) = 0                                (87)
+                                 d∈Fi
+
+Therefore:
+                           ∇wiE ˜LSDL(W D,∗ WE)∗ = −2(WD∗,i )⊤· 0 = 0                                 (88)
+
+This holds for all active neurons. For dead neurons (Fi = ∅), the gradient is automatically zero.
+Step 5: (W D,∗ WE)∗  is a partial optimum.
+By Theorem 3.2, ˜LSDL is convex in WD for fixed W E,∗ and convex in WE for fixed W D∗ within ΩA.
+
+Since we have verified:
+
+   • ∇WD ˜LSDL(W D,∗ WE)∗ = 0 (Step 3)
+   • ∇WE ˜LSDL(W D,∗ WE)∗ = 0 within ΩA (Step 4)
+
+By the first-order optimality condition for convex functions:
+
+   • W D∗ minimizes ˜LSDL(·, WE)∗
+   • W E∗ minimizes ˜LSDL(W D,∗  ·) over ΩA
+
+By standard results in biconvex optimization (Gorski et al., 2007), (W D,∗ WE)∗  is a partial optimum.
+
+Step 6: Non-zero loss.
+
+Since the pattern is polysemantic, there exists i ∈[nq] with |Fi| ≥2. Choose distinct d1, d2 ∈Fi.
+
+By Theorem 3.4, zero loss requires:
+                        wd1r = W Dzd1∗  = WD∗,i (zd1)i,  wd2r = WDzd2∗  = WD∗,i (zd2)i                         (89)
+
+If both equations held, then:
+                                        wd1r           ∗,i    wd2r
+                             = W D =                                                  (90)
+                                                 (zd1)i             (zd2)i
+
+Since (zd1)i = ⟨w∗,iE  , wd1p ⟩> 0 and (zd2)i = ⟨w∗,iE  , wd2p ⟩> 0, this requires:
+
+                                                            (zd1)i
+                                          wd1r =      wd2r                                               (91)
+                                                            (zd2)i
+
+This means wd1r ∝wd2r  , contradicting Assumption 2.4 (distinct features have linearly independent reconstruction vectors).
+Therefore:
+                                               n
+                              ˜LSDL(W D,∗ WE)∗ = X Md∥wdr −W Dzd∥2∗   > 0                                (92)
+                                                d=1
+
+Conclusion. We have constructed (W D,∗ WE)∗  exhibiting the polysemanticity pattern, explicitly verified both gradients
+vanish, and shown it achieves positive loss, completing the proof.
+
+                                                28
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+I.6. Proof of Theorem 3.10
+
+Proof. We construct a realizable pattern exhibiting feature absorption by scaling down the parent neuron’s encoder until one
+sub-concept separates, then adding a dedicated neuron for the separated feature.
+
+Step 1: Initial configuration and feature geometry.
+Since P = (F1, . . . , FM) is realizable, there exists an encoder WE ∈RM×np and threshold c > 0 such that:
+
+                                  ∀i ∈[M],  Fi = {d ∈[n] : ⟨wiE, wdp⟩> c}                                 (93)
+
+Fix any parent neuron i∗∈[M] with sub-concepts Fi∗= {di∗,1, . . . , di∗,ki∗} where ki∗≥2.
+
+For each sub-concept, compute its activation strength:
+
+                                                                     di∗,j                                       aj := ⟨wi∗E , wp  ⟩> c,  ∀j ∈[ki∗]                                     (94)
+
+
+Since there are finitely many sub-concepts, define:
+
+                                           amin := min aj > c                                            (95)
+                                                                 j∈[ki∗]
+
+Let j∗∈[ki∗] be the index achieving this minimum: aj∗= amin.
+
+Step 2: Scale down parent neuron to separate one sub-concept.
+We shrink the encoder row wi∗E by multiplying with scaling factor λ ∈(0, 1):
+
+                                                              ˜wi∗E := λ · wi∗E                                                (96)
+
+
+The new activation strengths become:
+                                                                           di∗,j                                                                 ˜aj := ⟨˜wi∗E , wp  ⟩= λ · aj                                         (97)
+
+Choose λ such that:
+                                                c + amin       c
+                                λ :=       ∈           , 1                                          (98)
+                                              2amin      amin
+
+This gives:
+
+   • For the minimum-activation feature: ˜aj∗= λamin = c+amin2  < c + ϵ for any small ϵ > 0
+   • For all other features: ˜aj = λaj > λamin = c+amin2
+
+By choosing the threshold to be c′ = c+amin2     , we have:
+
+                              ˜aj∗= c′   (at boundary),    ˜aj > c′ for all j ̸= j∗                               (99)
+
+Slightly increasing c′ by infinitesimal ϵ > 0 gives c′′ = c′ + ϵ, ensuring:
+
+                                        ˜aj∗< c′′ < ˜aj  ∀j ̸= j∗                                        (100)
+
+Therefore, with encoder row ˜wi∗E and threshold c′′:
+
+                              {d ∈[n] : ⟨˜wi∗E , wdp⟩> c′′} = Fi∗\ {di∗,j∗}                               (101)
+
+
+Step 3: Construct dedicated neuron for separated feature.
+
+
+                                                29
+
+ A Unified Theory of Sparse Dictionary Learning in Mechanistic Interpretability: Piecewise Biconvexity and Spurious Minima
+
+We create a new encoder row parallel to the separated feature:
+
+                                     wnewE  := α · wpdi∗,j∗                                          (102)
+
+where α > 0 is chosen sufficiently large.
+
+                                        di∗,j∗
+By the unit-norm assumption (∥wp  ∥= 1):
+
+                                 ⟨wnewE   , wpdi∗,j∗ ⟩= α∥wpdi∗,j∗ ∥2 = α                                  (103)
+
+For any other feature d ̸= di∗,j∗:
+                                 ⟨wnewE   , wdp⟩= α⟨wpdi∗,j∗ , wdp⟩≤αM                                  (104)
+
+where M < 1 is the maximum interference from Assumption 2.4.
+
+Choose α large enough such that:
+                                α > c′′, αM < c′′                                          (105)
+
+                                           2c′′
+This is possible by taking α = 1+M , giving:
+
+                                                      2c′′                2c′′M
+                         α =     > c′′, αM =     < c′′                                (106)
+                                    1 + M              1 + M
+
+where the first inequality uses M < 1 and the second uses M < 1.
+
+Therefore:
+
+   • ⟨wnewE   , wpdi∗,j∗ ⟩= α > c′′ (separated feature activates new neuron)
+   • ⟨wnewE   , wdp⟩≤αM < c′′ for all d ̸= di∗,j∗(no other features activate)
+
+Step 4: The new activation pattern.
+Construct the expanded encoder W E′ ∈R(M+1)×np:
+
+                                     w1 
+                                                                                                                                             E...
+                                                  wi∗−1E
+                                                                                                ′        ˜wi∗E                      W E =                                                     (107)                                                  wi∗+1
+                                                                                                                                                         E...                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     wME               
+                                             wnewE
+
+With threshold c′′, the resulting activation pattern is:
+
+                       P′ = (F1, . . . , Fi∗−1, Fi∗\ {di∗,j∗}, Fi∗+1, . . . , FM, {di∗,j∗})                      (108)
+
+
+This pattern is realizable by construction.
+
+
+
+
+
+                                                30

@@ -1,0 +1,482 @@
+          pyvene: A Library for Understanding and Improving PyTorch Models
+                                      via Interventions
+
+
+            Zhengxuan Wu†, Atticus Geiger‡, Aryaman Arora†, Jing Huang†, Zheng Wang†,
+                 Noah D. Goodman†, Christopher D. Manning†, Christopher Potts†
+                                     †Stanford University   ‡Pr(Ai)2R Group
+           {wuzhengx,atticusg,aryamana,hij,peterwz,ngd,manning,cgpotts}@stanford.edu
+
+
+
+                          Abstract
+
+                   Interventions on model-internal states are fun-
+                 damental operations in many areas of AI, in-
+                  cluding model editing, steering, robustness,
+                and interpretability. To facilitate such research,2024        we introduce pyvene, an open-source Python
+                    library that supports customizable interven-
+                    tions on a range of different PyTorch modules.Mar          pyvene supports complex intervention schemes
+                 with an intuitive configuration format, and its
+12             interventions can be static or include trainable
+                  parameters. We show how pyvene provides a
+                   unified and extensible framework for perform-
+                  ing interventions on neural models and shar-
+                  ing the intervened upon models with others.
+           We illustrate the power of the library via in-[cs.LG]              terpretability analyses using causal abstraction
+                and knowledge localization. We publish our
+                    library through Python Package Index (PyPI)
+                and provide code, documentation, and tutorials
+                     at https://github.com/stanfordnlp/pyvene.
+
+
+          1  Introduction
+
+         When we intervene on a neural network, we make
+                                                                   Figure 1: An inference-time intervention (Li et al.,
+           an in-place change to its activations, putting the                                                               2023a) on TinyStories-33M. The model is prompted
+           model in a counterfactual state. This fundamen-   with “Once upon a time there was a”, and is asked to
+                tal operation has emerged as a powerful tool for    complete the story. We add a static word embedding (for
+            both understanding and improving models; inter-   “happy” or “sad”) into the MLP output at each decoding
+             ventions of various kinds are key to recent efforts    step for all layers with a coefficient of 0.3. pyvene’sarXiv:2403.07809v1                                                           complete implementation is provided. The original and              in model robustness (He et al., 2019), model edit-
+                                                                      intervened generations use greedy decoding.
+             ing (Meng et al., 2022) and steering (Li et al.,
+            2023a), causal abstraction (Geiger et al., 2020,
+            2021, 2023; Wu et al., 2023) or activation patch-
+             ing (Chan et al., 2022; Wang et al., 2023), circuit    et al. 2023; Geiger et al. 2023 as examples) that lack
+              finding (Conmy et al., 2023; Goldowsky-Dill et al.,    extensibility and are hard to maintain and share,
+             2023), and knowledge tracing (Geva et al., 2023).    and current toolkits focus on single or non-nested
+            As intervention-based techniques have matured,    interventions (e.g., ablation neurons in a single for-
+              the need has arisen to run ever more complex inter-   ward pass) and are often limited to interventions
+             ventions on ever larger models. Currently, there is   on Transformers (Vaswani et al., 2017) without na-
+           no unified and generic intervention-oriented library    tively supporting other neural architectures. Some
+              to support such research. Existing libraries are of-   of these existing libraries (Bau, 2022; Lloyd, 2023;
+             ten project-based (see implementations for Wang   Fiotto-Kaufman, 2023; Mossing et al., 2024) can
+
+
+                                                    1
+
+support complex interventions such as exchanging   Python Package Index (PyPI),1 and the project site2
+activations across multiple forward passes yet they    hosts more than 20 tutorials that cover interventions
+require sophisticated knowledge and heavy imple-    at different levels of complexity with various model
+mentations.                                          architectures from simple feed-foward models to
+  To address these  limitations, we introduce   multi-modal models.
+pyvene, an open-source Python library that sup-
+ports customizable interventions on different neu-   2  System Design and Architecture
+ral architectures implemented in PyTorch.  Dif-
+                                    Two primary components of pyvene are the in-ferent from previous libraries (Bau, 2022; Nanda
+                                               tervenable configuration, which outlines whichand Bloom, 2022; Lloyd, 2023; Fiotto-Kaufman,
+                                          model components will be intervened upon, and2023; Mossing et al., 2024), pyvene is intervention-
+                                                      the intervenable model, which decorates the origi-oriented. It supports complex interventions by ma-
+                                                     nal torch model with hooks that allow activationsnipulating or exchanging activations across multi-
+                                                      to be collected and overwritten.3 Here is a setupple model forward runs while allowing these inter-
+                                                         for performing a zero-out intervention (often calledventions to be shared with a serialization configu-
+                                                a zero ablation; Li et al. 2023b) on the 10th, 11th,ration file. Specifically, pyvene has a number of
+                                            and 12th dimensions of the MLP output for 3rdadvantages:
+                                                 token embedding of layer 0 in GPT-2:
+  1. Intervention as the primitive. The interven-
+     tion is the basic primitive of pyvene. Inter-     importimport torchpyvene as pv
+     ventions are specified with a dict-based for-      # built -in helper to get a HuggingFace model
+                                                              _, tokenizer , gpt2 = pv.create_gpt2 ()
+     mat, in contrast to previous approaches where       # create with dict -based config
+     interventions are expressed as code and exe-     pv_config"layer": = 0,pv.IntervenableConfig ({
+     cuted during runtime (Bau, 2022; Lloyd, 2023;       "component": "mlp_output",
+                                                            "intervention_type": pv.VanillaIntervention })
+     Fiotto-Kaufman, 2023; Mossing et al., 2024).      # initialize model
+     All pyvene intervention schemes and mod-     pv_gpt2pv_config= pv.IntervenableModel(, model=gpt2)
+     els are serializable objects that can be shared       # run an intervened forward pass                                                           intervened_outputs = pv_gpt2(
+     through a public model hub such as Hugging-        # the base input
+                                                             base=tokenizer(
+     Face.                                                      "The capital of Spain is",
+                                                              return_tensors="pt"),
+                                                                        # the location to intervene at (3rd token)
+  2. Complex intervention schemes. pyvene sup-       unit_locations ={"base": 3},
+     ports interventions at multiple locations, in-        #subspacesthe individual=[10 ,11 ,12]dimensions,        targetted
+     volving arbitrary subsets of neurons, and in-        # the intervention values
+                                                            source_representations=torch.zeros(
+     terventions can be performed in parallel or in          gpt2.config.n_embd)
+     sequence. For generative use of LMs, pyvene       )# sharing
+     supports interventions at decoding steps. Fur-     pv_gpt2.save("./tmp/", save_to_hf_hub=True)
+     thermore, activations can easily be collected
+                                         The model takes a tensor input base and runs
+     for probe training.
+                                                 through the model’s computation graph modifying
+  3. Support for recurrent and non-recurrent    activations in place to be other values source. In
+    models. Existing libraries offer only limited    this code, we specified source in the forward call.
+     support for recurrent models. pyvene sup-  When source is a constant, it can alternatively be
+     ports simple feed-forward networks, Trans-   specified in the IntervenableConfig. To target
+     formers, and recurrent and convolutional neu-   complete MLP output representations, one simply
+      ral models.                                     leaves out the subspaces argument. The final line
+                                                     of the code block shows how to serialize and share
+  In this paper, we provide two detailed case stud-   an intervened model remotely through a model hub
+ies using pyvene as well: (1) we fully reproduce   such as HuggingFace.
+Meng et al. (2022)’s locating factual associations in
+GPT2-XL (Figure 1 in the original paper) in about       1pip install pyvene
+                                                        2https://github.com/stanfordnlp/pyvene20 lines of code, and (2) we show intervention
+                                                        3Code snippets provided in the paper can be run on Google
+and probe training with pyvene to localize gender                                                      Colab at https://colab.research.google.com/github/
+in Pythia-6.9B. pyvene is published through the    stanfordnlp/pyvene/blob/main/pyvene_101.ipynb.
+
+
+                                         2
+
+2.1  Interchange Interventions                     basis for training models to be robust to this noising
+                                                     process.Interchange interventions (Geiger et al., 2020; Vig
+et al., 2020; Wang et al., 2023, also known as acti-                                                    2.3  Activation Collection Interventions
+vation patching) fix activations to take on the values
+                                                  This is a pass-through intervention to collect activa-
+they would be if a different input were provided.
+                                                      tions for operations like supervised probe train-
+With minor changes to the forward call, we can
+                                                       ing.  Such interventions can be combined with
+perform an interchange intervention on GPT-2:
+                                                    other interventions as well, to support things like
+  # run an interchange intervention                    causal structural probes (Hewitt and Manning,
+  intervened_outputs = pv_gpt2(                     2019; Elazar et al., 2020; Lepori et al., 2023). In    # the base input
+    base=tokenizer(                                    the following example, we perform an interchange
+      "The capital of Spain is",
+      return_tensors = "pt"),                           intervention at layer 8 and then collect activations
+    #      the source input                                     at layer 10 for the purposes of fitting a probe:    sources=tokenizer(
+      "The capital of Italy is",
+      return_tensors = "pt"),                                                                     # set up a upstream intervention
+    # the location to intervene at (3rd token)                                                           probe_config = pv.IntervenableConfig ({
+    unit_locations ={"sources ->base": 3},                                                             "layer": 8,
+    # the individual dimensions targeted                                                             "component": "block_output",
+    subspaces =[10 ,11 ,12]                                                            "intervention_type":  pv.VanillaIntervention })
+  )                                                                     # add downstream collector
+                                                           probe_config = probe_config.add_intervention ({
+This forward call produces outputs for base but        "layer": 10,
+                                                             "component": "block_output",
+with the activation values for MLP output dimen-       "intervention_type": pv.CollectIntervention })
+sions 10–12 of token 3 at layer 0 set to those that ob-     probe_gpt2probe_config= pv.IntervenableModel(, model=gpt2)
+tained when the model processes the source. Such       # return the activations for 3rd token
+                                                           collected_activations = probe_gpt2(
+interventions are used in interpretability research to        base=tokenizer(
+                                                                 "The capital of Spain is",
+test hypotheses about where and how information          return_tensors="pt"),
+is stored in model-internal representations.                unit_locations ={"sources ->base": 3})
+
+2.2  Addition Interventions                       2.4  Custom Interventions
+
+In the above examples, we replace values in the   pyvene provides a flexible way of adding new inter-
+base with other values (VanillaIntervention).   vention types. The following is a simple illustration
+Another common kind of intervention involves up-    in which we multiply the original representation by
+dating the base values in a systematic way:          a constant value:
+
+
+  noising_config = pv.IntervenableConfig ({                    # multiply base with a constant
+    "layer": 0,                                              class MultInt(pv.ConstantSourceIntervention):
+    "component": "block_input",                                def __init__(self , ** kwargs):
+    "intervention_type": pv.AdditionIntervention })             super ().__init__ ()
+  noising_gpt2 = pv.IntervenableModel(                        def forward(self , base , source=None ,
+    config , model=gpt2)                                        subspaces=None):
+  intervened_outputs = noising_gpt2(                            return base * 0.3
+    base=tokenizer(
+      "The Space Needle is in downtown",                   pv.IntervenableModel ({
+      return_tensors = "pt"),                                "intervention_type": MultInt},
+    # target the first four tokens for intervention          model=gpt2)
+    unit_locations ={"base": [0, 1, 2, 3]},
+    source_representations = torch.rand(             The above intervention becomes useful when study-      gpt2.config.n_embd , requires_grad=False))
+                                                    ing interpretability-driven models such as the Back-
+As in this example, we add noise to a represen-   pack LMs of Hewitt et al. (2023). The sense vectors
+tation as a basic robustness check.  The code    acquired during pretraining in Backpack LMs have
+above does this, targetting the  first four input   been shown to have a “multiplication effect”, and
+token embeddings to a Transformer by using   so proportionally decreasing sense vectors could
+AdditionIntervention. This example serves as    effectively steer the model’s generation.
+the building block of causal tracing experiments as
+                                                    2.5  Trainable Interventionsin Meng et al. 2022, where we corrupt embedding
+inputs by adding noise to trace factual associations.   pyvene interventions can include trainable param-
+Building on top of this, we reproduce Meng et al.’s    eters. RotatedSpaceIntervention implements
+result in Section 3. pyvene allows Autograd on    Distributed Alignment Search (DAS; Geiger et al.
+the static representations, so this code could be the    2023), LowRankRotatedSpaceIntervention is a
+
+
+                                         3
+
+more  efficient  version  of  that  model,  and   examples and swapping them into the base’s com-
+BoundlessRotatedSpaceIntervention  imple-   putation graph:
+ments the Boundless DAS variant of Wu et al.
+(2023). With these primitives, one can easily train      parallel_config{"layer": 3, "component":= pv.IntervenableConfig"block_output"},([
+DAS explainers.                                           {"layer": 3, "component": "block_output"}],
+                                                                        # intervene on base at the same time
+   In the example below, we show a single gradient        mode="parallel")
+update for a DAS training objective that localizes      parallel_gpt2 = pv.IntervenableModel(
+the capital associated with the country in a one-       parallel_config , model=gpt2)
+dimensional linear subspace of activations from      base = tokenizer(
+                                                               "The capital of Spain is",
+the Transformer block output (i.e., main residual        return_tensors="pt")
+stream) at the 8th layer by training our intervention      sourcestokenizer("The= [      language of Spain is",
+module to match the gold counterfactual behavior:         return_tensors="pt"),
+                                                             tokenizer("The capital of Italy is",
+                                                               return_tensors="pt")]
+  das_config = pv.IntervenableConfig ({
+    "layer": 8,                                            intervened_outputs = parallel_gpt2(
+    "component": "block_output",                               base , sources ,
+    "low_rank_dimension": 1,                                  {"sources ->base": (
+    "intervention_type":                                            # each list has a dimensionality of
+      pv.LowRankRotatedSpaceIntervention })                      # [num_intervention , batch , num_unit]
+                                                               [[[1]] ,[[3]]] ,  [[[1]] ,[[3]]])}
+  das_gpt2 = pv.IntervenableModel(                             )
+      das_config , model=gpt2)
+  last_hidden_state = das_gpt2(                       In the example above, we interchange the activa-
+    base=tokenizer(                                      tions from the residual streams on top of the second
+      "The capital of Spain is",
+      return_tensors="pt"),                          token from the first example (“language”) as well as
+    sources=tokenizer(
+      "The capital of Italy is",                        the fourth token from the second example (“Italy”)
+      return_tensors="pt"),                              into the corresponding locations of the base’s com-    unit_locations ={"sources ->base": 3}
+  )[-1]. last_hidden_state [:,-1]                        putation graph. The motivating intuition is that
+  # gold counterfacutual label as " Rome"           now the next token might be mapped to a semantic
+  label         = tokenizer.encode(
+    " Rome",             return_tensors="pt")                     space that is a mixture of two inputs in the source
+  logits = torch.matmul(                         “The language of Italy”. (And, in fact, “Italian” is
+    last_hidden_state , gpt2.wte.weight.t())
+                                        among the top five returned logits.)
+  m = torch.nn.CrossEntropyLoss ()
+  loss = m(logits , label.view(-1))
+  loss.backward ()                                     2.8  Multi-Source Serial Interventions
+
+                                                    Interventions can also be sequentially applied, so
+2.6  Training with Interventions                    that later interventions are applied to an intervened
+                                           model created by the previous ones:
+Interventions can be co-trained with the intervening
+model for techniques like interchange intervention      serial_config = pv.IntervenableConfig ([
+training (IIT), which induce specific causal struc-       {"layer": 3, "component": "block_output"},
+                                                             {"layer": 10, "component": "block_output"}],
+tures in neural networks (Geiger et al., 2022):               # intervene on base one after another
+                                                             mode="serial")
+
+  pv_gpt2 = pv.IntervenableModel ({                         serial_gpt2 = pv.IntervenableModel(
+    "layer": 8},                                              serial_config , model=gpt2)
+    model=gpt2)
+  # enable gradients on the model                          intervened_outputs = serial_gpt2(
+  pv_gpt2.enable_model_gradients ()                             base , sources ,
+  # run counterfactual forward as usual                          # src_0 intervenes on src_1 position 1
+                                                                        # src_1 intervenes on base position 4
+                                                              {"source_0 ->source_1": 1,
+In the example above, with the supervision signals         "source_1 ->base"     : 4}
+from the training dataset, we induce causal struc-      )
+tures in the residual stream at 8th layer.
+                                                     In the example above, we first take activations at the
+                                                        residual stream of the first token (“language”) at the
+2.7  Multi-Source Parallel Interventions
+                                                3rd layer from the first source example and swap
+In the parallel mode, interventions are applied to   them into the same location during the forward run
+the computation graph of the same base example    of the second source example. We then take the
+at the same time. We can perform interchange inter-    activations of the 4th token (“is”) at layer 10 at
+ventions by taking activations from multiple source   upstream of this intervened model and swap them
+
+
+                                         4
+
+into the same location during the forward run of the    results. Specifically, we restore the Transformer
+base example. The motivating intuition is that the    block output, MLP activation, and attention output
+first intervention will result in the model retrieving    for each token at each layer. For MLP activation
+“The language of Italy” and the second interven-   and attention output, we restore 10 sites centered
+tion will swap the retrieved answer into the output   around the intervening layer (clipping on the edges).
+stream of the base example. (Once again, “Italian”   Our Figure 2 fully reproduces the main Figure 1
+is among the top five returned logits.)                  (p. 2) in Meng et al.’s paper. To replicate their ex-
+                                                     periments, we first define a configuration for causal
+2.9  Intervenable Model                                                         tracing:
+The IntervenableModel class is the backend for
+decorating torch models with intervenable config-      def l,tracing_config(c="mlp_activation", w=10, tl=48):
+urations and running intervened forward calls. It         s = max(0, l - w // 2)                                                                        e = min(tl , l - (-w // 2))
+implements two types of hooks: Getter and Setter        config = IntervenableConfig(
+                                                               [{"component": "block_input"}] +
+hooks to save and set activations.                            [{"layer": l, "component": c}
+   Figure 1 highlights pyvene’s support for LMs.         [pv.NoiseIntervention]for l in range(s, e)],+
+Interventions can be applied to any position in the          [pv.VanillaIntervention ]*(e-s))
+                                                               return config
+input prompt or any selected decoding step.
+  The following involves a model with recurrent   With this configuration, we corrupt the subject to-
+(GRU) cells where we intervene on two unrolled   ken and then restore selected internal activations to
+recurrent computation graphs at a time step:           their clean value. Our main experiment is imple-
+                                            mented with about 20 lines of code with pyvene:
+  # built -in helper to get a GRU
+  _, _, gru = pv.create_gru_classifier(
+                                                            trace_results = []    pv.GRUConfig(h_dim =32))
+                                                              _, tokenizer , gpt = pv.create_gpt2("gpt2 -xl")  # wrap it with config
+                                                              base = tokenizer(  pv_gru = pv.IntervenableModel ({
+                                                               "The Space Needle is in downtown",    "component": "cell_output",
+                                                             return_tensors="pt")     # intervening on time
+                                                               for s in ["block_output", "mlp_activation",    "unit": "t",
+                                                               "attention_output"]:    "intervention_type": pv.ZeroIntervention},
+                                                                  for l in range(gpt.config.n_layer):    model=gru)
+                                                                    for p in range (7):  # run an intervened forward pass
+                                                                             w = 1 if s == "block_output" else 10  rand_b = torch.rand(1,10, gru.config.h_dim)
+                                                                   t_config , n_r = tracing_config(l, s, w)  rand_s = torch.rand(1,10, gru.config.h_dim)
+                                                                    t_gpt = pv.IntervenableModel(t_config , gpt)  intervened_outputs = pv_gru(
+                                                                     _, outs = t_gpt(base , [None] + [base]*n_r ,    base = {"inputs_embeds": rand_b},
+                                                                     {"sources ->base": ([None] + [[[p]]]*n_r ,    sources = [{"inputs_embeds": rand_s}],
+                                                                       [[[0, 1, 2, 3]]] + [[[p]]]* n_r)})     # intervening time step
+                                                                     dist = pv.embed_to_distrib(gpt ,    unit_locations ={"sources ->base": (6, 3)})
+                                                                   outs.last_hidden_state , logits=False)
+                                                                 trace_results.append(
+A hook is triggered every time the corresponding              {"stream": s, "layer": l, "pos": p,
+                                                                     "prob": dist [0][ -1][7312]})
+model component is called. As a result, a vanilla
+hook-based approach, as in all previous libraries
+(Bau, 2022; Lloyd, 2023; Fiotto-Kaufman, 2023;   4  Case Study II: Intervention and Probe
+Mossing et al., 2024), fails to intervene on any      Training with Pythia-6.9B
+recurrent or state-space model. To handle this lim-
+                                 We showcase intervention and probe training with
+itation, pyvene records a state variable for each
+                                           pyvene using a simple gendered pronoun predic-
+hook, and only executes a hook at the targeted time
+                                                       tion task in which we try to localize gender in
+step.
+                                                hidden representations. For trainable intervention,
+                                    we use a one-dimensional Distributed Alignment3  Case Study I: Locating Factual
+                                                Search (DAS; Geiger et al., 2023), that is, we seek    Associations in GPT2-XL
+                                                       to learn a 1D subspace representing gender. To
+We replicate the main result in Meng et al. (2022)’s    localize gender, we feed prompts constructed from
+Locating Factual Associations in GPT2-XL with   a template of the form “[John/Sarah] walked be-
+pyvene. The task is to trace facts via interventions   cause [he/she]” (a fixed length of 4) where the
+on fact-related datasets. Following Meng et al.’s   name is sampled from a vocabulary of 47 typically
+setup, we first intervene on input embeddings by   male and 10 typically female names followed by
+adding Gaussian noise. We then restore individual    the associated gendered pronoun as the output to-
+states to identify the information that restores the    ken. We use pythia-6.9B (Biderman et al., 2023)
+
+
+                                         5
+
+      The*                                                                                              The*                                                                                              The*
+         Space*                                                    p(Seattle)      Space*                                                    p(Seattle)      Space*                                                    p(Seattle)
+                                                                                                                                                                                                                                        0.8
+        Need*                                                               0.75        Need*                                                               0.75        Need*                                                                  0.6
+     le*                                                               0.50     le*                                                               0.50     le*                                                                  0.4
+
+   is                                                               0.25   is                                                               0.25   is                                                                  0.2
+
+
+   in                                               in                                               in
+            downtown                                                                                                                                                                                             downtown                                                                                                                                                                                             downtown
+         0        10       20       30       40                           0        10       20       30       40                           0        10       20       30       40
+                single restored layer in GPT2-XL                            center of interval of 10 patched mlp layer                       center of interval of 10 patched attn layer
+
+Figure 2: We reproduce the results in Meng et al. (2022)’s Figure 1 of locating early sites and late sites of factual
+associations in GPT2-XL in about 20 lines of pyvene code. The causal impact on output probability is mapped for
+the effect of each Transformer block output (left), MLP activations (middle), and attention layer output (right) .
+
+   Trained Intervention (DAS)                           finds sparser gender representations across layers
+                                            and positions, whereas a linear probe achieves
+ EOS                                                               IIA  1                                      100% classification accuracy for almost all compo-
+                                                                     0.75    nents. This shows that a probe may achieve high  <name>
+                                                                     0.50    performance even on representations that are not
+  walked                                                  causally relevant for the task.
+                                                                     0.25
+   because                                                         0                                        5  Limitations and Future Work
+       0             10            20            30
+                          layers                                 We are currently focused on two main areas:
+   Trained Linear Probe
+                                                            1. Expanding the default intervention types and
+ EOS                                       ACC 1        model types.  Although pyvene is extensi-
+                                                          ble to other types, having more built-in types
+                                                                          0.9
+                                                        helps us to onboard new users easily.  <name>                                                                      0.8
+                                                                          0.7       2. pyvene is designed to support complex inter-  walked
+   because                                                                      0.60.5         ventioncomputationalschemes,efficiency.but this Ascomeslanguageat the modelscost of
+       0             10            20            30                   get larger, we would like to investigate how to
+                           layers                                                           scale intervention efficiency with multi-node
+                                                 and multi-GPU training.Figure 3: Results of interchange intervention accuracy
+(IIA) with the trainable intervention (DAS) and accu-
+racy with the trainable linear probe on different model   6  Conclusion
+components when localizing gender information.
+                                We introduce pyvene, an open-source Python li-
+                                                   brary that supports intervention-based research on
+in this experiment, which achieves 100% accuracy    neural models. pyvene supports customizable in-
+on the task. We then train our interventions and    terventions with complex intervention schemes as
+probes at the Transformer block output at each   well as different families of model architectures,
+layer and token position. For intervention training,   and intervened models are shareable with others
+we construct pairs of examples and train the inter-   through online model hubs such as HuggingFace.
+vention to match the desired counterfactual output   Our hope is that pyvene can be a powerful tool for
+(i.e., if we swap activations from an example with    discovering new ways in which interventions can
+a male name into another example with a female    help us explain and improve models.
+name, the desired counterfactual output should be
+“he”). For linear probe training, we use activation
+collection intervention to retrieve activations to pre-   References
+dict the pronoun gender with a linear layer.                                                David Bau. 2022.   BauKit.   https://github.com/
+  As shown in Figure 3, a trainable intervention      davidbau/baukit.
+
+
+                                         6
+
+Stella Biderman, Hailey Schoelkopf, Quentin Gregory    Zhezhi He, Adnan Siraj Rakin, and Deliang Fan. 2019.
+  Anthony, Herbie Bradley, Kyle O’Brien, Eric Hal-      Parametric noise injection: Trainable randomness
+   lahan, Mohammad Aflah Khan, Shivanshu Purohit,       to improve deep neural network robustness against
+  USVSN Sai Prashanth, Edward Raff, Aviya Skowron,       adversarial attack. In IEEE/CVF Conference on Com-
+  Lintang Sutawika, and Oskar Van Der Wal. 2023.      puter Vision and Pattern Recognition (CVPR).
+   Pythia: A suite for analyzing large language models
+   across training and scaling. In International Confer-   John Hewitt and Christopher D Manning. 2019. A struc-
+  ence on Machine Learning (ICML).                          tural probe for finding syntax in word representations.
+                                                          In North American Chapter of the Association for
+Lawrence Chan,  Adrià  Garriga-Alonso,  Nicholas      Computational Linguistics (NAACL).
+  Goldowsky-Dill, Ryan Greenblatt, Jenny Nitishin-
+   skaya, Ansh Radhakrishnan, Buck Shlegeris, and    John Hewitt, John Thickstun, Christopher Manning, and
+  Nate Thomas. 2022. Causal scrubbing: a method for      Percy Liang. 2023. Backpack language models. In
+   rigorously testing interpretability hypotheses. Align-      Association for Computational Linguistics (ACL).
+  ment Forum Blog post.
+                                                 Michael A Lepori, Thomas Serre, and Ellie Pavlick.
+Arthur Conmy, Augustine N Mavor-Parker, Aengus      2023. Uncovering intermediate variables in trans-
+  Lynch, Stefan Heimersheim, and Adrià Garriga-      formers using circuit probing. arXiv:2311.04354.
+  Alonso. 2023.  Towards automated circuit discov-
+   ery for mechanistic interpretability. In Advances in   Kenneth Li, Oam Patel, Fernanda Viégas, Hanspeter
+  Neural Information Processing Systems (NeurIPS).         Pfister, and Martin Wattenberg. 2023a.  Inference-
+                                                       time intervention: Eliciting truthful answers from a
+Yanai Elazar, Shauli Ravfogel, Alon Jacovi, and Yoav      language model. In Advances in Neural Information
+  Goldberg. 2020. Amnesic probing: Behavioral ex-      Processing Systems (NeurIPS).
+   planation with amnesic counterfactuals. In Transac-
+   tions of the Association of Computational Linguistics    Maximilian Li, Xander Davies, and Max Nadeau. 2023b.
+  (TACL).                                                   Circuit breaking: Removing model behaviors with
+                                                              targeted ablation. arXiv:2309.05973.
+Jaden Fiotto-Kaufman. 2023. nnsight. https://github.
+  com/JadenFiotto-Kaufman/nnsight.                Evan Lloyd. 2023. graphpatch. https://github.com/
+                                                        evan-lloyd/graphpatch.
+Atticus Geiger, Hanson Lu, Thomas Icard, and Christo-
+  pher Potts. 2021. Causal abstractions of neural net-   Kevin Meng, David Bau, Alex Andonian, and Yonatan
+  works. In Advances in Neural Information Process-      Belinkov. 2022. Locating and editing factual associ-
+   ing Systems (NeurIPS).                                   ations in GPT. In Advances in Neural Information
+                                                        Processing Systems (NeurIPS).
+Atticus Geiger, Kyle Richardson, and Christopher Potts.
+  2020. Neural natural language inference models par-   Dan Mossing, Steven Bills, Henk Tillman, Tom Dupré la
+   tially embed theories of lexical entailment and nega-      Tour, Nick Cammarata, Leo Gao, Joshua Achiam,
+   tion. In Proceedings of the Third BlackboxNLP Work-      Catherine Yeh, Jan Leike, Jeff Wu, and William
+  shop on Analyzing and Interpreting Neural Networks      Saunders. 2024.  Transformer debugger.  https:
+   for NLP, Online.                                      //github.com/openai/transformer-debugger.
+
+Atticus Geiger, Zhengxuan Wu, Hanson Lu, Josh    Neel Nanda and  Joseph Bloom.  2022.    Trans-
+  Rozner, Elisa Kreiss, Thomas Icard, Noah Good-      formerlens.    https://github.com/neelnanda-io/
+  man, and Christopher Potts. 2022. Inducing causal      TransformerLens.
+   structure for interpretable neural networks. In Inter-
+   national Conference on Machine Learning (ICML).    Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob
+                                                           Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz
+Atticus Geiger, Zhengxuan Wu, Christopher Potts,       Kaiser, and Illia Polosukhin. 2017. Attention is all
+  Thomas Icard, and Noah D. Goodman. 2023. Find-     you need. In Advances in Neural Information Pro-
+   ing alignments between interpretable causal variables       cessing Systems (NeurIPS).
+  and distributed neural representations.  In Causal
+  Learning and Reasoning (CLeaR).                     Jesse Vig, Sebastian Gehrmann, Yonatan Belinkov,
+                                                    Sharon Qian, Daniel Nevo, Yaron Singer, and Stuart
+Mor Geva, Jasmijn Bastings, Katja Filippova, and Amir       Shieber. 2020. Investigating gender bias in language
+  Globerson. 2023.  Dissecting recall of factual as-      models using causal mediation analysis. In Advances
+   sociations in auto-regressive language models.  In       in Neural Information Processing Systems (NeurIPS).
+  Empirical Methods in Natural Language Processing
+  (EMNLP), Singapore.                            Kevin Wang, Alexandre Variengien, Arthur Conmy,
+                                              Buck Shlegeris, and Jacob Steinhardt. 2023. Inter-
+Nicholas Goldowsky-Dill, Chris MacLeod, Lucas Sato,       pretability in the wild: A circuit for indirect object
+  and Aryaman Arora. 2023. Localizing model behav-       identification in GPT-2 small. In International Con-
+   ior with path patching. arXiv:2304.05969.                ference on Learning Representations (ICLR).
+
+
+                                         7
+
+Zhengxuan Wu, Atticus Geiger, Thomas Icard, Christo-
+  pher Potts, and Noah Goodman. 2023. Interpretabil-
+   ity at scale: Identifying causal mechanisms in Alpaca.
+   In Advances in Neural Information Processing Sys-
+  tems (NeurIPS).
+
+
+
+
+
+                                         8

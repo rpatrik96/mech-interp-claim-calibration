@@ -1,0 +1,576 @@
+                      Evaluating Open-Source Sparse Autoencoders
+                 on Disentangling Factual Knowledge in GPT-2 Small
+
+
+                    Maheep Chaudhary                     Atticus Geiger
+                            Pr(Ai)2R Group                       Pr(Ai)2R Group
+              maheepchaudhary.research@gmail.com       atticusg@gmail.com
+
+
+
+
+                          Abstract                     space with sparse linear features that are intended
+                                                                      to be better units of analysis.
+          A popular new method in mechanistic inter-
+                                                          However, researchers have invested more into                    pretability is to train high-dimensional sparse
+                  autoencoders (SAEs) on neuron activations and        scaling SAEs, than evaluating them (Templeton
+                 use SAE features as the atomic units of analy-        et al., 2024). In particular, only a handful of works
+                        sis. However, the body of evidence on whether       engage with whether SAEs are useful for a causal2024
+            SAE feature spaces are useful for causal analy-        interpretability analysis (Marks et al., 2024; En-
+                      sis is underdeveloped. In this work, we use        gels et al., 2024; Makelov et al., 2024).  In this
+                   the RAVEL benchmark to evaluate whetherSep                                                            paper, we add to the body of evidence an exam-
+              SAEs trained on hidden representations of GPT-
+5                                                           ple of when sparse autoencoders fail to provide a               2 small have sets of features that separately
+                                                                         better feature space than neurons for finding model-                 mediate knowledge of which country a city is
+                   in and which continent it is in. We evaluate        internal mediators of concepts (Geiger et al., 2024a;
+                   four open-source SAEs for GPT-2 small against       Mueller et al., 2024).  Specifically, we use the
+                 each other, with neurons serving as a baseline,     RAVEL benchmark (Huang et al., 2024) to evaluate
+                and linear features learned via distributed align-      whether the there are sets of SAE features that sep-[cs.LG]               ment search (DAS) serving as a skyline. For                                                                       arately mediate knowledge of which country a city
+                   each, we learn a binary mask to select features
+                                                                                is in and which continent a city is in. We evaluate
+                    that will be patched to change the country of
+                                                                 four publicly available SAEs for GPT-2 small: the                 a city without changing the continent, or vice
+                   versa. Our results show that SAEs struggle      Open AI SAE (Gao et al., 2024), two Apollo SAEs
+                   to reach the neuron baseline, and none come       (Braun et al., 2024), and the Bloom SAE (Bloom,
+                   close to the DAS skyline. We release code here:       2024). As a feature baseline, we use neurons; as
+                github.com/MaheepChaudhary/SAE-Ravel          a feature skyline, we use linear subspaces trained
+                                                            with distributed alignment search (DAS; Geiger
+          1  Introduction
+                                                                            et al. 2024b) to disentangle the country knowledge
+             Individual neurons in neural networks represent   from the continent knowledge.
+          many concepts, and individual concepts are repre-     For each feature space, we train a differentiable
+             sented by many neurons (Smolensky, 1988; Mc-   binary mask to select features that encode the
+             Clelland et al., 1986a,b; Olah et al., 2020; Cam-   country of a city, but not the continent, and vicearXiv:2409.04478v1
+            marata et al., 2020; Bolukbasi et al., 2021; Gurnee    versa. We evaluate the selected features using
+               et al., 2023). What, if not neurons, are the relevant    interchange interventions, where features are fixed
+            meaning-bearing components of neural networks?    to values they would take if a different input were
+            This is a fundamental question in mechanistic in-   provided.  For example, if we fix the ‘country’
+               terpretability. A recent, and increasingly popu-    features for the prompt Paris is a city in the country
+                  lar, unsupervised method for learning features that   and set them to the value they take for the prompt
+            correspond to intuitive concepts is to train high-   Tokyo is a city in, the output should be Japan
+            dimensional sparse autoencoders (SAEs) on the    not France.  If we instead target the ‘continent’
+            hidden representations of deep learning models    features, the output should be Europe not Asia.
+             across a wide range of possible inputs (Bricken      In Figure 1 we show that all SAEs struggle to
+               et al., 2023; Cunningham et al., 2023; Lieberum   compete with the neuron baseline and degrade the
+               et al., 2024; Gao et al., 2024). The encoder of an   model’s knowledge. However, the DAS skyline
+         SAE unpacks neurons into a higher dimensional    sets a high ceiling and there is room to improve.
+
+
+                                                    1
+
+(a) The disentangle score for ‘continent’ and ‘country’ interventions across the layers of GPT-2 small. The disentangle scores for
+empty intervention baselines are shown as dotted lines. The performance of the DAS skyline goes down after layer 7 because the
+knowledge about the city is being moved away from the <city> token. The Apollo SAEs are only available for layers 1, 5, and 9.
+
+
+
+                                  Country-Intervened Continent-Preserved                   Continent-Intervened Country-Preserved
+                          Neurons  DAS  Open AI  Bloom   Apollo      Apollo     Neuron  DAS  Open AI  Bloom   Apollo      Apollo
+                                 SAE    SAE  SAE e2e  SAE e2e+ds               SAE    SAE  SAE e2e  SAE e2e+ds
+
+     Continent Accuracy       46      93      51      36      24         33         48     94      49      37      24         32
+     Country Accuracy        96      94      95      49      84         86         97     99      97      52      81         82
+      Disentangle Score        71      94      73      43      54         59         72     96      73      45      52         57
+
+       Inactive Features         0       0     0.977     0.98     0.966       0.974        0      0     0.977     0.98     0.966       0.974
+   Non-Intervened Features     0.11    0.24    0.006    0.005     0.01       0.009       0.88    0.79    0.015    0.009    0.023       0.018
+     Intervened Features       0.89    0.76    0.015    0.009    0.023       0.018       0.12    0.21    0.007    0.005    0.011       0.009
+
+     Reconstruction Loss       0       0      152     551     2245       2130        0      0      158     516     2576       2318
+  Reconstructed Knowledge    100     100     95      56      67         1         100    100     95      47      35         0
+
+(b) GPT-2 small at layer 1. The first three rows are interchange intervention accuracies for RAVEL using learned binary masks to
+select features. The next three rows are sparsity evaluations that show the proportion of inactive features, intervened on features,
+and active non-intervened features. The final two rows are reconstruction evaluations that show the models knowledge of cities
+using a reconstructed representation (no interventions performed) and the average mean-squared error reconstruction loss. The
+base prompts for each of the two datasets were used for reconstruction evaluations, with source prompts being ignored.
+
+
+
+                                  Country-Intervened Continent-Preserved                   Continent-Intervened Country-Preserved
+                          Neurons  DAS  Open AI  Bloom     Apollo     Apollo   Neuron  DAS  Open AI  Bloom     Apollo     Apollo
+                                  SAE    SAE   e2e+ds SAE  SAE                SAE    SAE   e2e+ds SAE  SAE
+
+     Continent Accuracy       49      91      53      48        22        22      46     93      48      45        18        18
+     Country Accuracy        97      98      88      79        66        66      98     99      91      79        61        61
+      Disentangle Score        73      94      70      64        44        44      72     96      70      62        40        39
+
+       Inactive Features         0       0      0.951    0.979      0.981       0.98      0      0      0.951    0.979      0.981       0.98
+   Non-Intervened Features    0.119    0.325    0.017    0.006      0.008      0.009    0.877    0.69    0.031    0.013      0.017      0.017
+     Intervened Features       0.88    0.674    0.031    0.013      0.017      0.017    0.122   0.309    0.017    0.006      0.008      0.009
+
+     Reconstruction Loss       0       0      644     937      2383      2353      0      0      652     1044      2576      2318
+  Reconstructed Knowledge    100     100     88      77        84        83      100    100     90      86        76        61
+
+                (c) GPT-2 small at layer 5. See the caption above from Figure 1b for details on the table structure.
+
+Figure 1: Metrics on the RAVEL test set for interchange interventions performed on the residual stream in GPT-2
+small after transformer block above the city token <city>. For each space of features, we learn ‘country’ features
+that encode what country a city is in and ‘continent’ features that encode what continent a city is in. Interventions
+targeting the ‘country’ features should change the output for the prompt <city> is in the country of, but not <city>
+is in the continent of. Interventions targeting the ‘continent’ features should do the opposite. The disentangle score
+is the average of the country and continent accuracies. Neurons serve as a baseline for how easily these two facts are
+disentangled, and DAS is a supervised feature learning method that serves as a skyline. The SAEs are the methods
+we seek to evaluate. In sum, using SAE reconstructions harm the knowledge of GPT-2 and SAE features are not
+better mediators than the baseline of neurons.
+
+
+
+
+
+                                         2
+
+2  Related Work                                   to take on the value they would have for city Tokyo
+                                                should make the model think that Toronto is in
+Benchmarking SAEs  There are many aspects of
+                                                Japan. The process of fixing features to take on
+SAEs to benchmark. To what degree do the features
+                                                  values they would have for a different input is an
+respond precisely and accurately to the natural lan-
+                                                  interchange intervention (Geiger et al., 2020; Vig
+guage labels given to them by auto-interpretability
+                                                           et al., 2020; Finlayson et al., 2021). Suppose we
+methods (Hernandez et al., 2022; Huang et al.,
+                                                have base input prompt b and a source input prompt
+2023; Schwettmann et al., 2023; Bills et al., 2023;
+                                              s for a model M and we want to target features F.
+Shaham et al., 2024)? Can we do circuit discovery
+                                                 Define the interchange intervention as
+(Marks et al., 2024; Makelov et al., 2024), represen-
+tation analysis (Engels et al., 2024), or activation                                                                                f = get(M, s, F)
+steering (Templeton et al., 2024) in SAE feature
+                                                                                                       ˆy = MF←f(b)space? Our question is whether SAEs provide a
+better feature space than neurons for localizing the
+                                           where get(M, s, F) retrieves the value that fea-concepts used by deep learning models.
+                                                       tures F take on when M is run with input s and
+Interpretability of Knowledge Representations   MF←f(b) is the output produced when M is run
+The RAVEL benchmark belongs to a line of re-   with input b under intervention F ←f.
+search concerned with how factual knowledge is
+stored within a language model (Geva et al., 2021;   Counterfactual Labels  The label of an inter-
+Meng et al., 2022; Dai et al., 2022; Meng et al.,   change intervention example is determined by the
+2023; Hernandez et al., 2023; Geva et al., 2023).   concept we think is encoded in the features F and
+In this paper, we are concerned with how factual    the mechanism that determines the output given
+knowledge is stored and processed in hidden vector    the prompt (Geiger et al., 2021). For our task, the
+representations during model inference. Activa-   mechanism connecting the knowledge of a city and
+tion steering or model editing ask how to control    the expected behavior is simple.  If we are inter-
+a model, whereas we ask how a model constructs   vening on the ‘country’ features, then the ‘country’
+and manipulates representations to control itself.    prompt should have the label from the source ys
+                                            and the ‘continent’ prompt should have the label
+3  Methodology                             from the base yb. If we intervene on the ‘continent’
+                                                         feature, we use the opposite labels.
+3.1  The RAVEL Benchmark
+RAVEL (Huang et al., 2024) is an benchmark that    Splits  To evaluate a proposed set of ‘country’
+evaluates interpretability methods on localizing and    features and ‘continent’ features, we perform in-
+disentangling related factual knowledge. We focus    terchange interventions using the RAVEL dataset
+on the data for disentangling the country a city is   prompts for base and source inputs. We filtered
+in from the continent it is in.                      our dataset down to 40 cities, which can be used
+                                                       to generate 1600 interchange interventions target-
+Filtering  Following Huang et al. (2024), we fil-                                                  ing ‘country’ and 1600 interchange interventions
+ter out all of the cities that GPT-2 small (Radford                                                        targeting ‘continent’ (3200 in total). We split the in-
+et al., 2019) doesn’t know both the country and                                                   terchange intervention data so that 70% is training,
+the continent. However, GPT-2 small is not a very                                    10% is validation, and 20% is test. Our evaluations
+capable model, so we give five in context examples                                                     are i.i.d. to give SAEs the best chance at success.
+when evaluating the knowledge of the model:
+  “Toronto is a city in the country of Canada. Bei-   3.2  Constructing and Selecting Features
+jing is a ... <city> is a city in the country of”
+                                            Sparse Autoencoders for Dictionary Learning
+  See Appendix A for the full 5-shot prompts. We
+                                                Sparse autoencoders (SAEs;Bricken et al. 2023;
+further filter out multi-token cities to simplify the
+                                         Cunningham  et  al. 2023) are a unsupervised
+task and give the SAEs the best chance at success.
+                                          method for unpacking a hidden vector represen-
+The resulting dataset contains 40 cities in total.
+                                                          tation into a higher dimensional, sparsely activated
+Interchange Interventions in Feature Space   If    feature space. The hope is that dimensions in this
+a set of features contains the knowledge that   new feature space will correspond to interpretable
+Toronto is in Canada, then fixing those features    concepts. SAEs used for this purpose typically
+
+
+                                         3
+
+have an encoder with a linear transformation fol-      In particular, DAS learns an orthogonal matrix
+lowed by a ReLU and a linear decoder:       R that rotates a hidden vector h, with the dimen-
+                                                      sions of the rotated space Rh being the new feature
+                   ¯x = x −bx                                                   space, i.e. a set of features F are dimensions of
+           f = ReLU(We¯x + be)            Rh. We start by randomly initializing R, which
+                   ˆx = Wdf + bd                        renders all features equally meaningless. Then, an
+                                                  interchange intervention is performed on features
+  SAEs are optimized jointly to have low recon-  F with a base b and source s input prompt pair.
+struction error and sparse representations:          Loss is computed from the output of the intervened
+            1                                 model:
+     L =  X ∥x −ˆx∥22 + λ ∥f∥1           |X|
+             x∈X
+                                     L = CE(MF←get(M,s,F)(b), y)Low reconstruction loss ensures that the features
+faithful to the underlying hidden vector and low
+                                          The expected label y is determined by the concept
+sparsity loss is thought to create interpretable fea-
+                                                        that we are localizing in F and the mechanism
+tures. General purpose SAEs are trained on hidden
+                                          by which the concept determines behavior. See
+vector representations created by the model when
+                                                 Section 3.1 for a description of the interchange
+processing a enormous amount of text data, e.g., an
+                                                     intervention data. We provide details on hyperpa-
+SAE might be trained on residual stream represen-
+                                                  rameters in Appendix B.
+tations created by the second layer of a transformer
+processing the Pile (Gao et al., 2021).                Differential Binary Masking  In order to deter-
+  The Bloom SAE has this standard architecture   mine which features F to select for a given con-
+and training, but the other SAEs are variants. The    cept (‘country’ and ‘continent’ in our case), we
+Open AI SAE is a top-k SAE, which (Gao et al.,   use Differential Binary Masking (DBM; De Cao
+2024) show to outperform the standard architecture    et al. 2020; Csordás et al. 2021; De Cao et al. 2022;
+on the sparsity-reconstruction frontier. A top-k   Davies et al. 2023) to select features for interven-
+encoder is simply the standard encoder except only    tion.  Each feature f in the feature space F is
+the top-k firing features are kept:                masked with a vector m which is passed into a
+                                               sigmoid σ after being scaled by a temperature T:
+        f = Topk(ReLU(We¯x + be))
+                                                                    fb = get(M, F, b)
+  The two Apollo SAEs have standard architec-
+                                                                 fs = get(M, F, s)ture, but they are trained with additional loss terms.
+The Apollo SAE (e2e) is trained with the addi-         f = (1 −σ(m/T)) ⊙fb + σ(m/T) ⊙fs
+tional loss objective of the KL-divergence between
+                                            These masks are trained on an interchange inter-the output logits of the model before and after re-
+                                                  vention loss objective while the temperature is an-construction. The Apollo SAE (e2e + ds) has the
+                                                  nealed to make the masks snap to 0 or 1:logit-based loss in addition to a mean-squared error
+loss between the residual stream representations in
+                                       L = CE(MF←f(b), y)
+downstream layers before and after reconstruction.
+(Braun et al., 2024) also report a praeto improve-                                   When we DBM with DAS, the features and the
+ment on the sparsity-reconstruction trade off for                                           masks are learned simultaneosly.
+end-to-end models.
+                                       4  Experiments
+Distributed Alignment Search  SAEs are unsu-
+pervised, so features must be further analyzed to de-   Our goal is to find a hidden vector representation
+termine their conceptual content. In contrast, DAS    in GPT-2 small where the DAS skyline features are
+(Geiger et al., 2024b) learns linear features with    significantly better than the neuron baseline, and
+specific conceptual content via supervision from    then evaluate whether SAEs are an improvement
+counterfactual data that describes how a model   on neurons as a unit of analysis. For this reason, we
+should act when a concept has been intervened    follow the lead of (Huang et al., 2023) and chose to
+upon. DAS features learned specifically for this    explore the residual stream representations of GPT-
+task will be a skyline for general-purpose SAEs.     2 small above the <city> token in the early layers
+
+
+                                         4
+
+of the model. We implement our experiments with   have the highest reconstruction loss, the Apollo
+nnsight (Fiotto-Kaufman et al., 2024) and pytorch   SAE(e2e + ds) degrades the city-knowledge of
+(Paszke et al., 2019).                         GPT-2 small an amount that is comparable with
+                                       Open AI SAE and Bloom SAE. This is weak evi-
+4.1  Results                                   dence that the end-to-end objective was helpful for
+In Figure 1a, we report the interchange intervention    preserving model capabilities.
+accuracy across the layers of GPT-2 small. In Fig-
+                                           There is a signifigant gap between baseline andures 1b and 1c, we present the detailed results for
+                                                   skyline; neurons can be improved upon.  Thelayers 1 and 5 of GPT-2 small, because the Apollo
+                                                    skyline provided by DAS at ≈95% accuracy forSAEs are available for those two layers. We learned
+                                                    the first 7 layers of GPT-2 small shows that there‘country’ features and ‘continent’ features, then we
+                                                      are separate linear subspaces that encode the coun-used interchange interventions on those features
+                                                          try a city is in and the continent a city is in. Thisto evaluate whether they, in fact, store the model’s
+                                               means, an SAE with linear features that span theseknowledge of the country and continent that a city
+                                                  subspaces could achieve performance equivalent tois in, respectively. When targeting ‘country’ fea-
+                                        DAS. The neuron baseline at ≈70% is significantlytures for intervention, the ‘country’ accuracy is
+                                             worse than the DAS skyline, and shows that therehigh when the intervention changes the output and
+                                                      are polysemantic neurons that need to be disentan-the ‘continent’ accuracy is high when the interven-
+                                                  gled by a rotation via an orthogonal matrix.tion does not change the model output. The oppo-
+site is true for interventions on ‘continent’ features.                                            Current SAEs for GPT-2 small struggle to com-
+The ‘disentangle score’ is the average of the two                                                pete with the neurons.  The two Apollo SAEs
+accuracies. In the middle three rows of the table are                                             and Bloom SAE below the neuron baseline across
+sparsity evaluations that report how many features                                                                   all layers. The ‘country’ and ‘continent’ knowledge
+were active and/or intervened upon. In the final two                                                     are even more entangled in the feature spaces pro-
+rows of the table are reconstruction evaluations that                                                 vided by these SAEs. The Open AI SAE at ≈70%
+report the knowledge degradation of GPT-2 small                                                                is able to match the performance of the neuron
+when a reconstructed vector is used and the aver-                                                       baseline, but not exceed it.
+age reconstruction loss on residual stream vectors
+above the <city> token at a given layer.          The top-k SAE is the most performant.  Our
+                                                    evaluation is limited, however the results do seem
+4.2  Discussion                                                         to track improvements in SAEs. The Open AI SAE
+Using representations reconstructed by SAEs     is a top k-SAE, which a performant architecture on
+degrades the model’s knowledge of cities.  The    sparsity and reconstruction evaluations (Gao et al.,
+last row in Figures 1b and 1c that using a represen-   2024). This is in line with our results that the Open
+tation reconstructed by an SAE always degrades   AI SAE is the only model that competes with the
+the model’s knowledge of the countries and conti-   neuron baseline across all layers.
+nents that cities belong to. For the first layer, we
+can see that the Bloom SAE and Apollo SAEe2e   5  Conclusion
+severely harm the model (≈-50%) and the Apollo
+                                We evaluate open-source SAEs on their ability toSAE e2e+ds destroys the knowledge entirely. In
+                                                 provide a feature space for GPT-2 hidden repre-contrast, the Open AI SAE results in only a small
+                                                       sentations where knowledge about the country anddrop in performance (-5%). For the fifth layer, there
+                                                     continent a city is in can be disentangled. We used is less degradation, the Apollo SAE e2e+ds works,
+                                               neurons as a baseline feature space, and a super-and Open AI SAE is again the best.
+                                                   vised feature learned by DAS as a skyline feature
+The end-to-end SAEs degrade knowledge less    space. While we were able to see meaningful dif-
+relative to the reconstruction loss.  In our lim-   ferences in performance between the three SAEs,
+ited evaluations, there is no evidence that end-to-   only one of the evaluated SAEs was able to reach
+end training used to create the two Apollo SAEs    the neuron baseline and none could reach the DAS
+was helpful for providing a feature space where    skyline. We hope this is a useful step in evaluating
+knowledge can be disentangled. However, in the    the usefulness of SAEs for a causal interpretability
+last two rows of Figure 1c we can see that despite    analysis of deep learning models.
+
+
+                                         5
+
+Limitations                                   Xander  Davies,  Max  Nadeau,  Nikhil  Prakash,
+                                                Tamar Rott Shaham, and David Bau. 2023.  Dis-
+In future, we would like to scale the experiments      covering variable binding circuitry with desiderata.
+to models with available SAEs including gemma,       Preprint, arXiv:2307.03637.
+Mistral, Llama, and Pythia. Furthermore, we hope
+                                                      Nicola De Cao, Michael Sejr Schlichtkrull, Wilker Aziz,
+to use more attributes from the RAVEL dataset,                                                  and Ivan Titov. 2020. How do decisions emerge
+such as language, gender, etc. for larger models       across layers in neural models? interpretation with
+with more knowledge.                                      differentiable masking. In Proceedings of the 2020
+                                                     Conference on Empirical Methods in Natural Lan-
+                                                   guage Processing (EMNLP), pages 3243–3255, On-
+                                                                       line. Association for Computational Linguistics.References
+
+Steven   Bills,   Nick  Cammarata,  Dan  Moss-   Nicola De Cao, Leon Schmid, Dieuwke Hupkes, and
+   ing,  Henk  Tillman,  Leo  Gao,  Gabriel  Goh,      Ivan Titov. 2022. Sparse interventions in language
+   Ilya  Sutskever,   Jan  Leike,   Jeff  Wu,  and      models with differentiable masking. In Proceedings
+  William  Saunders.  2023.     Language  mod-       of the Fifth BlackboxNLP Workshop on Analyzing
+   els  can  explain  neurons  in  language  models.     and Interpreting Neural Networks for NLP, pages
+  https://openaipublic.blob.core.windows.         16–27, Abu Dhabi, United Arab Emirates (Hybrid).
+  net/neuron-explainer/paper/index.html.           Association for Computational Linguistics.
+
+Joseph Bloom. 2024. Open source sparse autoencoders    Joshua Engels, Isaac Liao, Eric J. Michaud, Wes Gurnee,
+   for all residual stream layers of gpt2 small.             and Max Tegmark. 2024. Not all language model
+                                                               features are linear. CoRR, abs/2405.14860.
+Tolga Bolukbasi, Adam Pearce, Ann Yuan, Andy Co-
+   enen, Emily Reif, Fernanda Viégas, and Martin Wat-   Matthew  Finlayson,  Aaron  Mueller,   Sebastian
+   tenberg. 2021. An interpretability illusion for bert.     Gehrmann, Stuart Shieber, Tal Linzen, and Yonatan
+   Preprint, arXiv:2104.07143.                            Belinkov. 2021.   Causal  analysis of  syntactic
+                                                    agreement mechanisms in neural language models.
+Dan Braun, Jordan Taylor, Nicholas Goldowsky-Dill,                                                          In Proceedings of the 59th Annual Meeting of
+  and Lee Sharkey. 2024. Identifying functionally im-                                                            the  Association  for  Computational  Linguistics
+   portant features with end-to-end sparse dictionary                                                 and the 11th International Joint Conference on
+   learning. Preprint, arXiv:2405.12241.                                                       Natural Language Processing (Volume 1:  Long
+                                                          Papers), pages 1828–1843, Online. Association for
+Trenton Bricken, Adly Templeton, Joshua Batson,                                                      Computational Linguistics.
+   Brian Chen, Adam Jermyn, Tom Conerly, Nick
+   Turner, Cem Anil, Carson Denison, Amanda Askell,                                                    Jaden Fiotto-Kaufman, Alexander R Loftus, Eric Todd,
+   Robert Lasenby, Yifan Wu, Shauna Kravec, Nicholas                                                        Jannik Brinkmann, Caden Juang, Koyena Pal, Can
+   Schiefer, Tim Maxwell,  Nicholas Joseph, Zac                                                        Rager, Aaron Mueller, Samuel Marks, Arnab Sen
+   Hatfield-Dodds, Alex Tamkin, Karina Nguyen, Bray-                                                   Sharma, Francesca Lucchetti, Michael Ripa, Adam
+  den McLean, Josiah E Burke, Tristan Hume, Shan                                                                Belfki, Nikhil Prakash, Sumeet Multani, Carla Brod-
+   Carter, Tom Henighan, and Christopher Olah. 2023.                                                                       ley, Arjun Guha, Jonathan Bell, Byron Wallace, and
+  Towards monosemanticity: Decomposing language                                                  David Bau. 2024. Nnsight and ndif: Democratiz-
+  models with dictionary learning. Transformer Cir-                                                         ing access to foundation model internals. Preprint,
+   cuits Thread.                                                        arXiv:2407.14561.
+
+Nick Cammarata, Shan Carter, Gabriel Goh, Chris Olah,
+                                             Leo Gao, Stella Biderman, Sid Black, Laurence Gold-  Michael Petrov, Ludwig Schubert, Chelsea Voss, Ben
+                                                                ing, Travis Hoppe, Charles Foster, Jason Phang,  Egan, and Swee Kiat Lim. 2020. Thread: Circuits.
+                                                  Horace He, Anish Thite, Noa Nabeshima, Shawn   Distill. Https://distill.pub/2020/circuits.
+                                                               Presser, and Connor Leahy. 2021.  The pile: An
+                                                  800gb dataset of diverse text for language modeling.Róbert Csordás, Sjoerd van Steenkiste, and Jürgen
+                                               CoRR, abs/2101.00027.  Schmidhuber. 2021. Are neural nets modular? in-
+   specting functional modularity through differentiable
+  weight masks. In International Conference on Learn-   Leo Gao, Tom Dupré la Tour, Henk Tillman, Gabriel
+   ing Representations.                               Goh, Rajan Troll, Alec Radford, Ilya Sutskever, Jan
+                                                            Leike, and Jeffrey Wu. 2024. Scaling and evaluating
+Hoagy Cunningham, Aidan Ewart, Logan Riggs, Robert       sparse autoencoders. CoRR, abs/2406.04093.
+  Huben, and Lee Sharkey. 2023. Sparse autoencoders
+   find highly interpretable features in language models.    Atticus Geiger, Duligur Ibeling, Amir Zur, Maheep
+   Preprint, arXiv:2309.08600.                          Chaudhary, Sonakshi Chauhan, Jing Huang, Arya-
+                                            man Arora, Zhengxuan Wu, Noah Goodman, Christo-
+Damai Dai, Li Dong, Yaru Hao, Zhifang Sui, Baobao      pher Potts, and Thomas Icard. 2024a.  Causal ab-
+  Chang, and Furu Wei. 2022. Knowledge neurons in       straction: A theoretical foundation for mechanistic
+   pretrained transformers. In acl.                              interpretability. Preprint, arXiv:2301.04709.
+
+
+                                         6
+
+Atticus Geiger, Hanson Lu, Thomas Icard, and Christo-     and Neel Nanda. 2024. Gemma scope: Open sparse
+  pher Potts. 2021. Causal abstractions of neural net-      autoencoders everywhere all at once on gemma 2.
+  works. In Advances in Neural Information Process-       Preprint, arXiv:2408.05147.
+   ing Systems 34: Annual Conference on Neural In-
+  formation Processing Systems 2021, NeurIPS 2021,   Aleksandar Makelov, George Lange, and Neel Nanda.
+  December 6-14, 2021, virtual, pages 9574–9586.         2024. Towards principled evaluations of sparse au-
+                                                         toencoders for interpretability and control. Preprint,
+Atticus Geiger, Kyle Richardson, and Christopher Potts.      arXiv:2405.08366.
+  2020.  Neural natural language inference models
+   partially embed theories of lexical entailment and   Samuel Marks, Can Rager, Eric J. Michaud, Yonatan
+   negation. In Proceedings of the Third BlackboxNLP      Belinkov, David Bau, and Aaron Mueller. 2024.
+  Workshop on Analyzing and Interpreting Neural Net-      Sparse feature circuits: Discovering and editing in-
+  works for NLP, pages 163–173, Online. Association       terpretable causal graphs in language models. CoRR,
+   for Computational Linguistics.                          abs/2403.19647.
+
+Atticus Geiger, Zhengxuan Wu, Christopher Potts,   James L. McClelland, David E. Rumelhart, and PDP Re-
+  Thomas Icard, and Noah D. Goodman. 2024b. Find-      search Group. 1986a. Parallel Distributed Process-
+   ing alignments between interpretable causal variables       ing, Volume 2: Explorations in the Microstructure
+  and distributed neural representations.  In Causal       of Cognition: Psychological and Biological Models.
+  Learning and Reasoning, 1-3 April 2024, Los Ange-     The MIT Press.
+   les, California, USA, volume 236 of Proceedings of
+                                                 James L. McClelland, David E. Rumelhart, and PDP Re-
+  Machine Learning Research, pages 160–187. PMLR.
+                                                         search Group. 1986b. Parallel Distributed Process-
+                                                                ing, Volume 2: Explorations in the MicrostructureMor Geva, Jasmijn Bastings, Katja Filippova, and Amir
+                                                               of Cognition: Psychological and Biological Models.  Globerson. 2023. Dissecting recall of factual associ-
+                                                The MIT Press.   ations in auto-regressive language models. Preprint,
+  arXiv:2304.14767.
+                                                 Kevin Meng, David Bau, Alex Andonian, and Yonatan
+                                                          Belinkov. 2022. Locating and editing factual associ-Mor Geva, Roei Schuster, Jonathan Berant, and Omer
+                                                             ations in GPT. In Advances in Neural Information  Levy. 2021.  Transformer feed-forward layers are
+                                                        Processing Systems 35: Annual Conference on Neu-   key-value memories. In emnlp.
+                                                               ral Information Processing Systems 2022, NeurIPS
+Wes Gurnee, Neel Nanda, Matthew Pauly, Katherine      2022, New Orleans, LA, USA, November 28 - Decem-
+  Harvey, Dmitrii Troitskii, and Dimitris Bertsimas.      ber 9, 2022.
+  2023. Finding neurons in a haystack: Case studies
+                                                Kevin Meng, Arnab Sen Sharma, Alex J. Andonian,  with sparse probing. Preprint, arXiv:2305.01610.
+                                                    Yonatan Belinkov, and David Bau. 2023.  Mass-
+Evan Hernandez, Belinda Z Li, and Jacob Andreas.      editing memory in a transformer. In The Eleventh
+  2023. Measuring and manipulating knowledge rep-      International Conference on Learning Representa-
+   resentations in language models.  arXiv preprint        tions, ICLR 2023, Kigali, Rwanda, May 1-5, 2023.
+  arXiv:2304.00740.                                   OpenReview.net.
+
+Evan Hernandez, Sarah Schwettmann, David Bau,   Aaron Mueller, Jannik Brinkmann, Millicent Li, Samuel
+  Teona Bagashvili, Antonio Torralba, and Jacob An-      Marks, Koyena Pal, Nikhil Prakash, Can Rager,
+   dreas. 2022. Natural language descriptions of deep     Aruna Sankaranarayanan, Arnab Sen Sharma, Jiud-
+   visual features. In The Tenth International Confer-      ing Sun, Eric Todd, David Bau, and Yonatan Be-
+  ence on Learning Representations, ICLR 2022, Vir-       linkov. 2024. The quest for the right mediator: A
+   tual Event, April 25-29, 2022. OpenReview.net.            history, survey, and theoretical grounding of causal
+                                                                    interpretability. Preprint, arXiv:2408.01416.
+Jing Huang,  Atticus Geiger, Karel D’Oosterlinck,
+  Zhengxuan Wu, and Christopher Potts. 2023. Rig-    Chris Olah, Nick Cammarata, Ludwig Schubert, Gabriel
+   orously assessing natural language explanations of      Goh,  Michael  Petrov,  and Shan  Carter. 2020.
+   neurons.  In Proceedings of the 6th BlackboxNLP     Zoom  in: An introduction to  circuits.    Distill.
+  Workshop: Analyzing and Interpreting Neural Net-       Https://distill.pub/2020/circuits/zoom-in.
+  works for NLP, BlackboxNLP@EMNLP 2023, Singa-
+                                      Adam Paszke, Sam Gross, Francisco Massa, Adam   pore, December 7, 2023, pages 317–331. Association
+                                                             Lerer, James Bradbury, Gregory Chanan, Trevor   for Computational Linguistics.
+                                                             Killeen, Zeming Lin, Natalia Gimelshein, Luca
+Jing Huang, Zhengxuan Wu, Christopher Potts, Mor      Antiga, Alban Desmaison, Andreas Kopf, Edward
+  Geva, and Atticus Geiger. 2024. Ravel: Evaluating      Yang, Zachary DeVito, Martin Raison, Alykhan Te-
+   interpretability methods on disentangling language        jani, Sasank Chilamkurthy, Benoit Steiner, Lu Fang,
+  model representations. Preprint, arXiv:2402.17700.       Junjie Bai, and Soumith Chintala. 2019.  Pytorch:
+                                         An imperative style, high-performance deep learning
+Tom Lieberum, Senthooran Rajamanoharan, Arthur        library. In Advances in Neural Information Process-
+  Conmy, Lewis Smith, Nicolas Sonnerat, Vikrant       ing Systems 32, pages 8024–8035. Curran Associates,
+  Varma, János Kramár, Anca Dragan, Rohin Shah,       Inc.
+
+
+                                         7
+
+Alec Radford, Jeff Wu, Rewon Child, David Luan,  A  Evaluation Details
+  Dario Amodei, and Ilya Sutskever. 2019. Language
+  models are unsupervised multitask learners.         To enhance, the prediction capability of GPT-2 us-
+                                                  ing in-context learning, we use 5-shot prompt for
+Sarah Schwettmann, Tamar Rott Shaham, Joanna
+                                                both the attributes.  Specifically, for country at-  Materzynska, Neil Chowdhury, Shuang Li, Jacob
+  Andreas, David Bau, and Antonio Torralba. 2023.    tribute, we prepare a template as: “Toronto is a city
+  FIND: A function description benchmark for evaluat-    in the country of Canada. Beijing is a city in the
+   ing interpretability methods. In Advances in Neural    country of China. Miami is a city in the country of
+  Information Processing Systems 36: Annual Confer-
+                                                     the United States. Santiago is a city in the country
+  ence on Neural Information Processing Systems 2023,
+  NeurIPS 2023, New Orleans, LA, USA, December 10    of Chile. London is a city in the country of England.
+   - 16, 2023.                                 <city> is a city in the country of”.
+                                                          Similarly, to support the prediction of continent,
+Tamar Rott Shaham, Sarah Schwettmann, Franklin
+                                      we also prepare a similar template for the model as:  Wang, Achyuta Rajaram, Evan Hernandez, Jacob
+  Andreas, and Antonio Torralba. 2024.  A mul-  “Toronto is a city in the continent of North America.
+  timodal automated interpretability agent.  CoRR,   Beijing is a city in the continent of Asia. Miami is
+  abs/2404.14394.                             a city in the continent of North America. Santiago
+Paul Smolensky. 1988. On the proper treatment of     is a city in the continent of South America. London
+  connectionism.   Behavioral and Brain Sciences,    is a city in the continent of Europe. <city> is a
+  11(1):1–23.                                            city in the continent of”. The <city> is replaced
+                                               with the city name in the dataset to make severalAdly Templeton, Tom Conerly, Jonathan Marcus, Jack
+   Lindsey, Trenton Bricken, Brian Chen, Adam Pearce,   samples to make the data for both the country and
+   Craig Citro, Emmanuel Ameisen, Andy Jones, Hoagy    continent attributes.
+  Cunningham, Nicholas L Turner, Callum McDougall,                                                       Eventually, we prepare the final dataset consist-
+  Monte MacDiarmid, C. Daniel Freeman, Theodore R.
+                                                  ing of base and source sentences, with their corre-  Sumers, Edward Rees, Joshua Batson, Adam Jermyn,
+  Shan Carter, Chris Olah, and Tom Henighan. 2024.   sponding labels to evaluate different techniques. In
+   Scaling monosemanticity: Extracting interpretable   each example, either the ‘country’ is targeted for
+   features from claude 3 sonnet. Transformer Circuits    intervention or the ‘continent’ is. When a prompt
+  Thread.
+                                                               is for targeted attribute, the intervention should
+Jesse Vig, Sebastian Gehrmann, Yonatan Belinkov,   change the output to match the source city. When
+  Sharon Qian, Daniel Nevo, Yaron Singer, and Stu-   the prompt is for the other attribute, the interven-
+   art M. Shieber. 2020. Investigating gender bias in                                                       tion should not change the output.
+  language models using causal mediation analysis.
+   In Advances in Neural Information Processing Sys-
+                              B  Hyperparameters and Compute  tems 33: Annual Conference on Neural Information
+  Processing Systems 2020, NeurIPS 2020, December
+                                We  used  these  parameters  for DBM  and
+   6-12, 2020, virtual.
+                               DBM+DAS training. Batch size of 16. Tempera-
+                                                      ture is annealed linearly from 10 to 0.1. Training
+                                          was for 20 epochs. Learning rate is 0.001.
+                               A masking experiment takes 1 hour approx to
+                                                       run. Three layers had 4 experiments with a run for
+                                                       for each intervention so 4*2 experiments. Layer 1
+                                              had a total of 6 experiments with two interventions
+                                                   each. Total time: 1x3x4x2 + 1x6x2 = 36 hours on
+                                                 a 24GB Nvidia RTX A5000
+
+                           C  Full Reconstruction Evaluation
+
+                                            See Tables 1 and 2 for the reconstruction evalua-
+                                                       tions done across all the layers.
+
+                           D  Training Graphs
+
+                                             See Figures 2a and 3a for the training graphs.
+
+
+
+
+                                         8
+
+   Layers   Bloom SAE  Bloom SAE  OpenAI SAE  OpenAI SAE  Apollo SAE  Apollo SAE    Apollo SAE      Apollo SAE
+              Country     Continent      Country       Continent      Country      Continent   e2e+ds Country  e2e+ds Continent
+  Layer 0     400.87       413.03        102.91         104.2               -                 -                   -                       -
+  Layer 1     551.28        516.5        151.83        158.03       2245.57      2307.15        2129.71          2123.09
+  Layer 2     698.25       681.64        217.13        219.78              -                 -                   -                       -
+  Layer 3     876.36       814.99        330.43        336.34              -                 -                   -                       -
+  Layer 4     890.41       869.71        449.33        458.82              -                 -                   -                       -
+  Layer 5     936.77      1044.33       643.82        651.67       2383.14      2576.08        2353.61          2318.49
+  Layer 6     1178.01      1531.46       839.68        837.81              -                 -                   -                       -
+  Layer 7     4640.78      7757.06      1218.99       1211.81             -                 -                   -                       -
+  Layer 8    19556.78     26810.38      1727.77       1723.93             -                 -                   -                       -
+  Layer 9    27877.84     36537.93      2304.84       2311.26       5276.6       6038.87        2569.59           2665.5
+  Layer 10   532812.74    571233.39     3296.77       3467.73             -                 -                   -                       -
+  Layer 11   846887.04    859555.3      4833.99       4893.55             -                 -                   -                       -
+
+Table 1: The table above denotes the reconstruction loss for country and continent dataset separately for each SAE.
+
+
+
+
+   Layers       Bloom SAE      Bloom SAE     OpenAI SAE     OpenAI SAE       Apollo SAE       Apollo SAE        Apollo SAE          Apollo SAE
+                  Country          Continent         Country          Continent          Country          Continent       e2e+ds Country      e2e+ds Continent
+  Layer 0          0.9375           0.890625   0.9642857142857143    0.9609375                  -                       -                        -                            -
+  Layer 1          0.5625           0.46875    0.9464285714285714    0.9453125   0.6696428571428571   0.3515625   0.008928571428571428          0.0
+  Layer 2   0.5267857142857143    0.5390625   0.9553571428571429    0.9140625                  -                       -                        -                            -
+  Layer 3   0.7142857142857143     0.78125    0.9196428571428571    0.890625                  -                       -                        -                            -
+  Layer 4   0.7946428571428571    0.8984375   0.9196428571428571      0.875                     -                       -                        -                            -
+  Layer 5   0.7678571428571429    0.859375           0.875          0.8984375   0.8392857142857143   0.7578125    0.8303571428571429       0.609375
+  Layer 6   0.7946428571428571     0.78125           0.8125          0.7421875                  -                       -                        -                            -
+  Layer 7           0.875           0.765625   0.7857142857142857    0.703125                  -                       -                        -                            -
+  Layer 8   0.8571428571428571    0.7578125   0.8571428571428571    0.8984375                  -                       -                        -                            -
+  Layer 9   0.6696428571428571    0.5078125   0.9107142857142857    0.9609375   0.9464285714285714   0.9453125            0.875               0.90625
+  Layer 10  0.23214285714285715    0.03125    0.9732142857142857    0.9765625                  -                       -                        -                            -
+  Layer 11            1.0                 1.0                1.0                 1.0                      -                       -                        -                            -
+
+ Table 2: The table above denotes the accuracy for country and continent dataset after intervention for each SAE
+
+
+
+
+
+(a) Training graphs for Layer 1 depict the results for both country and continent interventions. The country-intervened data is
+represented with dashed lines, while continent-intervened data is shown with bold lines, using the same color scheme as defined
+in the legend above the graph. The plots illustrate the training accuracy and loss for Neuron Masking, SAE Apollo e2e, SAE
+Apollo e2e+ds, OpenAI SAE, and Bloom SAE with DAS.
+
+
+
+
+
+(a) Training graphs for Layer 5 depict the results for both country and continent interventions. The country-intervened data is
+represented with dashed lines, while continent-intervened data is shown with bold lines, using the same color scheme as defined
+in the legend above the graph. The plots illustrate the training accuracy and loss for Neuron Masking, SAE Apollo e2e, SAE
+Apollo e2e+ds, OpenAI SAE, and Bloom SAE with DAS.
+
+
+
+                                         9

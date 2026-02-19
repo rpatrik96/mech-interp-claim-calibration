@@ -1,0 +1,34 @@
+[project]
+name = "h2-pilot-study"
+version = "0.1.0"
+description = "Multi-LLM annotation pipeline for ICML position paper pilot study"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.40.0",
+    "openai>=1.50.0",
+    "arxiv>=2.1.0",
+    "pymupdf==1.25.3",           # PINNED — text extraction reproducibility [V8]
+    "pandas>=2.1.0",
+    "numpy>=1.26.0",
+    "scipy>=1.12.0",
+    "scikit-learn>=1.4.0",       # cohen_kappa_score, confusion_matrix
+    "krippendorff>=0.7.0",       # Krippendorff's alpha
+    "pingouin>=0.5.4",           # ICC computation
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+    "google-genai>=1.0.0",       # Gemini structured output
+    "pydantic>=2.5.0",           # structured output schemas
+    "pyyaml>=6.0",               # config loading
+]
+
+[project.optional-dependencies]
+phase2 = [
+    "sentence-transformers>=3.0.0",  # claim alignment (Phase 2 only; pulls torch)
+]
+test = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

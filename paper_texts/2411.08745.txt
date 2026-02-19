@@ -1,0 +1,1202 @@
+              Separating Tongue from Thought: Activation Patching Reveals
+              Language-Agnostic Concept Representations in Transformers
+
+
+                               Clément Dumas12*† Chris Wendler3*†
+                       Veniamin Veselovsky4† Giovanni Monea5† Robert West6
+           1ENS Paris-Saclay 2Université Paris-Saclay 3Northeastern 4 Princeton 5Cornell 6EPFL
+                   {clement.dumas@ens-paris-saclay.fr, chris.wendler@epfl.ch}
+
+
+
+                          Abstract
+
+          A central question in multilingual language
+                modeling is whether large language models
+              (LLMs) develop a universal concept represen-2025              tation, disentangled from specific languages.
+                  In this paper, we address this question by an-
+                  alyzing latent representations (latents) duringJun
+                 a word-translation task in transformer-based
+25         LLMs. We strategically extract latents from a                  source translation prompt and insert them into
+                   the forward pass on a target translation prompt.
+             By doing so, we find that the output language
+                       is encoded in the latent at an earlier layer than
+                   the concept to be translated. Building on this
+                     insight, we conduct two key experiments. First,[cs.CL]
+             we demonstrate that we can change the con-
+                                                                   Figure 1: For two given concepts, e.g., BOOK and
+                  cept without changing the language and vice
+                                                     LEMON, we construct multiple source prompts which
+                  versa through activation patching alone. Sec-
+                                                                                translate BOOK, and a target prompt for translating from
+                  ond, we show that patching with the mean rep-
+                                                                 French to Chinese. Then we extract the residual stream
+                   resentation of a concept across different lan-
+                                                                        of the last token of the word to be translated after some
+                guages does not affect the models’ ability to
+                                                                            layer j and all subsequent ones from the source prompts
+                    translate it, but instead improves it.  Finally,
+                                                             and insert the mean of each layer at the corresponding
+             we generalize to multi-token generation and
+                                                                         positions in the forward pass of the target prompt. The
+                 demonstrate that the model can generate natu-
+                                                                           resulting next token probabilities will concentrate on
+                      ral language description of those mean repre-                                                                          the source concept in target language (BOOKZH, i.e., 书)
+                    sentations. Our results provide evidence for the
+                                                      when patching at layers 0–15, on the target concept in
+                  existence of language-agnostic concept repre-                                                                            target language (LEMONZH, 柠檬) for layers 16–31.
+                   sentations within the investigated models.1
+
+                                                              achieve remarkable performance across multiplearXiv:2411.08745v4
+          1  Introduction                               languages (Shi et al., 2022), raising fundamen-
+                                                                                tal questions about how they process and repre-
+          Most modern large language models (LLMs) are                                                                     sent multilingual information. Understanding these
+              trained on massive corpora dominated by English                                                      mechanisms is crucial not only to improve model
+               text (Touvron et al., 2023; Dubey et al., 2024;                                                            performance, but also to identify potential biases
+            Radford et al., 2019; Brown et al., 2020; Ope-                                                        and limitations in cross-lingual processing.
+            nAI, 2023). Despite this imbalanced training, they                                      A fundamental question in multilingual lan-
+                  *Equal contribution                             guage modeling is whether LLMs develop univer-
+                †Work done while at EPFL                               sal concept representations that transcend specific
+                   1This  work  has  been  previously  published  under
+                                                            languages (Wendler et al., 2024; Conneau et al.,                the  title “How Do Llamas Process Multilingual Text?
+         A  Latent  Exploration through  Activation  Patching”  at   2020b; Chi et al., 2020; Xie et al., 2022; Mousi
+                the ICML 2024 Mechanistic  Interpretability Workshop    et al., 2024). For example, when a model processes
+               https://openreview.net/forum?id=0ku2hIm4BS.
+                                                                 the word “cat” in English and “chat” in French,            Code  for reproducing our experiments  is  available  at
+                https://github.com/Butanium/llm-lang-agnostic             does it map these to the same internal represen-
+
+
+                                                    1
+
+tation of the feline concept, or does it maintain       and concepts are represented independently,
+separate language-specific representations? Sev-       and H2 where they are inherently entangled.
+eral recent works hint at the existence of language-     We argue that if language and concepts are in-
+agnostic concept representations.                       dependent (H1), averaging the latent represen-
+  Wendler et al. (2024) found that for simple mul-         tation of a concept across languages should
+tilingual tasks independent of the input and output            still allow the model to make sense of and
+language intermediate decodings of concept rep-         utilize this representation. Conversely, if lan-
+resentations using the logit lens (Nostalgebraist,       guage and concepts are entangled (H2), this
+2020) decode to the English before they decode      mean representation would be an incoherent
+to the target language. Additionally, it has been        mixture of language-specific concepts that the
+long observed that instruction and safety tuning       model cannot effectively use.
+LLMs only on English data generalizes to other      3. To test these hypotheses, we use a novel activa-
+languages (Li et al., 2024; Shaham et al., 2024).         tion patching setup depicted in Figure 1 which
+The presence of language-agnostic representation         forces Llama 2 7B to translate this mean repre-
+in the pretrained LLMs would provide an explana-         sentation across languages. We find that using
+tion for both of these behaviors.                          the mean concept representation across lan-
+                                                  guages improves Llama 2 7B’s performance  This provides a unique opportunity for us to dig
+                                               on a word translation task, supporting H1.deeper and examine how multilingual concepts are
+                                                            4. We show that our observations generalize to arepresented and processed within LLMs, poten-
+                                                         diverse set of transformer models varying intially revealing insights into language biases and
+                                                                  size, architecture, and training data, includingconcept formation. In particular, we are inspired
+                                               Llama 2 70B, Llama 3 8B (Dubey et al., 2024),by recent mechanistic interpretability approaches
+                                                        Mistral 7B (Jiang et al., 2023), Qwen 1.5based on activation patching (Variengien and Win-
+                                        7B (Bai et al., 2023), Aya 23 8B (Aryabumisor, 2023; Ghandeharioun et al., 2024; Chen et al.,
+                                                                et al., 2024) and Gemma 2 2B (Team et al.,2024a). These approaches are based on the idea
+                                                       2024).of patching activations from one forward pass into
+                                                            5. Finally, to support our claim that mean repre-another while observing the output (c.f. Fig. 2) and
+                                                           sentation are usable by the model in a autore-present a simple, yet effective way to inspect the
+                                                            gressive generation setting, we present a novelrepresentations learned and causally understand the
+                                                             activation patching setup depicted in Figure 5computations performed by LLMs.
+                                                             to show that a model can successfully write a
+Contributions. While prior work has provided         definition of such a mean representation.
+observational evidence for shared semantic spaces
+                                                 Implications.  While prior work has suggested
+in LLMs, we present the first causal analysis of
+                                                      the existence of shared semantic spaces across lan-
+how these representations are actively utilized dur-
+                                               guages through observational methods, our causal
+ing multilingual processing. More specifically, in
+                                                     analysis provides the  first direct evidence that
+this work we aim to understand how transformers
+                                  LLMs actively utilize language-agnostic concept
+process and represent concepts during translation
+                                                    representations during text generation.  Further-
+tasks, whether language and concept information
+                                              more, our activation patching methodology estab-
+can be manipulated independently in the model’s
+                                                         lishes a framework for future causal investigations
+computations, and, whether models maintain sep-
+                                                     of multilingual representations, moving beyond the
+arate language-specific concept representations or
+                                                      limitations of embedding similarity, probing, and
+develop a shared conceptual space. To this end, we
+                                                           logit lens approaches.
+make the following contributions.
+  1. First, we perform an activation patching anal-                                       2  Related Work
+     ysis of Llama 2 7B (Touvron et al., 2023). We
+     demonstrate that the model processes transla-  LLMs have demonstrated remarkable capabilities
+     tion tasks by first resolving output language,    in processing multilingual text across languages,
+     then the concept to be translated.              with examples including encoder-only model like
+  2. We propose two competing hypotheses about  mBERT (Devlin et al., 2018), XLM-R (Conneau
+    how transformers solve the translation task    et al., 2020a), and mT5 (Xue et al., 2021) and
+     during their forward pass: H1 where language   decoder-only model like (Aryabumi et al., 2024;
+
+
+                                         2
+
+Dubey et al., 2024). Studies on encoder-only mod-   draw causal interpretation of LLM representations
+els have shown that they develop language-agnostic    (Variengien and Winsor, 2023; Geiger et al., 2022;
+representations, explaining their cross-lingual trans-   Kramár et al., 2024). More recently, Ghandehar-
+fer capabilities. The methodology used was em-   ioun et al. (2024); Chen et al. (2024a) also show
+bedding similarity analysis (Conneau et al., 2020b;   patching setups in which they can use the model
+Libovický et al., 2020; Muller et al., 2021; Mousi     itself to analyze its own model internal. Inspired by
+et al., 2024) and probing methods (Choenni and    those methods, we developed two novel patching
+Shutova, 2020; Pires et al., 2019).                  experiments supporting the language-agnosicity of
+  While decoder-only transformers are not primar-  LLMs representation.
+ily designed to develop contextual embedding, but       Parallel work to ours by Fierro et al. (2025) lever-
+rather for open-ended text generation, they also   ages the mechanistic interpretability toolkit to un-
+develop cross-lingual generalization, for example,   derstand how factual recall works in multilingual
+during safety and instruction tuning (Li et al., 2024;  LLMs as well. Similar to us, they find that the con-
+Chirkova and Nikoulina, 2024). Mechanistic in-   cept to be decoded and its language does not enter
+terpretability has led to powerful tools to analyze    at the same layer into the residual stream, however
+the language-agnosticity of these models. Using    in their knowledge association tasks they observe
+neuron analysis Sta´nczak et al. (2022); Chen et al.   the opposite order than we do in our translation
+(2024b); Cao et al. (2024); Zeng et al. (2024); Tang    task. They also find that large parts of multilingual-
+et al. (2024) have shown that LLMs develop both    factual recall are handled in a language agnostic
+language-agnostic and language-specific neurons.   way, despite the investigated models being trained
+Wendler et al. (2024); Wu et al. (2024) use the logit   on a more balanced split of languages than the ones
+lens (Nostalgebraist, 2020) to perform early de-   studied in our paper.
+coding during the forward pass of both LLMs and
+                                       3  Backgroundshow that, no matter the language or input modality,
+the intermediate decodings concentrate on English
+                                           Transformers forward pass. When an autore-before decoding to a specific language in the very
+                                                     gressive decoder-only transformer (Vaswani et al.,last layers.
+                                                2017; Touvron et al., 2023) with L layers processes  While the analyses via embedding similarity,
+                                                 a sequence of input tokens x1, . . . , xn ∈V from aprobing and the logit lens give use valuable in-
+                                                vocabulary V , each token is initially transformedsight into the structure of the representation, they
+                                                      into a d-dimensional vector h0i by an embeddingare not causal. Additionally, while the neuron level
+                                                            layer. This first set of vector is the beginning of theanalysis studies the causal effects of the neurons,
+                                                      residual stream. Then, for each token position i,they do not study the representation themselves.
+                                                     the layer j ∈1, . . . , L updates the residual streamOur work aims to fill this gap.
+                                                     the following way: A related line of work has explored using defi-
+nition generation as a means to evaluate semantic
+                                                            h(j)i = h(j−1)i   + fj  h(j−1)1      , . . . , h(j−1)i         (1)representations. Noraset et al. (2017) introduced
+definition modeling, the task of generating dictio-
+                                             where fj represents the operations of the j-th layer
+nary definitions from word embeddings, as a more
+                                                         (typically self-attention followed by a feedforward
+direct evaluation of what semantic information em-
+                                                  network). Finally, for a m-layer transformer, the
+beddings capture. This approach has been extended
+                                                   next-token probabilities are obtained via a learned
+to evaluate various types of embeddings (Gardner
+                                                         linear layer followed by a softmax operation map-
+et al., 2022; Chang and Chen, 2019). For example,
+                                                 ping h(m)i   to P(xi+1|x1 . . . xi).(Chang and Chen, 2019) demonstrated that contex-
+tualized embeddings like ELMo and BERT can be   Activation patching.  Activation patching is a
+effectively mapped to definition spaces, revealing    causal intervention technique that allows us to un-
+their sense-specific semantic content. In our work,   derstand how different components of a neural net-
+instead of training a model to generate descriptions   work contribute to its output. The key idea is to run
+of LLM’s representations, we repurpose the LLM   two forward passes through the network – one on a
+itself to either translate or define it using activa-   source input and one on a target input – and copy
+tion patching. Activation patching, introduced by    (or “patch”) activations from specific positions and
+Meng et al. (2022), has been the main tool used to    layers of the source forward pass into the target
+
+
+                                         3
+
+forward pass. By observing how these interven-           ℓ(in): “Cℓ(in)1   ” - ℓ(out): “Cℓ(out)1   ”
+tions affect the model’s output, we can understand               ...
+                                                                                        ℓ(in): “Cℓ(in)k   ” - ℓ(out): “Cℓ(out)k   ”
+what information is encoded in different parts of
+                                                                                        ℓ(in): “Cℓ(in)” - ℓ(out): “
+the network and how it is used.
+  More formally, given a source input S and target  We    denote     TPconcept(ℓ(in), ℓ(out), C)    as
+input T, we can patch activations at position i, i′    TP(ℓ(in), ℓ(out), C)  cut  at  the  last  token  of
+                                                     For example, in our previous example,and layer j by setting h(j)i (T) = h(j)i′ (S) during     Cℓ(in).
+the target forward pass, where h(j)i  represents the    TPconcept(EN, FR, CLOUD) would be:
+activation at position i and layer j. The change         English: “computer” - Français: “ordinateur”
+                                                                                                                 ...
+in the model’s output distribution provides evi-                                                                    English: “ant” - Français: “fourmi”
+dence about what information was contained in         English: “cloud
+the patched activation.
+                                We expect that the last token of such prompts is
+Concepts. We use capitalization to denote an   where the model stores its latent representation of
+abstract concept, (e.g. CAT). Let C be an abstract     Cℓ(in).
+concept, then we denote Cℓits language-specific      Importantly, whether the model correctly an-
+version.   Further, we define w(Cℓ) as the set   swers TP is determined by its next token prediction.
+of words  expressing  the  abstract concept C    In our prompt example, the next token predicted
+in language ℓ.  For example, if C = CAT and   should be “nu”, the first token of “nuage”. Thus,
+ℓ= EN we have w(Cℓ) =  {“cat”} and sim-  we can track P(Cℓ)3, i.e., the probability of the
+ilarly w(C DE) =   {“Katze”, “Kater”}.  Note    concept C occurring in language ℓ, by simply sum-
+that we talk about words for the sake of sim-   ming up the probabilities of all starting tokens of
+plicity.  However, on a technical level w refers   w(Cℓ) in the next-token distribution.
+to the  set of  starting tokens of these words    We improve upon the construction of Wendler
+(e.g.  {“Katze”, “Kat”}).  Therefore, when we    et al. (2024) by considering all the possible ex-
+track different sets of tokens W, (e.g. W ∈    pressions of C in ℓusing BabelNet (Navigli et al.,
+{w(C1IT ), w(C1ZH ), w(C2IT ), w(C2ZH ), w(C1EN )  ∪    2021), instead of GPT-4 translations, when com-
+w(C2EN )} = W), we ensure that there is no token    puting P(Cℓ).  This allows us to capture many
+in common between any pair of W1, W2 ∈W    possible translations, instead of one. For exam-
+with W1 ̸= W2.                                         ple, “commerce”, “magasin” and “boutique” are
+                                                                 all valid words for SHOPFR.Prompt design. We use the same translation
+prompt template as (Wendler et al., 2024) that we
+                                       4  Exploratory analysis with patching
+denote TP(input language, output language, con-
+cept). For example, TP(EN, FR, CLOUD) could be:
+                                         Problem statement.  We aim to understand
+     English: “computer” - Français: “ordinateur”           whether language and concept information can vary
+        ...
+                                                   independently during Llama-2’s forward pass when     English: “ant” - Français: “fourmi”
+     English: “cloud” - Français: “                       processing a multilingual prompt. For example, a
+                                                    representation of Cℓof the form zCℓ= zC + zℓ,
+Here the task  is to translate w(CLOUDEN) =                                                      in which zC ∈U, zℓ∈U⊥and U ⊕U⊥= Rd
+{“cloud”} into w(CLOUDFR) = {“nuage”}.                                                                is a decomposition of Rd into a subspace U and
+  More formally,  for a given concept C,  in-    its orthogonal complement U⊥, would allow for
+put language  ℓ(in), and output language  ℓ(out),   language and concept information to vary inde-
+we  construct  a  few-shot  translation  prompt    pendently: language can be varied by changing
+TP(ℓ(in), ℓ(out), C).  This prompt contains k ex-  zℓ∈U⊥and concept by changing zC ∈U. Con-
+amples2 of single-word translations of concepts    versely, if language and concept information were
+C1, . . . , Ck from ℓ(in) to ℓ(out), concluding with the
+                                                   3We use simplified notation P(Cℓ) rather than P(Cℓ|TP)model being tasked to translate C from ℓ(in) to
+                                                             throughout. While the conditional notation would be more
+ℓ(out). Using Cℓ(in) as a shortcut for v ∈w(Cℓ(in)),    precise for the initial case, our patching experiments involve
+TP(ℓ(in), ℓ(out), C) looks like:                            multiple conditioning factors (target prompt, source prompt,
+                                                            patching configuration, layer) that would make the full nota-
+                                                                    tion unwieldy. We therefore adopt this simplified notation for
+    2in our study we used k = 5                                       clarity.
+
+
+                                         4
+
+                                            prompt after layer j, h(j)nS(S), and insert it at the
+                                           same layer at position nT in the forward pass of the
+                                                        target prompt, i.e., by setting h(j)nT (T) = h(j)nS(S)
+                                            and subsequently completing the altered forward
+                                                        pass. From the resulting next token distribution, we
+                                            compute P(CℓSS ), P(CℓTS ), P(CℓST ), and P(CℓTT  ).
+
+                                                    4.2  Results
+
+                                                     In this experiment, we perform the patching at one
+                                                      layer at a time and report the probability that is as-
+                                                   signed to P(CℓSS ), P(CℓTS ), P(CℓST ), and P(CℓTT  ).
+                                       As a result we obtain Figure 3 in which we report
+Figure 2: For two given concepts, e.g., BOOK and   means and 95% confidence interval over 200 exam-
+LEMON, we construct a source prompt for translating                                                          ples.
+BOOK from German to Italian, and a target prompt for
+translating LEMON from French to Chinese. Then we ex-                    1.0
+tract the residual stream of the last token at a single layer
+j from the source prompt and insert it at the correspond-                    0.8
+ing position and layer in the forward pass of the target
+                                                                                               0.6prompt. The resulting next token probabilities will con-                                                                                                                                                                                                                                                                                                       probability
+centrate on the target concept in the target language                                                                                               0.4                                src it
+(LEMONZH, i.e., 柠檬) when patching at layers 0–11,                                                       src zh                                                                                                                                                                                            concept                                    tgt iton the target concept in the source language (LEMONIT,                    0.2                                                                                                                                       tgt zh
+“limone”) for layers 12–16, and on the source concept in                                                       src + tgt en
+the source language (BOOKIT, “libro”) for layers 17–31.                    0.0 0     5    10    15    20    25    30
+                                                                                                                     layer
+
+entangled, a decomposition like this should not ex-   Figure 3: Our first patching experiment with a DE to
+                                                          IT source prompt and a FR to ZH target prompt withist: varying the language would mean varying the
+                                                             different concepts. The x-axis shows at which layer
+concept and vice versa.
+                                                         the patching was performed and the y-axis shows the
+                                                             probability of predicting the correct concept in language
+4.1  Experimental design
+                                                  ℓ(see legend). In the legend, the prefix “src” stands
+We start our analysis with an exploratory experi-    for source and “tgt” for target concept. The orange
+ment on Llama 2 7B (Touvron et al., 2023). We    dashed line and blue dash-dotted line correspond to
+                                                         the mean accuracy on source and target prompt. Weuse 5-shots translation prompts to create paired
+                                                           report means and 95% Gaussian confidence intervals
+source S = TP(ℓ(in)S   , ℓ(out)S    , CS) and target prompt    computed over 200 source, target prompt pairs featuring
+T = TP(ℓ(in)T   , ℓ(out)T    , CT ) datasets with different   41 source concepts and 38 target concepts.
+concept, input languages and output languages4. If
+                                                   Interpretation. We observe the following pattern
+not mentioned otherwise, ℓS and ℓT refer to the
+                                                 while patching at different layers (see Figure 3):
+output language of S and T.
+                                                                 • Layers 0–11: Target concept decoded in target
+   Similar to (Variengien and Winsor, 2023), we                                         ZH
+                                                       language, resulting in large P(CT  ).would like to infer at which layers the output lan-
+                                                                 • Layers 12–16:  Target concept decoded in
+guage and the concept enter the residual stream                                                                  IT
+                                                      source language, resulting in large P(CT ).h(j)nT (T) respectively and whether they can vary                                                                 • Layers 16–31: Source concept decoded in
+independently for our task.  In order to investi-                                                                  IT
+                                                      source language, resulting in large P(CS ).
+gate this question, we perform the experiment de-                                                  This pattern suggests that the model first com-
+picted in Figure 2. For each transformer block fj                                                   putes the output language: from layer 12 onwards,
+we create two parallel forward passes, one pro-                                     we decode in the source output language. This in-
+cessing the source prompt S which tokens are                                                      dicates that up until that layer, the need to decode
+(s1, . . . , snS) and one processing the target prompt                                                       to ℓ(out) is being encoded in the residual stream
+T = (t1, . . . , tnT ). While doing so, we extract                                            and subsequently remains unchanged. For exam-
+the residual stream of the last token of the source                                                            ple, this could be achieved by the model computing
+   4See details in Appendix B                          a function vector zℓ(out) (Todd et al., 2023). If this
+
+
+                                         5
+
+hypothesis is correct, patching at layer 12 would                                                                               ℓ(in)S                                     we collect the activations at the last token of CS    .
+overwrite zℓ(out)T   with zℓ(out)S     . The green spike be-     Let ρT denote the position of that token in the tar-
+tween layer 12 and 16 indicates that at those layer,    get prompt. Since the concept information seems to
+the concept is not yet represented, so the model    enter via multiple layers (16-20) into the latent of
+keep outputing the target concept but in the source    the last token, we overwrite the latent correspond-
+language.                                         ing to the token at position ρT at layer j and all
+   In later layers, the model determines the concept:   subsequent ones. By patching in this way in both
+from layer 16 onwards, the source concept is de-  H1 and H2 we would expect to see large P(CℓTS  ).
+                                                    Formally, we patch by  setting  h(j)ρT (T) =coded. This suggests that zCℓ(out)T     is overwritten at
+layer 16.5                                              h(j)−1(S), . . . , h(L)ρT (T) = h(L)−1 (S)6.
+Hypotheses. We are left with two hypotheses com-   Disambiguation experiment. Both H1 and H2
+patible with these results:                       compute w(CℓTS ) but in different ways. In H1 one
+    • H1: Concept and language are represented   decoding circuit per output language is required in
+     independently. When doing the translation,   order to compute the expression for the concept CS
+     the model first computes ℓ(out) from context,    in language ℓT . In contrast, in H2 one translation
+    and then identifies C. In the last layers, it then    circuit per input-output language pair is required
+                                                                                                                            ℓ(in)S                                                                                                                                        ℓ(out)T    maps C to the first token of w(Cℓ(out)).                                                                                                                                                . Therefore,                                                      to map the entangled CS                                                                                    to CS
+    • H2: The representation of a concept is always                                                      in order to disambiguate the two, we construct a
+     entangled with its language. When doing the                                                 patching experiment that should work under H1,
+     translation, the model first computes ℓ(out),                                                    but fail under H2.
+     then computes ℓ(in) and Cℓ(in) from its context      In order to do so, instead of patching the latent
+    and solves the language-pair-specific transla-                          ℓ(in)S
+                                                    containing CS  from a single source forward pass,     tion task of mapping Cℓ(in) to Cℓ(out).
+                                    we create multiple source prompts with the same
+                                                                                                         ̸=                                                  concept CS but in different input languages ℓ(in)S15  Ruling out hypotheses
+                                                                              . . . ̸= ℓ(in) and output languages ℓ(out) ̸=  . . . ̸=                                                            Sk                          S1
+Next, we run additional experiments to (1) provide                                                                  ℓ(out) and patch by setting
+further evidence that we are either in H1 or H2 and     Sk
+(2) to disambiguate whether we are in H1 or H2                              k
+                                                              1
+(3) to show that our findings hold for other models.              h(α)ρT (T) = X h(α)−1 (Si),                                                           k
+Further evidence experiment. In the experiments                            i=1
+in Sec. 4 we did not observe source concept in tar-                                                                                                                                     ℓ(in)
+get language. However, both H1 and H2 would    for α ∈j, . . . , m. Let Ci = CSSi  , under H1, tak-
+allow for that to happen via patching in the right    ing the mean of several language-specific concept
+way. Therefore, in this experiment, instead of over-   representations should keep the concept informa-
+writing the residual stream at the last token of the    tion intact, since for all i, zCi = zCS:
+prompt, we overwrite them at the last token of
+the word to be translated. In order to do that, for           1  k             1  k
+                                                                                                                                       .                  X zCi = zCS +                        X zℓ(in)the source prompt, we use TPconcept instead of TP          k                                                                k                                                                                                               Si                                                               i=1                i=1
+(S = TPconcept(ℓ(in)S   , ℓ(out)S    , CS)). This means that
+                                                  Therefore, we’d expect high P(CℓTS ) in this case.    5In Appendix A, we collected additional experimental re-
+sults investigating the right part of Figure 3 more deeply and   However, under H2, in which zCi cannot be dis-
+in Appendix C the left part. For the right part, we use the    entangled, this mean representation may not cor-
+patchscope lens (Ghandeharioun et al., 2024) to investigate
+                                               respond to a well-defined concept. Additionally,from which layer it is possible to decode the source concept
+in App. Figure 7. The results of both experiments agree: from    the interference between multiple input languages
+layer 16 it is possible to decode the source concept in source   should cause difficulties for the language-pair-
+language. For the left part, we experiment with randomized
+                                                        specific translation, which should result in a dropsource prompts and different prompting templates in between
+source and target prompt in App. Figure 8. We find that indeed    in P(CℓTS  ).
+before layer 11 there is no translation task specific information
+in the residual stream, only prompt-template specific informa-       6Note that we use Python indexing, where -1 denotes the
+tion.                                                                      last token.
+
+
+                                         6
+
+Results. In the first experiment, we use the same        (a) Single source prompt    (b) Mean over source prompts
+languages as above and in the second one we used            1.0        src zh                                     1.0
+                                                                                                                                                                            0.8DE, NL, ZH, ES, RU as input and IT, FI, ES, RU, KO            0.8         tgtsrc zh+ tgt en
+as output languages for the source prompts and FR            0.6                                                   0.6        src zh                                                                                                                                                                                                                                                                                                                                                                                 probability                                                                                                                                                                   probability            tgt zh
+to ZH for the target prompt.                                                           0.4                                                   0.4        src + tgt en
+                                                                                                                                                                                                                                           concept                                                                                                        concept
+   In Figure 4 we observe that in both experiments,           0.2                                                   0.2
+we obtain very high probability for the source con-           0.0                                                   0.0                                                                                                     0     5    10    15    20    25    30        0     5    10    15    20    25    30
+cept in the target language P(CSZH ) from layers 0                                   layer                                                 layer
+to 15, i.e., exactly until the latents at the last token                                                     Figure 4: Here we use different input languages (DE,
+stop attending to the last concept-token.               FR), different concepts, different output languages (IT,
+  Therefore, Figure 4 (a) supports that we are in-   ZH) in (a). In (b) we use multiple source input languages
+deed either in H1 or H2, since as planned we suc-   DE, NL, ZH, ES, RU and source output languages IT, FI,
+cessfully decode source concepts in the target lan-    ES, RU, KO. We patch at the last token of the concept-
+            ZH                                 word at all layers from j to 31. In (a) we patch latents
+guage P(CS ) from layers 0 to 15. Conversely,                                                 from the single source prompt in (b) we patch the mean
+if we were not able to decode source concept in                                                        of the latents over the source prompts. For each of the
+target language in this way this would have spoken                                                                 plots, the x-axis shows at which layer the patching was
+against both H1 and H2.                            performed during the forward pass on the target prompt
+   Additionally, Figure 4 (b) supports that we are   and the y-axis shows the probability of predicting the
+in H1 and not in H2 because patching in the mean    correct concept in language ℓ(see legend). The prefix
+keeps P(CSZH ) intact and even increases it. There-   “src” stands for source and “tgt” for target concept. We
+                                                          report means and 95% Gaussian confidence intervalsfore, instead of observing interference between the
+                                                computed over a dataset of size 200.
+different language-entangled concepts as would
+have been predicted by H2, we observe a concept-
+denoising effect by averaging multiple language-                                    we explore whether these mean representations,
+agnostic concept representations which only makes                                            which theoretically capture language-independent
+sense under H1. Taking the mean over concept rep-                                                   concepts, can be described by the model in natu-
+resentations corresponding to different input lan-                                                            ral language as effectively as concepts expressed
+guages seems to act like a majority voting mecha-                                                      in a single language. This approach builds on the
+nism resulting in an increase in P(CSZH ). 7            definition modeling paradigm (Noraset et al., 2017;
+Other models. In Appendix D we perform the ex-   Mickus et al., 2022; Chang and Chen, 2019; Gard-
+periments from Sec. 4 and Sec. 5 on several other    ner et al., 2022), which uses natural language gen-
+models, varying in size, training data and architec-    eration as a transparent evaluation of semantic rep-
+ture namely, Mistral 7B (Jiang et al., 2023), Llama    resentations.
+3 8B (Dubey et al., 2024), Qwen 1.5 7B (Bai et al.,
+2023), Llama 2 70B, and Aya 23 8B (Aryabumi    6.1  Definition prompt
+et al., 2024) which was specifically trained to be                                                   In order to do that, we introduce a new prompt
+multilingual. We observe the same improvement                                                   template that tasks the model to describe a concept
+when we take the mean of a concept across lan-                                                      in natural language. More precisely, given a con-
+guages for all these models, suggesting that they                                                   cept C and a language ℓ, we construct a few shot
+are all operating under H1 and use some language-                                                        definition prompt DP(ℓ, C) of the form:
+agnostic concept representation.
+                                                     “Cℓ1” : “Dℓ1”
+                                                                                                                 ...
+6  Generating descriptions for latents                                                      “Cℓ” : “
+We just showed that LLMs can effectively trans-   where Cℓ1, . . . , Cℓn are concepts in language ℓand
+late concept representations averaged across mul-  Dℓ1, . . . , Dℓn are their descriptions in language ℓ.
+tiple languages, providing evidence for language-  We denote DPconcept(ℓ, C) the prompt template
+agnostic concept representations. In this section,    that ends at the last token of Cℓ. For example,
+                                                    DPconcept(EN, ANT) could be:   7Conversely,  e.g., averaging over different translation
+prompt contexts but while keeping the input and output lan-
+                                                         ZH              “apple” : “Fruit with red or yellow or green skin”
+guage fixed does not lead to an increase in P(CS ) (see               ...
+App. Figure 11,12 (b)).                                             “ant
+
+
+                                         7
+
+  For each language, we constructed a definition    6.3  Experiment
+dataset using the first concept in BabelNet (Nav-                                         To compare the quality of the definitions of CS
+igli et al., 2021) associated with each of the 200                                                  generated by the model in our experiment, we use
+picturable words from the Basic English word list                                                     the following baselines:
+from Wikipedia8. For each concept, BabelNet pro-                                                                 • Ground truth: We use a random definition
+vides several definitions in different languages.                                                 from BabelNet.
+                                                                 • Prompting: We use the definition gener-
+6.2  Patching setup
+                                                        ated by the model when prompted with
+For languages ℓ1S, . . . , ℓnS and ℓT , and concepts       DP(ℓT , CS).
+CS  ̸= CT , we construct a target prompt T =                                                                 ℓjS                                                                 • Word patching: We replace CℓTT  with CS  forDP(ℓT , CT ) and two sets S of source prompts:
+                                                    a random j ∈{1, . . . , n} and let the model
+   • From translations: for each language ℓiS we                                                       generate the definition.  In this setting, the
+     pick an input language ℓi  and choose
+                                        (in)                     model is tasked to generate a definition of a
+                                             word in a language different from the target
+       Strans = {TPconcept(ℓi(in), ℓiS, CS)}i∈{1,...,n}.         prompt’s language.
+                                                                 • Repeat word: We use CℓTS  as the definition.   • From definitions: we choose
+                                           To   evaluate   the    different    definitions,
+                                    we   use   the   sentence-transformers    li-
+         Sdef = {DPconcept(ℓiS, CS)}i∈{1,...,n}.
+                                                  brary (Reimers and Gurevych, 2019)  to run
+                                            paraphrase-multilingual-mpnet-base-v29, a  Then, to generate a definition of CS in language
+                                                semantic similarity model distilled from (SongℓT , for all layers, we patch the latents of the last
+                                                           et al., 2020) using the methods from (Reimerstoken averaged over the source prompts from S
+                                            and Gurevych, 2020). To assess the quality of theto the last token of CT in the target prompt and
+                                                 generated definition, we compute the similaritylet the model generate the definition as depicted in
+                                                    score between embeddings of the definition and theFigure 5. More formally, we patch by setting
+                                        mean embedding of the ground truth definitions10.
+                       n
+                   1
+             h(j)ρT (T) = X h(j)−1(Si)               6.4  Results                n
+                         i=1               We report the mean similarity score between the
+                                                        definition and the mean embedding of the ground
+for j ∈{1, . . . , m} and ρT the position of the last
+                                                        truth definitions for LLama 2 7B in Figure 6. To
+token of CT in the target prompt.
+                                                  give an idea of the scale of the similarity scores,
+                                    we also report the mean similarity between the
+                                                       definition embedding and the embeddings of the
+                                                        definitions of the other concepts in the dataset.
+                                  We find that patching concept representations
+                                            from one language to another allows the model to
+                                                    generate high-quality definitions, comparable to or
+                                                        better than direct prompting. The fact that patch-
+                                                  ing mean representations across multiple source
+                                                languages leads to slightly better results suggests
+                                                           that the model’s concept representations are indeed
+                                                   language-agnostic – if they were language-specific,
+                                                 averaging across languages would likely degrade
+Figure 5: Illustration of the patching setup for the defi-
+                                                       9https://huggingface.co/sentence-transformers/nition prompt experiment. We patch the latents of the
+                                                    paraphrase-multilingual-mpnet-base-v2
+last token of the source prompts from S to the last token
+                                                                10To be able to compare the score of the generated definition
+of CT in the target prompt.                                 with the ground truth baseline, we compute its similarity score
+                                                            with the mean embedding of the other ground truth definitions
+                                                                             - excluding the one that was randomly chosen as the ground
+   8https://en.wiktionary.org/wiki/Appendix:            truth baseline
+Basic_English_word_list#Things_-_200_picturable_        11For some concepts and languages, BabelNet does not
+words                                                       provide any definition.
+
+
+                                         8
+
+         Target: English (61 concepts)      Target: Chinese (38 concepts)      Target: French (29 concepts)
+   1.0
+                                                                                                                               Similarity with mean
+                                                                                                      ground truth embedding
+   0.8                                                                                                                         Similarity with
+                                                                                                                 other concepts
+   0.6                                                                                                              Multi-Source Translationsimilarity                                                                                                                 Multi-Source Definition
+Mean0.4                                                                                                            Single-SourceSingle-Source TranslationDefinition
+   0.2                                                                                         Word Patching
+                                                                                                          Prompting
+   0.0                                                                                                 Repeat Word
+
+Figure 6: Mean similarity between the definition and the mean embedding of the ground truth definitions, as well as
+the mean similarity between the definition embedding and the embeddings of the definitions of the other concepts in
+the dataset. The results are presented for three target languages: English (with source languages Italian, Finnish,
+Spanish, Korean, and input languages for source translations: German, Dutch, Chinese, Russian), Chinese (using
+the same languages), and French (with source languages Korean, Japanese, Estonian, Finnish and English as input
+language for source translations). We report means and 95% Gaussian confidence intervals computed over a dataset
+of various sizes11.
+
+
+performance. This aligns with our translation ex-   our results are consistent with findings from pre-
+periment findings and adds another perspective on   vious work (Wendler et al., 2024) indicating that
+how LLMs process multilingual information.       Llama-2 represents concepts in a concept space
+   Additionally, the comparable performance be-   independent of the language of the prompt. Our
+tween patching from definitions and translations   work also provides evidence that findings from
+indicates that the model builds similar concept rep-  BERT models (Conneau et al., 2020b; Pires et al.,
+resentations regardless of whether it processes a   2019) generalize to a wide range of decoder-only
+translation or definition prompt. This suggests a    transformers. Our findings open several important
+unified internal representation of concepts that gen-   avenues for future research. Understanding these
+eralizes across different types of language tasks.     disentangled representations could improve cross-
+                                                      lingual transfer learning and reduce the computa-
+Other models.  In Appendix D.3 we show that
+                                                        tional costs of multilingual training by leveraging
+those findings generalize to other models and lan-
+                                                  shared concept spaces more efficiently. Moreover,
+guages.
+                                                our results provide mechanistic insights into the
+7  Conclusion                                    root causes of Western cultural biases in multilin-
+                                                  gual LLMs, suggesting that biases may propagate
+In this paper, we showed that transformers use   through the shared concept space. We hope these
+language-agnostic latent representations of con-   contributions will guide efforts to build more con-
+cepts when  processing  word-level  translation    trollable, efficient, and culturally-aware multilin-
+prompts. We achieved this by patching latents    gual language models.
+between parallel forward passes for translation
+prompts that differed in both input and output   Limitations
+languages, as well as in the specific concepts be-
+ing translated. Our main finding was that transla-   In this work, we studied how transformers repre-
+tion performance improves when the transformer    sent concepts when processing multilingual text.
+is forced to translate a concept representation av-   However, we only considered very simple concepts,
+eraged across multiple languages.  This finding   maybe some more complex concepts would have
+speaks for language-agnostic concept representa-   shown a different behavior. Also, we did not study
+tions. As we argued, for language-agnostic concept    language-specific concepts like “Waldeinsamkeit”,
+representations, taking the mean representation of   “The feeling of solitude and connectedness to na-
+a concept across languages should not impair the    ture when being alone in the woods.”. It would be
+LLM’s ability to translate this concept.  In con-    interesting to see how those are represented.
+trast, for language-specific ones, taking the mean      Furthermore, more fine-grained probing will be
+should result in interference between the different    required to determine to which degree transformers
+language-specific versions of the concept. Thus,   are able to specialize a concept to a language and
+
+
+                                         9
+
+whether concepts and languages are entangled in   Yuheng Chen, Pengfei Cao, Yubo Chen, Kang Liu, and
+more subtle ways.                                     Jun Zhao. 2024b. Journey to the center of the knowl-
+                                                    edge neurons: Discoveries of language-independent
+                                                  knowledge neurons and degenerate knowledge neu-
+Acknowledgment                                                               rons. In Proceedings of the AAAI Conference on Ar-
+                                                                              tificial Intelligence, volume 38, pages 17817–17825.
+We would like to thank the team working on
+NNsight (Fiotto-Kaufman et al., 2024) which is    Ethan A. Chi, John Hewitt, and Christopher D. Manning.
+the python package we used to implement all our      2020.  Finding universal grammatical relations in
+                                                             multilingual bert. Preprint, arXiv:2005.04511.
+experiments. We thank Hannes Wendler for multi-
+ple fruitful discussions.                          Nadezhda Chirkova and Vassilina Nikoulina. 2024.
+                                                        Zero-shot cross-lingual transfer in instruction tun-
+                                                         ing of large language models.   arXiv preprint
+                                                        arXiv:2402.14778.References
+                                                     Rochelle Choenni and Ekaterina Shutova. 2020. WhatViraat Aryabumi,  John Dang, Dwarak  Talupuru,
+                                                       does it mean to be language-agnostic? probing multi-  Saurabh Dash, David Cairuz, Hangyu Lin, Bharat
+                                                              lingual sentence encoders for typological properties.   Venkitesh, Madeline Smith, Jon Ander Campos,
+                                                        arXiv preprint arXiv:2009.12862.  Yi Chern Tan, Kelly Marchisio, Max Bartolo, Se-
+   bastian Ruder, Acyr Locatelli, Julia Kreutzer, Nick                                                      Alexis Conneau, Kartikay Khandelwal, Naman Goyal,
+   Frosst, Aidan Gomez, Phil Blunsom, Marzieh Fadaee,                                                       Vishrav Chaudhary, Guillaume Wenzek, Francisco
+  Ahmet Üstün, and Sara Hooker. 2024.  Aya 23:                                               Guzmán, Edouard Grave, Myle Ott, Luke Zettle-
+  Open weight releases to further multilingual progress.                                                     moyer, and Veselin Stoyanov. 2020a.  Unsuper-
+   Preprint, arXiv:2405.15032.                                                         vised cross-lingual representation learning at scale.
+                                                              Preprint, arXiv:1911.02116.
+Jinze Bai, Shuai Bai, Yunfei Chu, Zeyu Cui, Kai Dang,
+  Xiaodong Deng, Yang Fan, Wenbin Ge, Yu Han, Fei    Alexis Conneau, Shijie Wu, Haoran Li, Luke Zettle-
+  Huang, Binyuan Hui, Luo Ji, Mei Li, Junyang Lin,      moyer, and Veselin Stoyanov. 2020b.  Emerging
+   Runji Lin, Dayiheng Liu, Gao Liu, Chengqiang Lu,       cross-lingual structure in pretrained language mod-
+  Keming Lu, Jianxin Ma, Rui Men, Xingzhang Ren,        els. In Proceedings of the 58th Annual Meeting of
+  Xuancheng Ren, Chuanqi Tan, Sinan Tan, Jianhong       the Association for Computational Linguistics, pages
+   Tu, Peng Wang, Shijie Wang, Wei Wang, Shengguang      6022–6034.
+  Wu, Benfeng Xu, Jin Xu, An Yang, Hao Yang, Jian
+  Yang, Shusheng Yang, Yang Yao, Bowen Yu, Hongyi    Jacob Devlin, Ming-Wei Chang, Kenton Lee, and
+  Yuan, Zheng Yuan, Jianwei Zhang, Xingxuan Zhang,       Kristina Toutanova. 2018. Bert: Pre-training of deep
+  Yichang Zhang, Zhenru Zhang, Chang Zhou, Jin-       bidirectional transformers for language understand-
+   gren Zhou, Xiaohuan Zhou, and Tianhang Zhu. 2023.       ing. Preprint, arXiv:1810.04805.
+  Qwen technical report. Preprint, arXiv:2309.16609.
+                                            Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey,
+Tom Brown, Benjamin Mann, Nick Ryder, Melanie      Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman,
+   Subbiah, Jared D Kaplan, Prafulla Dhariwal, Arvind      Akhil Mathur, Alan Schelten, Amy Yang, Angela
+   Neelakantan, Pranav Shyam, Girish Sastry, Amanda      Fan, et al. 2024. The llama 3 herd of models. arXiv
+   Askell, et al. 2020. Language models are few-shot       preprint arXiv:2407.21783.
+   learners. Advances in neural information processing
+                                                  Constanza Fierro, Negar Foroutan, Desmond Elliott,   systems, 33:1877–1901.
+                                                  and Anders Søgaard. 2025. How do multilingual
+                                                      language models remember facts?  arXiv preprintPengfei Cao, Yuheng Chen, Zhuoran Jin, Yubo Chen,
+                                                        arXiv:2410.14387.  Kang Liu, and Jun Zhao. 2024. One mind, many
+   tongues: A deep dive into language-agnostic knowl-                                                    Jaden Fiotto-Kaufman, Alexander R Loftus, Eric Todd,
+  edge neurons in large language models.   arXiv                                                        Jannik Brinkmann, Caden Juang, Koyena Pal, Can
+   preprint arXiv:2411.17401.                                                        Rager, Aaron Mueller, Samuel Marks, Arnab Sen
+                                                   Sharma, et al. 2024. Nnsight and ndif: Democra-
+Ting-Yun Chang and Yun-Nung Chen. 2019. What does                                                                tizing access to foundation model internals. arXiv
+   this word mean? explaining contextualized embed-                                                             preprint arXiv:2407.14561.
+   dings with natural language definition. In Proceed-
+   ings of the 2019 Conference on Empirical Methods   Noah Gardner, Hafiz Khan, and Chih-Cheng Hung.
+   in Natural Language Processing and the 9th Inter-      2022.  Definition modeling: literature review and
+   national Joint Conference on Natural Language Pro-       dataset analysis.  Applied Computing and Intelli-
+   cessing (EMNLP-IJCNLP), pages 6064–6070.            gence, 2(1):83–98.
+
+Haozhe Chen, Carl Vondrick, and Chengzhi Mao. 2024a.    Atticus Geiger, Zhengxuan Wu, Hanson Lu, Josh
+   Selfie: Self-interpretation of large language model      Rozner, Elisa Kreiss, Thomas Icard, Noah Good-
+  embeddings. arXiv preprint arXiv:2403.10949.         man, and Christopher Potts. 2022. Inducing causal
+
+
+                                         10
+
+   structure for interpretable neural networks.  In In-    Nostalgebraist. 2020. Interpreting gpt: The logit lens.
+   ternational Conference on Machine Learning, pages      LessWrong.
+  7324–7338. PMLR.
+                                               OpenAI. 2023. Gpt-4 technical report. arXiv preprint
+Asma Ghandeharioun, Avi Caciularu, Adam Pearce,      arXiv:2303.17548.
+  Lucas Dixon, and Mor Geva. 2024.  Patchscope:
+ A unifying framework for inspecting hidden rep-   Telmo Pires, Eva Schlinger, and Dan Garrette. 2019.
+   resentations of language models.  arXiv preprint    How multilingual is multilingual bert?   Preprint,
+  arXiv:2401.06102.                                    arXiv:1906.01502.
+
+                                                 Alec Radford, Jeffrey Wu, Rewon Child, David Luan,Albert Q Jiang, Alexandre Sablayrolles, Arthur Men-
+                                                       Dario Amodei, Ilya Sutskever, et al. 2019. Language   sch, Chris Bamford, Devendra Singh Chaplot, Diego
+                                                    models are unsupervised multitask learners. OpenAI  de las Casas, Florian Bressand, Gianna Lengyel, Guil-
+                                                             blog, 1(8):9.  laume Lample, Lucile Saulnier, et al. 2023. Mistral
+  7B. arXiv preprint arXiv:2310.06825.
+                                                          Nils Reimers and Iryna Gurevych. 2019. Sentence-bert:
+                                                      Sentence embeddings using siamese bert-networks.János Kramár, Tom Lieberum, Rohin Shah, and Neel
+                                                            In Proceedings of the 2019 Conference on Empirical  Nanda. 2024. Atp*: An efficient and scalable method
+                                                 Methods in Natural Language Processing. Associa-   for localizing llm behaviour to components. arXiv
+                                                                tion for Computational Linguistics.   preprint arXiv:2403.00745.
+                                                        Nils Reimers and Iryna Gurevych. 2020.  Making
+Xiaochen Li, Zheng Xin Yong, and Stephen Bach. 2024.
+                                                     monolingual sentence embeddings multilingual us-
+   Preference tuning for toxicity mitigation generalizes                                                         ing knowledge distillation.  In Proceedings of the
+   across languages.  In Findings of the Association                                                2020 Conference on Empirical Methods in Natural
+   for Computational Linguistics: EMNLP 2024, pages
+                                                   Language Processing. Association for Computational
+  13422–13440.
+                                                               Linguistics.
+
+Jindˇrich Libovický,  Rudolf Rosa, and Alexander                                                    Uri Shaham, Jonathan Herzig, Roee Aharoni, Idan
+   Fraser. 2020. On the language neutrality of pre-                                                            Szpektor, Reut Tsarfaty, and Matan Eyal. 2024. Mul-
+   trained multilingual representations. arXiv preprint                                                                    tilingual instruction tuning with just a pinch of multi-
+  arXiv:2004.05160.                                                                    linguality. arXiv preprint arXiv:2401.01854.
+
+Kevin Meng, David Bau, Alex Andonian, and Yonatan                                                     Freda Shi, Mirac Suzgun, Markus Freitag, Xuezhi Wang,
+   Belinkov. 2022. Locating and editing factual associ-                                                            Suraj Srivats, Soroush Vosoughi, Hyung Won Chung,
+   ations in gpt. Advances in Neural Information Pro-                                                   Yi Tay, Sebastian Ruder, Denny Zhou, Dipanjan
+   cessing Systems, 35:17359–17372.                                                      Das, and Jason Wei. 2022. Language models are
+                                                           multilingual chain-of-thought reasoners.  Preprint,
+Timothee Mickus, Kees Van Deemter, Mathieu Con-                                                        arXiv:2210.03057.
+   stant, and Denis Paperno. 2022. Semeval-2022 task
+   1: Codwoe–comparing dictionaries and word embed-   Kaitao Song, Xu Tan, Tao Qin, Jianfeng Lu, and Tie-
+   dings. arXiv preprint arXiv:2205.13858.              Yan Liu. 2020.  Mpnet: Masked and permuted
+                                                              pre-training for language understanding. Preprint,
+Basel Mousi, Nadir Durrani, Fahim Dalvi, Majd      arXiv:2004.09297.
+  Hawasly, and Ahmed Abdelali. 2024.  Exploring
+  alignment in shared cross-lingual spaces.  arXiv    Karolina Sta´nczak, Edoardo Ponti, Lucas Torroba Hen-
+   preprint arXiv:2405.14535.                               nigen, Ryan Cotterell, and Isabelle Augenstein. 2022.
+                                            Same neurons, different languages: Probing mor-
+Benjamin Muller, Yanai Elazar, Benoît Sagot, and      phosyntax in multilingual pre-trained models. arXiv
+  Djamé Seddah. 2021. First align, then predict: Un-       preprint arXiv:2205.02023.
+   derstanding the cross-lingual ability of multilingual
+   bert. In Proceedings of the 16th Conference of the Eu-    Tianyi Tang, Wenyang Luo, Haoyang Huang, Dong-
+  ropean Chapter of the Association for Computational     dong Zhang, Xiaolei Wang, Xin Zhao, Furu Wei,
+   Linguistics: Main Volume, pages 2214–2231.            and Ji-Rong Wen. 2024. Language-specific neurons:
+                                                 The key to multilingual capabilities in large language
+Roberto Navigli, Michele Bevilacqua, Simone Conia,      models. arXiv preprint arXiv:2402.16438.
+  Dario Montagnini, Francesco Cecconi, et al. 2021.
+  Ten years of babelnet: A survey. In IJCAI, pages   Gemma Team, Morgane  Riviere,  Shreya  Pathak,
+  4559–4567. International Joint Conferences on Arti-       Pier Giuseppe Sessa, Cassidy Hardin, Surya Bhupati-
+   ficial Intelligence Organization.                              raju, Léonard Hussenot, Thomas Mesnard, Bobak
+                                                              Shahriari, Alexandre Ramé, Johan Ferret, Peter
+Thanapon Noraset, Chen Liang, Larry Birnbaum, and       Liu, Pouya Tafti, Abe Friesen, Michelle Casbon,
+  Doug Downey. 2017. Definition modeling: Learning      Sabela Ramos, Ravin Kumar, Charline Le Lan,
+   to define word embeddings in natural language. In    Sammy Jerome, Anton Tsitsulin, Nino Vieillard,
+  Proceedings of the AAAI Conference on Artificial       Piotr Stanczyk, Sertan Girgin, Nikola Momchev,
+   Intelligence, volume 31.                              Matt Hoffman, Shantanu Thakoor, Jean-Bastien Grill,
+
+
+                                         11
+
+  Behnam Neyshabur, Olivier Bachem, Alanna Wal-       bert, Amjad Almahairi, Yasmine Babaei, Nikolay
+   ton, Aliaksei Severyn, Alicia Parrish, Aliya Ah-      Bashlykov, Soumya Batra, Prajjwal Bhargava, Shruti
+  mad, Allen Hutchison, Alvin Abdagic, Amanda      Bhosale,  et  al. 2023.  Llama 2:  Open founda-
+   Carl, Amy Shen, Andy Brock, Andy Coenen, An-       tion and fine-tuned chat models.  arXiv preprint
+  thony Laforge, Antonia Paterson, Ben Bastian, Bilal      arXiv:2307.09288.
+   Piot, Bo Wu, Brandon Royal, Charlie Chen, Chintu
+  Kumar, Chris Perry, Chris Welty, Christopher A.   Alexandre Variengien and Eric Winsor. 2023. Look
+  Choquette-Choo, Danila Sinopalnikov, David Wein-      before you leap: A universal emergent decomposition
+   berger, Dimple Vijaykumar, Dominika Rogozi´nska,      of retrieval tasks in language models. arXiv preprint
+  Dustin Herbison, Elisa Bandy, Emma Wang, Eric      arXiv:2312.10091.
+  Noland, Erica Moreira, Evan Senter, Evgenii Elty-
+   shev, Francesco Visin, Gabriel Rasskin, Gary Wei,   Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob
+  Glenn Cameron, Gus Martins, Hadi Hashemi, Hanna       Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz
+   Klimczak-Pluci´nska, Harleen Batra, Harsh Dhand,       Kaiser, and Illia Polosukhin. 2017. Attention is all
+   Ivan Nardini, Jacinda Mein, Jack Zhou, James Svens-     you need. Advances in neural information processing
+   son, Jeff Stanway, Jetha Chan, Jin Peng Zhou, Joana       systems, 30.
+   Carrasqueira, Joana Iljazi, Jocelyn Becker, Joe Fer-
+  nandez, Joost van Amersfoort, Josh Gordon, Josh                                                       Chris Wendler, Veniamin Veselovsky, Giovanni Monea,
+   Lipschultz, Josh Newlan, Ju yeong Ji, Kareem Mo-                                                   and Robert West. 2024. Do llamas work in english?
+  hamed, Kartikeya Badola, Kat Black, Katie Mil-                                                on the latent language of multilingual transformers.
+   lican, Keelin McDonell, Kelvin Nguyen, Kiranbir                                                        arXiv preprint arXiv:2402.10588.
+  Sodhia, Kish Greene, Lars Lowe Sjoesund, Lau-
+   ren Usui, Laurent Sifre, Lena Heuermann, Leti-                                                 Zhaofeng Wu, Xinyan Velocity Yu, Dani Yogatama, Ji-
+   cia Lago, Lilly McNealus, Livio Baldini Soares,                                                       asen Lu, and Yoon Kim. 2024. The semantic hub
+  Logan Kilpatrick, Lucas Dixon, Luciano Martins,                                                           hypothesis: Language models share semantic repre-
+  Machel Reid, Manvinder Singh, Mark Iverson, Mar-                                                               sentations across languages and modalities. Preprint,
+   tin Görner, Mat Velloso, Mateo Wirth, Matt Davi-                                                        arXiv:2411.04986.
+  dow, Matt Miller, Matthew Rahtz, Matthew Watson,
+  Meg Risdal, Mehran Kazemi, Michael Moynihan,
+                                                    Zhihui Xie, Handong Zhao, Tong Yu, and Shuai Li.  Ming Zhang, Minsuk Kahng, Minwoo Park, Mofi
+                                                       2022. Discovering low-rank subspaces for language-  Rahman, Mohit Khatwani, Natalie Dao, Nenshad
+                                                          agnostic multilingual representations. In Proceed-   Bardoliwalla, Nesh Devanathan, Neta Dumai, Nilay
+                                                          ings of the 2022 Conference on Empirical Methods  Chauhan, Oscar Wahltinez, Pankil Botarda, Parker
+                                                               in Natural Language Processing, pages 5617–5633,  Barnes, Paul Barham, Paul Michel, Pengchong
+                                           Abu Dhabi, United Arab Emirates. Association for   Jin, Petko Georgiev, Phil Culliton, Pradeep Kup-
+                                                      Computational Linguistics.   pala, Ramona Comanescu, Ramona Merhej, Reena
+   Jana, Reza Ardeshir Rokni, Rishabh Agarwal, Ryan
+                                                         Linting Xue, Noah Constant, Adam Roberts, Mihir Kale,   Mullins, Samaneh Saadat, Sara Mc Carthy, Sarah
+                                             Rami Al-Rfou, Aditya Siddhant, Aditya Barua, and  Cogan, Sarah Perrin, Sébastien M. R. Arnold, Se-
+                                                      Colin Raffel. 2021. mt5: A massively multilingual   bastian Krause, Shengyang Dai, Shruti Garg, Shruti
+                                                             pre-trained text-to-text transformer. In Proceedings   Sheth, Sue Ronstrom, Susan Chan, Timothy Jor-
+                                                                 of the 2021 Conference of the North American Chap-   dan, Ting Yu, Tom Eccles, Tom Hennigan, Tomas
+                                                                 ter of the Association for Computational Linguis-  Kocisky, Tulsee Doshi, Vihan Jain, Vikas Yadav,
+                                                                         tics: Human Language Technologies. Association for  Vilobh Meshram, Vishal Dharmadhikari, Warren
+                                                      Computational Linguistics.   Barkley, Wei Wei, Wenming Ye, Woohyun Han,
+  Woosuk Kwon, Xiang Xu, Zhe Shen, Zhitao Gong,
+  Zichuan Wei, Victor Cotruta, Phoebe Kirk, Anand   Hongchuan Zeng, Senyu Han, Lu Chen, and Kai
+  Rao, Minh Giang, Ludovic Peran, Tris Warkentin,      Yu. 2024.  Converging to a lingua franca: Evolu-
+   Eli Collins, Joelle Barral, Zoubin Ghahramani, Raia       tion of linguistic regions and semantics alignment
+   Hadsell, D. Sculley, Jeanine Banks, Anca Dragan,       in multilingual large language models.  Preprint,
+  Slav Petrov, Oriol Vinyals, Jeff Dean, Demis Hass-      arXiv:2410.11718.
+   abis, Koray Kavukcuoglu, Clement Farabet, Elena
+  Buchatskaya, Sebastian Borgeaud, Noah Fiedel, Ar-  A  Patchscope experiment
+  mand Joulin, Kathleen Kenealy, Robert Dadashi,
+  and Alek Andreev. 2024. Gemma 2: Improving                                We performed an additional experiment using the
+  open language models at a practical size. Preprint,
+                                                patchscope lens (Ghandeharioun et al., 2024) to  arXiv:2408.00118.
+                                                         collect more evidence about from which layer it is
+Eric Todd, Millicent L Li, Arnab Sen Sharma, Aaron    possible to decode the source concept in Figure 7.
+   Mueller, Byron C Wallace, and David Bau. 2023.   The results of this experiment corroborate the find-
+  Function vectors in large language models. arXiv
+                                                     ings presented in Section 4. To enable a convenient   preprint arXiv:2310.15213.
+                                             comparison of the experimental results, we also
+Hugo Touvron, Louis Martin, Kevin Stone, Peter Al-   include Figure 3 in Figure 7.
+
+
+                                         12
+
+    (a) Activation patching          (b) Patchscope lens
+    1.0                                                   1.0
+                                                                                                      it
+    0.8                                                   0.8       en
+
+    0.6                                                   0.6probability                                                                                                                                                                   probability
+    0.4                                src it               0.4
+                                      src zhconcept                                    tgt it                        concept
+    0.2                                 tgt zh              0.2
+                                      src + tgt en
+    0.0                                                   0.0      0     5    10    15    20    25    30        0     5    10    15    20    25    30
+                           layer                                                 layer
+
+Figure 7: (a) Our first patching experiment with a DE
+to IT source prompt and a FR to ZH target prompt with
+different concepts. (b) Our patchscope lens experiment
+with a DE to IT source prompt and identity target prompt
+ king king\n1135 1135\nhello hello\n?   . We patch at
+                                            Algorithm 1 Construction of Translation Pairs forthe last token respectively. For each of the plots the
+x-axis shows at which layer the patching was performed    Patching Experiments
+during the forward pass on the target prompt and the   Require: Set of source languages LS, target lan-
+y-axis shows the probability of predicting the correct                                                 guage ℓT , number of pairs n
+concept in language ℓ(see legend). In the legend the
+                                             Ensure: Set of valid translation pairs P
+prefix “src” stands for source and “tgt” for target con-
+                                                                     1: Load BabelNet translations for all languagescept. The orange dashed line and blue dash-dotted line
+correspond to the mean accuracy on source and target       2: TS ←GETTRANSLATIONS(LS)
+prompt. We report means and 95% Gaussian confidence       3: TT ←GETTRANSLATIONS(ℓT )
+intervals computed over 200 source-, target prompt pairs       4: P ←∅                 ▷Initialize valid pairs
+featuring 41 source concepts and 38 target concepts for       5: A ←COMBINATIONS(TS, TT ) ▷All possible
+(a) and 38 prompts for (b).                                                            pairs
+                                                                     6: SHUFFLE(A)          ▷Randomize order
+B  Translation Pair Construction
+                                                                     7: for (wS, wT ) ∈A do
+To ensure reproducibility of our experiments,      8:       if concept(wS) = concept(wT ) then
+we  provide  the  pseudocode  for  construct-      9:        continue      ▷Skip same concepts
+ing  translation  pairs  used  in  our  activation     10:    end if
+patching experiments.   The complete imple-    11:       if HASTOKENCOLLISIONS(wS, wT ) then
+mentation  is  available  in  our  codebase  at     12:        continue     ▷Skip pairs with token
+notebooks/obj_patch_translation.ipynb.           overlap
+Key constraints:                                          13:    end if
+                                                              14:   P ←P ∪{(wS, wT )}
+    • Different concepts: We ensure that source     15:       if |P| ≥n then
+    and target words represent different concepts     16:       break     ▷Sufficient pairs collected
+     to enable meaningful patching experiments.      17:    end if
+                                                              18: end for
+    • No token collisions: As described in Sec-                                                              19: return P
+     tion 3, we track sets of tokens w(Cℓ) for each
+     concept-language pair. To ensure clean prob-
+     ability measurements, we verify that there is
+    no overlap between the token sets of paired
+     concepts across all languages used in the ex-
+     periment.
+
+    • Randomization: Pairs are shuffled before se-
+     lection to avoid systematic biases in concept
+     or language selection.
+
+  For our experiments, we typically use n = 200
+pairs, with concepts drawn from the 200 picturable
+words from the Basic English word list, ensuring
+
+
+                                         13
+
+sufficient statistical power while maintaining com-     A: “CATDE” - B: “DOGIT”
+                                                      A: “OWLJA” - B: “SUNHI”putational feasibility.
+                                                      A: “ICEFR” - B: “
+
+C  Random prompt task experiment                                       By doing this, the latent of the source prompt is
+                                                       similar in terms of prompt structure, but the modelIn order to investigate the leftmost part of Figure 7a
+                                                cannot infer a task vector specifying the outputmore deeply, we performed additional experiments
+                                               language since the source prompt instantiates anin which we explore “random” source prompts in-
+                                                   impossible task (to predict a random word in a ran-stead of translation source prompts.
+                                    dom language). As shown in Figure 8a, for layers  The experimental setting here is similar to the
+                                               0–11, we observe no drop in the accuracy, whichone in Sec. 4, except for the fact that instead of
+                                                 confirms our hypothesis that in those layers the la-patching in latents from a translation source prompt
+                                                         tent at last token position contains no informationwe patch latents from different “random” source
+                                                         specific to the translation task.prompts. For the random source prompts, we grad-
+                                                        Instead, we think that in our chosen promptingually move away from the prompting template.
+                                                  template the last token, which is a quotation mark,
+                                                merely indicates where to put the translation result.      (a) Random prompt             (b) Empty prompt
+    1.0                                                   1.0                        In order to investigate this, we performed further
+                tgt zh                                                   tgt zh
+    0.8         tgt it                                      0.8                       patching experiments investigating how changes
+    0.6                                                   0.6                          in the prompting template in the source promptprobability                                                                                                                                                                   probability
+    0.4                                                   0.4                          affects the target forward pass ability to compute
+concept                                                                                                               concept
+    0.2                                                          0.2                      an answer.
+
+    0.0                                                          0.0      0     5    10    15    20    25    30                                                   0     5    10    15    20    25    30   Empty context. For example, replacing the source
+                           layer                                                 layer
+                                            prompt with an empty prompt, merely containing
+(c) Random prompt with “@” (d) Random shuffled prompt    B: “  results in Figure 8b. In contrast to Figure 8a,
+instead of quotation mark    (random hidden state)
+    1.0                                                   1.0                        the target concept in target language probability
+                tgt zh                                                   tgt zh
+    0.8                                                   0.8                       drops already starting from layer 4. We think this
+
+    0.6                                                          0.6                              is due to the fact that until layer 4 the quotationprobability                                                                                                                                                                               probability                                           mark token information which is shared among the
+concept0.4                                                                                                  concept0.4                    two prompting templates “dominates” the latent
+    0.2                                                   0.2
+                                                    representation and is not yet converted to a task
+    0.0                                                   0.0      0     5    10                       15    20    25    30        0     5    10                                                                    15    20    25    30     specific position marker yet. Then, starting from                           layer                                                                                layer
+                                                     layer 4 the latent representation of the last token
+                                                      also aggregates task specific information, in partic-
+Figure 8:  (a) activation patching experiment with a
+                                                            ular, the fact that the quotation mark in this taskrandomized source prompt (random concepts, and lan-
+guages, but same template) and a FR to ZH target prompt.   actually marks the position after which the trans-
+(b) we construct a source prompt with empty context.    lated word should be decoded. As a result, replac-
+(c) we replace the quotation mark with @ in the random    ing the task specific quotation mark embedding,
+source prompt from (a). (d) we randomly shuffle the   which contains the information that the translated
+source prompts from (c). We patch at the last token   word comes next, with the “empty-context”-one,
+respectively. For each of the plots, the x-axis shows                                            which does not contain this information, results in
+at which layer the patching was performed during the
+                                                 a performance drop.forward pass on the target prompt and the y-axis shows
+the probability of predicting the correct concept in lan-   Modified template. Next, replacing the quotation
+guage ℓ(see legend). We only plot the target (“tgt”)                                           marks by “@” (Figure 8c) in the random prompt,
+concept, as there is no source concept to predict. We
+                                                          A: @CATDE@ - B: @DOGIT@
+report means and 95% Gaussian confidence intervals     i.e.,  A: @OWLJA@ - B: @SUNHI@
+computed over 200 source-, target prompt pairs.                A: @ICEFR@ - B: @
+
+
+Same  template.     In  Figure  8a,  we  ran-      leads to a drop of performance for early layers,
+domized both  input and  output language  as    but for layers 5–11, the model is not much affected
+well  as concepts  in  the source prompts,  re-   by the patching. We postulate that at those layers,
+sulting  in  prompts  of  the  following  form:   position-marker tokens have been already mapped
+
+
+                                         14
+
+to a general position-marker feature that is similar   whereas the mean over language pairs does. This
+in between source and target forward pass, even     is intuitive, since there may be some languages in
+though at input level different symbols have been   which the mapping from words to concept features
+used.                                                     results in the correct concept feature vector. There-
+                                                         fore, averaging over different language pairs canShuffled tokens. Lastly, in Figure 8d we try to
+                                                     increase the signal about the source concept. How-destroy all of the shared structure in between the
+                                                          ever, having additional random contexts stemmingsource and the target prompt by randomly shuffling
+                                            from the same language pair does not bring in anythe characters of the source prompts from the mod-
+                                                  information about the source concept.ified template task. As expected, the probability of
+                                            Note that Figure 9, Figure 11 and Figure 12the target concept in target language becomes very
+                                               are on the next two pages.low (albeit surprisingly not zero), which shows
+that the task cannot be solved without the position                                             D.3  Similarity comparison
+marker feature.
+                                We experiment with other languages and models
+D  Other models and languages                in Figure 13 and get the same trends as with our
+                                                         results in Figure 6. We also provide results for
+In this section, we report results for additional mod-   another experiment in which instead of measuring
+els, namely, Mistral 7B (Jiang et al., 2023), Llama   embedding similarities, we measure perplexity on
+3 8B (Dubey et al., 2024), Qwen 1.5 7B (Bai et al.,   ground truth definitions in Figure 14. We did not
+2023) and Llama 2 70B (Touvron et al., 2023). We    include this metric in our analysis as it seemed to
+also include Aya 23 8B (Aryabumi et al., 2024) for   have less granularity and is more sensitive to the
+the mean patching experiment in App D.2.          syntax rather than being focused on the semantic.
+
+D.1  Exploratory analysis
+
+The results of the exploratory analysis outlined in
+Sec. 4 are in Figure 9.
+  As can be seen in Figure 9, the target concept
+in source language spike is smaller for Llama 3,
+Mistral 7B v0.3 and Qwen 1.5 7B. This hints that
+for those models, zℓ(out) and C computation overlap
+more than for Llama-2-7B.
+
+D.2  Ruling out hypotheses
+
+In this section, we report results for the experiments
+performed in Sec. 5.
+  In addition, instead of just patching in the mean
+over different language pairs (Figure 11c, 12c), we
+also patch in the mean over contexts composed
+of different concept words in Figure 11b, 12b. In
+particular, we take the mean over 5 different few-
+shot contexts from the same language pair. E.g.:
+  Deutsch: “Dorf” - Italiano: “villaggio”
+         ...
+  Deutsch: “Buch
+            ...
+
+
+  Deutsch: “Zitrone” - Italiano: “limone”
+         ...
+  Deutsch: “Buch
+
+  Our results in Figure 11 and Figure 12 show that
+the mean over contexts does not increase P(CℓTS  ),
+
+
+                                         15
+
+                      (a) Mistral-7B v0.3                                                  (b) Llama3-8b
+ 1.0                                                     1.0
+
+ 0.8                                                     0.8
+
+ 0.6                                                     0.6
+
+ 0.4        src it                                        0.4        src it
+            src zh                                                   src zh
+             tgt it                                                      tgt it
+ 0.2                                                     0.2             tgt zh                                                     tgt zh
+            src + tgt en                                             src + tgt en
+ 0.0                                                     0.0   0     5     10    15    20    25    30        0     5     10    15    20    25    30
+                         layer                                                   layer
+
+
+                        (c) Qwen1.5-7B                                                   (d) Llama2-70B
+ 1.0                                                     1.0
+
+ 0.8                                                     0.8
+
+ 0.6                                                     0.6
+
+ 0.4        src it                                        0.4                                  src it
+            src zh                                                                             src zh
+             tgt it                                                                                tgt it
+ 0.2                                                     0.2             tgt zh                                                                               tgt zh
+            src + tgt en                                                                       src + tgt en
+ 0.0                                                     0.0   0     5     10    15    20    25    30        0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75
+                         layer                                                   layer
+
+Figure 9: Our first patching experiment with a DE to IT source prompt and a FR to ZH target prompt with different
+concepts. We patch at the last token. For each of the plots the x-axis shows at which layer the patching was
+performed during the forward pass on the target prompt and the y-axis shows the probability of predicting the correct
+concept in language ℓ(see legend). In the legend the prefix “src” stands for source and “tgt” for target concept. The
+orange dashed line and blue dash-dotted line correspond to the mean accuracy on source and target prompt. We
+report means and 95% Gaussian confidence intervals computed over 200 source-, target prompt pairs featuring 41
+source concepts and 38 target concepts.
+
+
+
+
+
+                                         16
+
+Figure 10: Mean patching experiment replicated on multiple languages with 200 pairs each and 95% confidence
+interval.
+
+
+
+
+
+                                         17
+
+          (a) Single source setup     (b) Mean over contexts    (c) Mean over language pairs
+                   1.0                                                      1.0                                                           1.0
+                               src zh                                                     src zh
+                                tgt zh                                                      tgt zh
+                   0.8        src + tgt en                                  0.8        src + tgt en                                       0.8
+
+                   0.6                                                      0.6                                                           0.6        src zh                                                  probability                                                                                                                                                                              probability                                                                                                                                                                                              probability            tgt zh
+                                concept0.4                                                                                                         concept0.4                                                                                                                   concept0.4        src + tgt en
+                   0.2                                                      0.2                                                           0.2
+
+                   0.0                                                      0.0                                                           0.0                   0     5    10    15    20    25    30           0     5    10    15    20    25    30               0     5    10    15    20    25    30
+                                          layer                                                    layer                                                         layer
+
+                                      Llama-2 7B
+
+                   1.0                                                      1.0                                                           1.0
+
+                   0.8                                                      0.8                                                           0.8
+
+                   0.6                                                      0.6                                                           0.6                                                  probability                                                                                                                                                                              probability                                                                                                                                                                                              probability
+                                concept0.4                                                                                                         concept0.4                                                                                                                   concept0.4
+                   0.2                                                      0.2                                                           0.2
+
+                   0.0                                                      0.0                                                           0.0                   0     5    10    15    20    25    30           0     5    10    15    20    25    30               0     5    10    15    20    25    30
+                                          layer                                                    layer                                                         layer
+
+                                      Llama-3 8B
+
+                   1.0                                                      1.0                                                           1.0
+
+                   0.8                                                      0.8                                                           0.8
+
+                   0.6                                                      0.6                                                           0.6                                                  probability                                                                                                                                                                              probability                                                                                                                                                                                              probability
+                                concept0.4                                                                                                         concept0.4                                                                                                                   concept0.4
+                   0.2                                                      0.2                                                           0.2
+
+                   0.0                                                      0.0                                                           0.0                   0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75            0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75                0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75
+                                          layer                                                    layer                                                         layer
+
+                                  LLama-2 70B
+
+Figure 11: Here we use different input languages (DE, FR), different concepts, different output languages (IT, ZH) in
+(a). In (b) we use the same source and target language pairs as in (a). In (c) we use multiple source input languages
+DE, NL, ZH, ES, RU and output languages IT, FI, ES, RU, KO. We patch at the last token of the concept-word at all
+layers from j to 31. In (a) we patch latents from the single source prompt. In (b) for each concept, we patch the
+average latent over different few-shot DE to IT translation contexts. In (c) we patch the mean of the latents over
+the source prompts. For each of the plots, the x-axis shows at which layer the patching was performed during the
+forward pass on the target prompt and the y-axis shows the probability of predicting the correct concept in language
+ℓ(see legend). The prefix “src” stands for source and “tgt” for target concept. We report means and 95% Gaussian
+confidence intervals computed over a dataset of size 200.
+
+
+
+
+
+                                         18
+
+          (a) Single source setup     (b) Mean over contexts    (c) Mean over language pairs
+                   1.0                                                      1.0                                                           1.0
+
+                   0.8                                                      0.8                                                           0.8
+
+                   0.6                                                      0.6                                                           0.6                                                  probability                                                                                                                                                                              probability                                                                                                                                                                                              probability
+                                concept0.4                                                                                                         concept0.4                                                                                                                   concept0.4
+                   0.2                                                      0.2                                                           0.2
+
+                   0.0                                                      0.0                                                           0.0                   0     5    10    15    20    25    30           0     5    10    15    20    25    30               0     5    10    15    20    25    30
+                                          layer                                                    layer                                                         layer
+
+                                           Mistral 7B v0.3
+
+                   1.0                                                      1.0                                                           1.0
+
+                   0.8                                                      0.8                                                           0.8
+
+                   0.6                                                      0.6                                                           0.6                                                  probability                                                                                                                                                                              probability                                                                                                                                                                                              probability
+                                concept0.4                                                                                                         concept0.4                                                                                                                   concept0.4
+                   0.2                                                      0.2                                                           0.2
+
+                   0.0                                                      0.0                                                           0.0                   0     5    10    15    20    25    30           0     5    10    15    20    25    30               0     5    10    15    20    25    30
+                                          layer                                                    layer                                                         layer
+
+                                    Aya 23 8B
+
+                   1.0                                                      1.0                                                           1.0
+                               src zh                                                     src zh
+                                tgt zh                                                      tgt zh
+                   0.8        src + tgt en                                  0.8        src + tgt en                                       0.8
+
+                   0.6                                                      0.6                                                           0.6                                                  probability                                                                                                                                                                              probability                                                                                                                                                                                              probability
+                                concept0.4                                                                                                         concept0.4                                                                                                                   concept0.4        src zh
+                   0.2                                                      0.2                                                           0.2         tgt zh
+                                                                                                                                                         src + tgt en
+                   0.0                                                      0.0                                                           0.0                   0          5         10         15              0          5         10         15                  0          5         10         15
+                                          layer                                                    layer                                                         layer
+
+                             Gemma 2B
+
+Figure 12: Here we use different input languages (DE, FR), different concepts, different output languages (IT, ZH) in
+(a). In (b) we use the same source and target language pairs as in (a). In (c) we use multiple source input languages
+DE, NL, ZH, ES, RU and output languages IT, FI, ES, RU, KO. We patch at the last token of the concept-word at all
+layers from j to 31. In (a) we patch latents from the single source prompt. In (b) for each concept, we patch the
+average latent over different few-shot DE to IT translation contexts. In (c) we patch the mean of the latents over
+the source prompts. For each of the plots, the x-axis shows at which layer the patching was performed during the
+forward pass on the target prompt and the y-axis shows the probability of predicting the correct concept in language
+ℓ(see legend). The prefix “src” stands for source and “tgt” for target concept. We report means and 95% Gaussian
+confidence intervals computed over a dataset of size 200.
+
+
+
+
+
+                                         19
+
+        Target: English (156 concepts)      Target: French (29 concepts)      Target: Chinese (38 concepts)
+   1.0
+                                                                                                                               Similarity with mean
+                                                                                                      ground truth embedding
+   0.8                                                                                                                         Similarity with
+                                                                                                                 other concepts
+   0.6                                                                                                              Multi-Source Translationsimilarity                                                                                                                 Multi-Source Definition
+Mean0.4                                                                                                            Single-SourceSingle-Source TranslationDefinition
+   0.2                                                                                         Word Patching
+                                                                                                          Prompting
+   0.0                                                                                                 Repeat Word
+
+                                                 (a) Aya 23 8B
+         Target: English (38 concepts)      Target: French (144 concepts)     Target: Estonian (32 concepts)
+   1.0
+                                                                                                                               Similarity with mean
+                                                                                                      ground truth embedding
+   0.8                                                                                                                         Similarity with
+                                                                                                                 other concepts
+   0.6                                                                                                              Multi-Source Translationsimilarity                                                                                                                 Multi-Source Definition
+Mean0.4                                                                                                            Single-SourceSingle-Source TranslationDefinition
+   0.2                                                                                         Word Patching
+                                                                                                          Prompting
+   0.0                                                                                                 Repeat Word
+
+                                             (b) Gemma 2 2B
+
+Figure 13: Mean similarity between the definition and the mean embedding of the ground truth definitions, as well
+as the mean similarity between the definition embedding and the embeddings of the definitions of the other concepts
+in the dataset. For Aya, the results are presented for three target languages: English (with source languages French
+and German and input language Spanish), French (with source languages Korean, Japanese, Estonian, Finnish and
+input language English), and Chinese (with source languages Italian, Finnish, Spanish, Russian, Korean and input
+languages German, Dutch, Chinese, Spanish, Russian). For Gemma, we show English (with source languages
+Italian, Finnish, Spanish, Russian, Korean and input languages German, Dutch, Chinese, Spanish, Russian), French
+(with source languages Spanish, German and input language Italian), and Estonian (with source languages English,
+French, Chinese, German and input language Hindi). We report means and 95% Gaussian confidence intervals
+computed over the dataset.
+
+
+
+
+
+         Target: English (61 concepts)      Target: French (29 concepts)      Target: Chinese (38 concepts)
+   3.0
+                                                                                        Mean loss
+   2.5                                                                                    Mean loss with
+                                                                                                                 other concepts
+   2.0loss
+                                                                                                                    Multi-Source Translation
+                                                                                                                    Multi-Source DefinitionMean1.5
+   1.0                                                                                                            Single-Source Translation
+                                                                                                                  Single-Source Definition
+   0.5                                                                                         Word Patching
+                                                                                                          Prompting
+   0.0
+
+           Figure 14: Mean loss on the ground truth definitions. We report 95% confidence intervals.
+
+
+
+
+
+                                         20

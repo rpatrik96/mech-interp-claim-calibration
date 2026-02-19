@@ -1,0 +1,526 @@
+        Causal Tracing of Object Representations in Large Vision Language Models:
+                 Mechanistic Interpretability and Hallucination Mitigation
+
+         Qiming Li1*, Zekai Ye1*, Xiaocheng Feng1,2†, Weihong Zhong1, Weitao Ma1, Xiachong Feng3†
+                          1Harbin Institute of Technology, 2Peng Cheng Laboratory, 3The University of Hong Kong
+                                                         {qmli,zkye}@ir.hit.edu.cn
+
+
+
+                               Abstract                                                                                                                                                                                                    ...                                     MHSA   MLP     Hidden State
+              Despite  the remarkable advancements  of Large  Vision-                                                                                                          ...
+            Language Models (LVLMs), the mechanistic interpretability                                                                                                          ...                       Finding of MLP:2025                                                                                                                       Is                                                   ...                Hierarchical Representation             remains underexplored. Existing analyses are insufficiently
+                                                                                                                                         bird                                                ...
+             comprehensive and lack examination covering visual and tex-
+                                                                                                                             one                                                 ...
+                tual tokens, model components, and the full range of layers.                                   ：                                              ...                                                                                                Logits
+             This limitation restricts actionable insights to improve theNov                                                                                                          Finding of MHSA:
+               faithfulness of model output and the development of down-             Cross-modal Aggregation
+             stream                       tasks,                         such                                as hallucination                                                  mitigation.                                               To address                                                                                this                                       Intermediate Representation Injection19                                                                                                                         Method:                                   Fine-grained                                            Cross-modal                                                        Causal                limitation,                  we                            introduce
+            Tracing (FCCT) framework, which systematically quantifies         Figure 1: An overview of our proposed Fine-grained Cross-
+               the causal effects on visual object perception. FCCT conducts       modal Causal Tracing (FCCT) findings and Intermediate
+               fine-grained analysis covering the full range of visual and tex-                                                                   Representation Injection (IRI) method.
+                tual tokens, three core model components including multi-
+             head self-attention (MHSA), feed-forward networks (FFNs),
+            and hidden states, across all decoder layers. Our analysis is[cs.CV]       the first to demonstrate that MHSAs of the last token in mid-          distinct functional behaviors from three core model com-
+               dle layers play a critical role in aggregating cross-modal in-       ponents—such as multi-head self-attention (MHSA), feed-
+              formation, while FFNs exhibit a three-stage hierarchical pro-        forward networks (FFNs), and hidden states—across layers,
+              gression for the storage and transfer of visual object represen-        remains underexplored. Previous studies have partially ad-
+                tations. Building on these insights, we propose Intermediate                                                                        dressed these questions but still leave notable limitations.
+             Representation Injection (IRI), a training-free inference-
+                                                                          Attention knockout experiments (Neo et al. 2024) demon-             time technique that reinforces visual object information flow
+                                                                                      strate that LVLMs extract object information from visual ob-            by precisely intervening on cross-modal representations at
+               specific components and layers, thereby enhancing percep-          ject tokens in the middle to late layers. However, it lacks an
+               tion and mitigating hallucination. Consistent improvements         analysis of the cross-modal interactions between visual and
+              across five widely used benchmarks and LVLMs demonstrate          textual tokens, as well as the functional roles of the MLP and
+            IRI achieves state-of-the-art performance, while preserving        hidden states. NOTICE (Golovanevsky et al. 2024) intro-
+              inference speed and other foundational performance.               duces semantic image pairs for image corruption and sym-
+                                                                         metric token replacement for text corruption to analyze how
+                                           MHSA and MLP contribute to information aggregation in                        Introduction
+                                                                                textual tokens, but overlooks the effect of visual tokens.
+         Large Vision-Language Models (LVLMs) have  rapidly                                                              To address these limitations, we propose a Fine-grained
+          evolved, demonstrating impressive capabilities across di-arXiv:2511.05923v3                                                         Cross-modal Causal Tracing (FCCT) framework, which
+          verse tasks. However, existing interpretability studies fall                                                                            systematically analyzes cross-modal causal effects on visual
+           short in capturing the full complexity of visual informa-                                                                         perception by examining visual and textual tokens catego-
+           tion flow, thereby limiting progress in critical downstream                                                                             rized with their position and semantic role in the input se-
+           applications such as hallucination mitigation. Fundamen-                                                                      quence, covering three core model components across lay-
+             tal questions require further investigation, particularly re-                                                                                       ers. By introducing controlled Gaussian perturbations to in-
+          garding how LVLMs process visual object features and                                                                         put images, we induce measurable drops in output probabili-
+           align them with textual semantics in cross-modal represen-                                                                                         ties for existing objects. Then we restore specific activations
+            tations. Furthermore, how visual and textual tokens elicit                                                                       using the clean activations from the original image input.
+             *These authors contributed equally.                      By quantifying the recovery in the LVLM’s output probabil-
+              †Corresponding authors                                                     ities, we precisely estimate the causal effect on visual object
+           Copyright © 2026, Association for the Advancement of Artificial      perception for each core components across token types and
+            Intelligence (www.aaai.org). All rights reserved.                         layers. FCCT is the first to demonstrate that the MHSAs of
+
+the last token in middle layers play a critical role in aggre-      (Yu et al. 2024; You et al. 2023; Zhang et al. 2025) and novel
+gating crucial object visual and textual information, as well       training objectives (Lyu et al. 2024). These methods can be
+as the FFNs exhibit a three-stage hierarchical progression       effective but require substantial data and computational re-
+for the storage and transfer of visual object representations.       sources. (2) Contrastive decoding (Leng et al. 2024; Huang
+ FCCT not only reveals cross-modal information flow of        et al. 2024; Zhong et al. 2024) leverages differences between
+visual objects, but also provides valuable guidance for hal-       deliberately perturbed decoding paths to promote genera-
+lucination mitigation. Prior studies (Tang et al. 2025) sug-       tions that are more consistent in visual information. How-
+gest that deep unidirectional information flow can lead to the       ever, such methods introduce significant latency at inference
+progressive degradation of fine-grained semantic cues en-       time. (3) Inference-time interventions modify internal ac-
+coded in earlier layers, which may be a potential cause of ob-       tivations such as attention heads outputs (Liu, Zheng, and
+ject hallucination. To prevent mid-layer degradation of crit-     Chen 2024; Li et al. 2025a; Ye et al. 2025) or hidden states
+ical information during forward and reinforce components       (Liu, Ye, and Zou 2024) to steer the model toward more
+with strong causal effects identified by FCCT, we further       faithful outputs. However, these methods generally lack in-
+propose Intermediate Representation Injection (IRI), a       terpretability of the selection of layers and components.
+training-free inference-time technique that injects crucial
+mid-layer representations into subsequent layers, thereby                     Preliminary
+enhancing visual perception capability and mitigating hal-
+                                         We restrict our scope to LVLMs that are based on auto-lucination. FCCT offers fine-grained and quantitative guid-
+                                                                   regressive Transformer architecture (Vaswani et al. 2017),ance for selecting model components and layers, serving as a
+                                                                as it is adopted by most SOTA LVLMs. The model receivestheoretical foundation for the design and implementation of
+                                                                as input a visual input sequence V = {v1, v2, . . . , vm} andthe IRI method. Consistent improvement across five widely
+                                                            a textual input sequence T =  {t1, t2, . . . , tn}, where mused benchmarks and five advanced LVLMs demonstrates
+                                                       and n denote the sequence lengths of the visual and textualthat IRI achieves state-of-the-art (SOTA) performance.
+                                                                     input. The textual and visual input sequences are concate-
+  In summary, our main contributions are three-fold:
+                                                              nated together and processed through L transformer layers
+ • We propose FCCT, a fine-grained causal analysis that       of the language decoder, each consisting of multi-head self-
+   covers all types of visual and textual tokens, three core       attention (MHSA), feed-forward network (FFN) that is usu-
+   components across the full layer range, providing a com-       ally a multilayer perception (MLP), and a residual stream
+   prehensive mechanistic interpretability study of LVLMs.        is applied between each components. The l-th layer hidden
+ • We propose IRI, a training-free inference-time method       state h(l) can be computed from the previous layer:
+   that effectively mitigates hallucination while preserving
+   inference speed and other foundational capabilities.                            h(l) = h(l−1) + a(l) + m(l),             (1)
+ • Consistent improvements across five widely used bench-                                                       where a(l) and m(l) are the output of the MHSA compo-
+   marks and LVLMs not only demonstrate IRI’s SOTA                                                              nent and the FFN component at layer l. Finally, the model
+   performance, but also validate the findings of FCCT.                                                                   predicts the next token in an auto-regressive manner based
+                                                     on the last layer output.
+               Related Work                             In this paper, we aim to identify which types of visual
+Mechanistic Interpretability of LVLMs  While LVLMs      and textual tokens, model components (i.e., a(l), m(l), and
+have demonstrated remarkable capabilities across various       h(l)), and layer ranges play a critical role in the perception
+downstream tasks, their mechanistic interpretability remains      and comprehension of visual object information in LVLMs.
+underexplored. Existing interpretability methods, such as     By uncovering the underlying information flow, we seek to
+probing (Salin et al. 2022), activation patching (Basu et al.      provide practical guidance for mitigating object hallucina-
+2024; Palit et al. 2023; Golovanevsky et al. 2024), logit       tion and related downstream issues.
+lens (Neo et al. 2024; Huo et al. 2024), in-context learning
+(Li et al. 2025d,b,c) provide only a coarse-grained analysis      Fine-Grained Cross-Modal Causal Tracing
+of model components or do not fully disentangle the com-
+                                                           Causal tracing (also known as activation patching or causalplex interactions between visual and textual token represen-
+                                                            mediation analysis) is a widely used interpretability tech-tations. In contrast, our work employs causal tracing with
+                                                            nique that selectively replaces internal activations to probeGaussian noise to precisely quantify the functional roles of
+                                                                 the causal contribution of specific model components (MengMHSA, FFN, and hidden states for both visual and textual
+                                                                          et al. 2022). In the context of large language models (LLMs),tokens across layers, enabling a fine-grained analysis of how
+                                                                causal tracing is frequently employed to examine the storageLVLMs perceive and process visual object information.
+                                                       and retrieval mechanisms of factual associations (Meng et al.
+Mitigating Hallucination in LVLMs  LVLMs frequently      2022), and document-level relevance (Liu, Mao, and Wen
+produce content that deviates from visual information, lead-      2025). In the context of LVLMs, we are the first to propose
+ing to object hallucination. Existing hallucination mitigat-      using controlled Gaussian noise perturbations on input im-
+ing strategies can be broadly categorized into three types:      ages for causal tracing. By adding controlled Gaussian noise
+(1) Training-based approaches enhance model factuality       to the entire image and then selectively restoring the acti-
+by pre-training or finetuning with carefully curated datasets       vations of specific components, we conduct a fine-grained
+
+Figure 2: Overview of our proposed Fine-grained Cross-modal Causal Tracing method. Activation patching computes the
+causal effect of a specific component by running the LVLMs three times: a clean run (step1) with original image, a corrupted
+run (step2) with image added Gaussian noise, and a patched run (step3) with corrupted input but restoring specific component
+using the value in the clean run. We use Recovery Rate to quantify the causal effect of each restored component.
+
+
+analysis of the internal mechanisms responsible for visual     2  Object Visual Tokens directly encode visual features
+object perception and comprehension in LVLMs.                   corresponding to the queried object, which are central for
+   Specifically, we select 500 images from the COCO dataset         analyzing the internal mechanisms of visual object per-
+and design object-related questions for the objects present in          ception and comprehension.
+each image. Following the analysis methodology of ROME
+                                                     3  Late Visual Tokens occur after any queried object re-
+(Meng et al. 2022), we define three types of inference runs:
+                                                                     gion, which may capture residual visual information.
+ • Clean Run: The model is given the original image, and
+  we record the probability Pclean assigned to the token     4  Early Textual Tokens occur near the visual&textual se-
+  yes in response to binary questions of the form ”Is there         quences boundary, which help analyze how information
+   a XXX in the image? Please answer this question with           transitions from visual to language components.
+   one word (Yes or No).”                                5  Textual Object Tokens encode textual features corre-
+ • Corrupted Run: Gaussian noise is added to the entire         sponding to the queried object, which help reveal how
+   image to degrade visual quality, and we record the re-          visual object information interacts with textual reference.
+   sulting prediction probability Pcorrupted.
+                                                     6  Late Textual Tokens occur in the late part of the textual
+ • Patched Run: Starting from the corrupted run, we selec-
+                                                              prompt, which help analyze how visual object informa-
+    tively restore specific internal activations (e.g., MHSA
+                                                                        tion propagates across textual stream not directly related.
+   output, MLP output, or hidden states) at certain layers
+   and token categories using activations from the clean run.     7 The Last Token occurs at the end of input sequence,
+   The prediction probability is denoted as Ppatched.                 helping analyze cross-modal information aggregation.
+  To quantify the causal effect of each restored component,                                               By restoring only one component of one layer for a single
+we define the following Recovery Rate (RR) metric:                                                            token category at one time, we systematically derive fine-
+                           Ppatched −Pcorrupted                      grained insights into how LVLMs perceive and comprehend       RR =                                   (2)
+                            Pclean −Pcorrupted                        visual object information. This enables us to trace the causal
+                                                         pathways through which visual object information is repre-  This normalized measure reflects the proportion of clean
+                                                                   sented, propagated, and aggregated across different layersperformance regained through targeted restoration; more
+                                                       and model components.profoundly, it serves as a quantitative estimate of the com-
+ponent’s causal effect on visual object perception. A value
+close to 1 indicates a strong causal effect, whereas a value     Causal Tracing Results and Key Findings
+near 0 suggests minimal influence.                               In this section, we present and analyze the experimental re-
+  To systematically conduct causal tracing across visual and       sults and key findings of FCCT conducted on two widely
+textual information flow, we define seven categories based      used LVLMs: LLaVA-1.5-7B and Qwen-VL-Chat. As illus-
+on token’s position and semantic role in the input sequence:       trated in Figure 3, we present the RRs of 3 model compo-
+1  Early Visual Tokens occur before any queried object re-      nents across 32 layers under 7 token categories, denoted as
+   gion, which serve as a control group for comparison.         1  to 7 , corresponding to the previous definition.
+
+             Self- Attention                     MLP                        Hidden State
+             (a) Recovery Rate of Attention (LLaVA-1.5-7b)                       (b) Recovery Rate of MLP (LLaVA-1.5-7b)                       (c) Recovery Rate of Hidden State (LLaVA-1.5-7b)
+                                                                          ①Visual Center
+
+
+
+                                                                                               ②Visual&Textual
+
+
+                                                                                                         ③Generation-oriented
+
+
+            (d) Recovery Rate of Attention (Qwen-VL-Chat)                        (e) Recovery Rate of MLP (Qwen-VL-Chat)                        (f) Recovery Rate of Hidden State (Qwen-VL-Chat)
+                                                                          ①Visual Center
+
+
+
+                                                                                               ②Visual&Textual
+
+
+                                                                                                         ③Generation-oriented
+
+
+   Finding 1:                            Finding 2:                             Finding 3:
+  MHSA of the last token in middle layers plays a   MLPs exhit a three-stage hierarchical    Hidden states have the greatest casual effect
+   crucial role in aggregating cross-model    progression in the visual object representations    on the output among three components and
+   information from all preceding tokens.             across tokens and layers.                           exhibit a distinct semantic shift .
+
+
+Figure 3: Results and key findings of FCCT framework on LLaVA-1.5-7b and Qwen-VL-Chat. The symbols from 1  to
+ 7  represent the seven token categories defined above: 1 Early Visual Tokens, 2 Object Visual Tokens, 3 Late Visual
+Tokens, 4 Early Textual Tokens, 5 Textual Object Tokens, 6 Late Textual Tokens, and 7 The Last Token.
+
+
+
+                                              LLaVA-1.5-7b  Visual Object Tokens                                             Three-stage  Hierarchical  Representations  via MLPs
+                                                As shown in Figure 2 (b) and (e), MLPs exhibits a three-
+                                                                 stage progression in the formation of visual object repre-
+                                                                     sentations: In early layers, visual object tokens are encoded
+                                                                     into localized, modality-specific embeddings with limited
+                                                            semantic abstraction; In intermediate layers, textual object                                           Qwen-VL-Chat
+                                                             tokens interact with visual representations, forming increas-
+                                                                 ingly rich cross-modal semantics; In the deeper layers, un-
+                                                               der the cross-modal aggregation effect of MHSA, the last
+                                                                 token’s MLPs progressively accumulate a cross-modal and
+ Textual Object Tokens                                                    task-relevant representation.
+                                                                    Overall,  this  hierarchical  progression  illustrates how
+Figure 4: Visualization of normalized attention weights to     MHSA-driven cross-modal interactions and MLPs together
+visual object tokens and corresponding textual object tokens      transform unimodal and localized visual representations into
+across layers. We report the average result on 3,000 VQAs.       cross-modal and globally aggregated representations that are
+                                                                      essential for visual object perception in LVLMs.
+
+Cross-modal Aggregation via the Last Token’s MHSAs
+                                                            Hierarchical Semantic Shift of the Hidden States  AsAs shown in Figure 2 (a) and (d), the last token’s MHSAs
+                                                    shown in Figure 2 (c) and (f), hidden states exhibit a dis-in intermediate layers exhibit a strong causal effect, which
+                                                                           tinct semantic shift: in shallow layers (Layers 0–10), visualplays a particularly crucial role in aggregating information
+                                                                tokens’ hidden states are primarily visual-centric, encodingfrom all preceding tokens.
+                                                                 low-level perceptual patterns. In deep layers (Layers 18–31),  To further investigate the cross-modal aggregation effect
+                                                                 the last tokens’ are cross-modal and highly task-related toof MHSA, we visualized the last token’s layer-wise nor-
+                                                                 the final prediction. Notably, the phase in which the causalmalized attention weights for the queried visual object to-
+                                                                       effect of the hidden states gradually strengthens aligns withkens and textual object tokens. As shown in Figure 3, we
+                                                                 the intermediate layers around Layer 14, precisely whereobserve a sharp increase in attention weight around Layer
+                                         MHSAs and MLPs jointly contribute most significantly to15. This suggests that around these layers, LVLMs begin to
+                                                                     refining cross-model object representations.align instruction-guided attention with the most relevant vi-
+sual and textual cues. We hypothesize that these layers mark        This shift reflects the progression from grounding visual
+a transition point where deep cross-modal information ag-       object information to aggregation with task-related context
+gregation occurs, enabling the model to bind unimodal rep-       for final prediction. It further highlights the hierarchical or-
+resentations to high-level cross-modal representations.            ganization of internal representation inference in LVLMs.
+
+    Intermediate Representation Injection             This intervention ensures that only critical cross-modal
+Motivated by the findings from the proposed FCCT analy-       intermediate activations are injected into subsequent layers
+sis, we observe that the last token’s MHSA and MLP outputs      with sufficient causal effect throughout the information flow,
+at intermediate layers are crucial for capturing and aggre-      enhancing the LVLM’s trustworthiness to visual object in-
+gating task-related object information from both visual and      formation and thereby mitigating hallucination.
+textual modalities. To take advantage of this observation, we
+                                                  Experimental Setuppropose Intermediate Representation Injection (IRI), a
+training-free inference-time technique, which aims to rein-      Models.  We adopt the widely used LLaVA-1.5-7b (Liu
+force crucial cross-modal representations to improve visual        et al. 2024a), Qwen-VL-Chat (Bai et al. 2023), LLaVA-
+object information perception and mitigate hallucination.      NeXT (Liu et al. 2024b), Qwen2-VL-7B(Wang et al. 2024)
+                                                       and InternVL2-8B (Chen et al. 2024) as baseline LVLMs.
+Method                                                            Evaluation.  We comprehensively evaluate the methods
+To reinforce crucial mid-layer cross-modal representations,       for both discriminative and generative tasks to measure the
+we  selectively  inject them  into  later  layers, which are       effectiveness and robustness of hallucination mitigation.
+adaptively scaled by their causal effects (Recovery Rates),                                                                             • POPE (Li  et  al. 2023) employs a binary question-
+thereby amplifying the contributions of the most influential                                                             answering format, inquiring LVLMs to answer if a spe-
+components across layers.                                                                             cial object exists in the given image. Following previous
+  Let RRattn = {RRattnk }Lk=1 and RRmlp = {RRmlpk }Lk=1         works, we adopt Accuracy and F1 score as the metrics.
+denote the Recovery Rates of the MHSA and MLP outputs                                                                             • MME (Fu et al. 2023) serves as a comprehensive tool for
+across the L layers, respectively. To ensure that the most crit-                                                                    assessing the capabilities of LVLMs across both 10 per-
+ical cross-modal representations are injected into layers with                                                                  ception tasks and 4 cognition tasks. Consequently, task
+sufficient causal effect, we rank components across layers by                                                                   scores are reported as the evaluation metric.
+their Recovery Rates and independently select:
+                                                                             • CHAIR (Rohrbach et al. 2018) is a widely used met-
+ • A set of top-k1 MHSA source layers Lattnsrc with the high-           ric for assessing object hallucination in responses of
+    est RRattn values and a set of top-k2 target layers Lattntgt .        LVLMs. The CHAIR metric comprises two important in-
+ • A set of top-k1 MLP source layers Lmlpsrc with the highest           dicators, denoted as CS and CI, with the following cal-
+                                                                     culation formulas:
+  RRmlp values and a set of top-k2 target layers Lmlptgt  .                                                                                              |{Hallucinated objects}|
+                                                       CS =  For each attention source layer k ∈Lattnsrc , we record the                               |{All mentioned objects}|
+MHSA output of the last token: a(k) ∈Rd. For each target                                                                                     |{Sentences w/ hallucinated objects}|
+layer l ∈Lattntgt such that l > k, we inject the stored activa-             CI =
+                                                                                                 |{All sentences}|tions into the target MHSA output, and scaling them by RR
+to modulate their contribution to reflect causal effect:                 • MMHal-Bench (Sun et al. 2023) comprises 96 metic-
+                                                                  ulously designed questions, which evaluates response-
+         ˜a(l) = a(l) + λa · X g(k, l) · RRattnk   · a(k),    (3)           level  hallucination  rate (VH.%) and informativeness                                                                      (Score). It asks GPT-4 to compare model outputs with
+                               k∈Lattnsrc                                                   human responses and object labels for evaluation.
+   Similarly, for each k ∈Lmlpsrc and l ∈Lmlptgt with l > k, we         • MHumanEval (Yu et al. 2024) is designed to evaluate
+inject the recorded MLP outputs as:                                  hallucination performance by human annotators. The
+                                                         benchmark contains 146 samples collected from Object
+                                                        HalBench and MMHal-Bench. Given model responses,
+   ˜m(l) = m(l) + λm · X g(k, l) · RRmlpk   · m(k),   (4)       we ask three human annotators to label the hallucinated
+                         k∈Lmlpsrc                                   segments and compute the mean response-level halluci-
+                                                                   nation rate (Hu.%) as the evaluation metric.
+where λa and λm are scaling coefficients, and g(k, l) en-
+sures that the injected information respects causal ordering:       Baselines.  We compared our proposed IRI method with
+                                                                 the following SOTA training-free methods: VCD (Leng
+                             1,   if l > k                             et al. 2024) contrasts model logits derived from original
+                g(k, l) =
+                             0,  otherwise                    and distorted visual input to reduce the over-reliance on
+                                                                              statistical bias and unimodal priors. OPERA (Huang et al.
+  To ensure that the injected activation maintains the same                                                         2024) introduces a penalty term on the model logits during
+norm as the original, we apply the following normalization:                                                                 the beam-search decoding to mitigate the over-trust issue.
+                                                 PAI (Liu, Zheng, and Chen 2024) intervenes on attention
+                   ∥a(l)∥2              ∥m(l)∥2             heads by leveraging their original direction and optimizes
+        ˜a(l) = ˜a(l) ·             , ˜m(l) = ˜m(l) ·              ,    (5)
+                     ∥˜a(l)∥2                ∥˜m(l)∥2              the output distribution during decoding to mitigate language
+                                                                        bias. VTI (Liu, Ye, and Zou 2024) mitigates hallucination
+where ||·|| represents the ℓ2 norms (Euclidean norms) of the     by steering layer-wise hidden states during inference to en-
+activation vectors.                                          hance visual feature stability.
+
+                      LLaVA-1.5-7b                  Qwen-VL-Chat                 LLaVA-NeXT  Method
+                Exist.  Count   Pos.   Color   Total   Exist.  Count   Pos.   Color   Total   Exist.  Count   Pos.   Color   Total
+   Regular    175.7   124.7  114.0  151.0  565.4  170.0   135.0  123.3  170.0  598.3  180.0   105.0  150.0  151.7  586.7
+  VCD       180.3  131.7  125.0  155.0  592.0  180.0   133.3  131.7  175.0  620.0  185.0   125.0  133.3  168.3  611.6
+  OPERA    165.0  116.0  133.3  149.0  563.3  180.0   140.0  138.3  175.0  633.3  183.8   121.3  155.0  162.1  622.2
+   PAI        190.0   148.3  126.7  160.0  625.0  175.0   141.6  132.5  177.5  626.6  185.0   128.3  148.3  170.8  632.4
+  VTI        185.0  140.0  135.0  165.7  625.7  180.0   142.5  133.0  178.0  633.5  186.7   126.7  150.0  172.5  635.9
+   IRI(ours)  195.0  140.0  140.0  168.3  648.3  185.0  145.0  135.0  180.0  645.0  190.0  135.0  155.0  177.5  657.5
+
+    Table 1: Results on MME hallucination subset. The best performances are bolded and the second-best are underlined.
+
+
+
+              LLaVA-1.5-7bQwen-VL-ChatLLaVA-NeXT                     LLaVA-1.5-7b      Qwen-VL-Chat
+SettingMethod                                            Method
+               Acc   F1   Acc    F1    Acc   F1                 Score↑VH.%↓Hu.%↓Score↑VH.%↓Hu.%↓
+
+        Regular  83.29  81.33  84.63   82.61   84.78  86.43           Regular    1.86    63.5    67.1   2.93    41.1    61.0
+     VCD     87.73  87.16  86.93   85.46   88.76  89.57       VCD       2.12    54.2    66.7   2.77    39.2    61.5
+     OPERA   89.20  88.81  85.71   84.64   90.27  89.71        OPERA    2.15    54.2    63.0   2.94    38.4    58.2
+ Ran.      PAI      86.33  84.56  85.38   85.54   88.40  87.16          PAI        2.27    53.2    62.5   2.87    39.5    56.7
+      VTI      89.50  88.89  86.73   85.59   89.23  88.68         VTI        2.43    52.2    63.4   2.99    38.4    57.4
+       IRI(ours)89.76  89.32  87.38   87.42   90.68  90.21           IRI(ours)  2.53    50.2    62.0   3.13    37.5    56.2
+
+        Regular  81.88  80.06  83.63   81.53   83.23  84.77
+     VCD     85.38  85.06  85.17   83.68   87.01  87.70        Table 4: Results on MMHal-Bench and MHumanEval. We
+     OPERA   86.64  86.62  84.82   83.99   87.16  87.68        use GPT-4 and human annotators as evaluation references. Pop.      PAI      85.33  83.62  84.20   83.10   86.65  86.99
+      VTI      87.36  86.69  85.67   84.48   87.33  87.16
+       IRI(ours) 87.67  87.07  86.24   86.89   88.25  88.04                    POPE    MME    CHAIR
+                                                             Model
+        Regular  78.96  77.57  81.03   79.30   81.19  82.50                 ACC ↑F1 ↑Cog.↑Hall.%↑CS ↓CI ↓
+     VCD     80.88  81.33  83.10   82.04   84.80  85.23
+     OPERA   81.24  81.38  82.67   79.89   85.20  85.54         Qwen2-VL-7B  88.49  87.85 556.4  630.0   24.8  7.2
+ Adv.      PAI      83.17  81.67  82.19   82.06   84.32  83.68                + IRI  89.04  88.44 563.4  663.3   14.2  6.5
+      VTI      82.57  82.11  83.13   82.16   85.35  84.52
+       IRI(ours) 85.17  84.18  84.83   84.52   85.67  86.26            InternVL2-8B  86.67  85.72 566.4  663.0   37.2  9.4
+                                                             + IRI  87.69  86.90 569.3  688.7   30.7  8.6
+
+Table 2: Results on POPE tasks. We evaluate the accuracy
+                                                             Table 5: Results on more advanced models. Cog. and Hall.and F1 Score of various widely used LVLMs.
+                                                            denote the cognitive and hallucination subset of MME.
+
+              LLaVA-1.5-7b        Qwen-VL-Chat
+ Method
+        CS ↓CI ↓Recall↑Len CS ↓CI ↓Recall↑Len           (1) Robust and SOTA Performance: Our proposed IRI
+ Regular   52.8  15.9   77.3   93.4   2.8   3.0   31.0   5.3       method demonstrates robust, SOTA hallucination mitiga-
+ VCD      51.0  14.9   77.2  101.9  1.4   1.2   30.8   4.0        tion performance across both discriminative and generative
+ OPERA   45.6  13.1   78.5   95.3   1.7   1.3   31.9   4.4         tasks. Specifically, on the POPE benchmark, IRI achieves an
+ PAI       38.3  12.4   76.9   94.4   1.3   1.2   32.2   4.2       average improvement of +4.89% in Accuracy and +5.20%
+ VTI       36.9  12.1   76.8   93.8   1.1   1.1   31.4   4.2
+                                                                     in F1 Score. For the MME hallucination subset, IRI brings IRI(ours) 34.6  11.5   78.2   95.8   1.0   0.9   32.6   4.4
+                                                        an average absolute gain of +65.7 points in the Total score.
+                                            On the CHAIR benchmark, IRI reduces the average hallu-Table 3: Results on CHAIR. Max new tokens is 512.
+                                                                  cination metrics (CS and CI) by 6.43 points. Finally, onLower CS and Ci along with higher recall and length in-
+                                                  MMHal-Bench, IRI improves the average Score by +0.44dicate better hallucination mitigating performance.
+                                                            while lowering the average VH Rate by 8.45%. These re-
+                                                                         sults demonstrate the effectiveness and robustness of our ap-
+                                                           proach in mitigating hallucinations.
+Implementation Details.  In our experiments, we uni-
+                                                                       (2) Model-agnostic and generalizable: IRI is not de-
+formly set k1 = 3 and k2 = 10. For LLaVA-1.5-7B, we use                                                           pendent on specific model architectures and can be read-
+λa = 0.26 and λm = 0.16; for Qwen-VL-Chat, λa = 0.20                                                                            ily deployed across various LVLMs. We successfully imple-
+and λm = 0.10; and for LLaVA-NeXT, λa = 0.15 and                                                      mented IRI on more advanced models, such as Qwen2-VL-
+λm = 0.08. Both causal tracing analysis and evaluation ex-                                              7B and InternVL2-8B, where it continued to provide steady
+periments of our proposed IRI method are performed on 8
+                                                       and significant performance enhancements.
+× NVIDIA A100 SXM 80GB GPUs.
+                                                                       (3) Preserving foundational capabilities: IRI effectively
+                                                                 mitigates hallucination without sacrificing LVLM’s other
+Main Results                                                               foundational capabilities. Specifically, it leads to improved
+Based on the experimental results presented in Tables 1-5,       scores on MME cognitive tasks and more informative re-
+we can draw the following key conclusions:                      sponses, as indicated by higher scores on MMHal-Bench.
+
+                         Hyperparameters   POPE           (3) How does the number of source and target layers affect  Setting
+                         λa  λm k1  k2 ACC ↑F1 ↑       performance? We find that the number of intervention lay-
+                                                                     ers affects the effectiveness of IRI to some extent. It is nec- LLaVA-1.5-7b                     -      -    -    -   78.96  77.57
+                                                                essary to select a sufficient number of intermediate layers                    Ablation of Component
+                                                            with strong causal effects for visual information perception
+ + IRI w/o MLP              0.22   -   3  10  84.93  84.02
+ + IRI w/o MHSA                  -   0.04 3  10  85.07  84.03      and inject them into a sufficient number of target layers to
+ + IRI w/ Hidden States       0.18 0.04 3  10  84.50  83.67      make IRI effective. Notably, even when injecting from too
+                   Ablation of Layer Range                   many source layers or into too many target layers, IRI’s per-
+ + IRI w/ Fisrt 10 Layers      0.22 0.14 3  10  78.46  77.23       formance does not drop significantly compared to its peak,
+ + IRI w/ Last 10 Layers      0.20 0.14 3  10  80.42  79.87      which demonstrates strong robustness. Nevertheless, select-
+                   Ablation of Layer Nums.                        ing too many source layers may introduce noise, while in-
+                                                              cluding too many target layers may inject mid-level repre- + IRI w/ Less Source Layers  0.26 0.16 1  10  82.92  83.13
+ + IRI w/ More Source Layers 0.24 0.14 5  10  84.76  83.94        sentations into task-relevant representation for final predic-
+ + IRI w/ Less Target Layers  0.22 0.12 3   5   83.32  82.71         tion, preventing optimal performance.
+ + IRI w/ More Target Layers  0.26 0.16 3  15  84.49  83.56
+                                                                     (4) Why is Recovery Rate necessary for more precise in-
+                       Ablation of RRs                            jection? The Recovery Rate adaptively controls how much
+ + IRI w/o RRs              0.26 0.14 3  10  84.42  83.92       each layer’s information is amplified in line with its esti-
+                   Ablation of Normalization                    mated causal effect. By re-weighting restored activations,
+ + IRI w/o Norm.             0.24 0.14 3  10  85.07  83.98           it highlights components across layers that contribute more
+                                                                 strongly to visual object perception. + IRI                       0.26 0.16 3  10  85.17  84.18
+                                                                     (5) Why is normalization necessary for more stable injec-
+Table 6: Result of ablation study on MS-COCO POPE. For      tion? The normalization strategy ensures that the scale of
+each experiment, the parameter λa and λm is individually       the vector remains consistent before and after injection, pre-
+optimized to ensure fair comparison.                            venting undesired magnitude shifts that may distort down-
+                                                            stream representations. This mechanism stabilizes the effect
+                                                                of representation injection, thereby enhancing the robustness
+                                                                of the IRI method to distributional shifts.Ablation Study
+As shown in Table 6, to validate the effectiveness of each      Inference Latency
+component within the proposed IRI method and the key find-     As shown in Table 7, IRI achieves the best hallucination mit-
+ings of FCCT framework, we conducted a comprehensive       igating performance while preserves the inference speed.
+and systematic set of ablation experiments. We specifically
+focus on addressing the following five questions:                 Method        TTFT(ms)    TPOT(ms)   Acc(%)
+(1) Why is it necessary to intervene in both MHSA and         LLaVA-1.5-7b     99.8 1.0×      36.0 1.0×     78.96
+MLP, but not directly in hidden states? Experimental re-                                                       + VCD           160.1 1.6×      96.8 2.7×     80.88
+sults show that removing either MHSA or MLP results in a        + OPERA        109.8 1.1×      69.5 1.9×     81.24
+                                                       + PAI            156.3 1.6×      93.6 2.6×     83.17slight performance decrease. Combined aggregation of two
+modules yields greater improvements, which demonstrates        + IRI(ours)      102.2 1.0×      36.5 1.0×     85.17
+that both MHSAs and MLPs play a critical role in enriching
+                                                             Table 7: Inference latency (Time to First Token, Time Perthe high-level representations in the middle layers. Further-
+                                                          Output Token) and the accuracy on adversarial POPE.more, we also apply interventions to the hidden states based
+on IRI and observe a performance drop. We believe that hid-
+den states are the cumulative result of MHSA, MLP, and the
+states from the previous layer. Directly intervening in these                     Conclusion
+highly integrated and functionally specialized hidden states       In this paper, we introduce the Fine-grained Cross-modal
+can disrupt the hierarchically constructed flow of semantic      Causal Tracing (FCCT) framework and the Intermediate
+information. Consequently, this approach is less effective      Representation Injection (IRI) technique to improve the
+than precisely enhancing the individual key components: the       interpretability and performance of large vision-language
+MHSA, which is responsible for information aggregation,      models (LVLMs). Our FCCT framework provides a com-
+and the MLP, which handles representation processing.           prehensive, fine-grained causal analysis of the internal com-
+(2) Do the intermediate layers really play a crucial role?      ponents of LVLMs, uncovering key insights into the cross-
+Specifically, when IRI’s source and target layers are both     modal aggregation and hierarchical representation forma-
+limited in the first ten or the last ten layers, accuracy drops        tion, particularly through MHSA and MLP mechanisms.
+to 78.46% and 80.42%, respectively. These results align      Building on these insights, IRI proves to be a robust and
+well with our FCCT findings: intermediate layers carry the       training-free inference-time method, significantly mitigat-
+strongest causal effect for perceiving and aggregating cru-      ing object hallucinations across various LVLM architectures
+cial visual&textual object information, whereas shallow lay-      while maintaining inference speed and foundational model
+ers lack sufficient crucial visual object perception and deep       capabilities. Experimental results not only demonstrate the
+layers already focus on final output generation.                    superiority of IRI, but also validate the findings of FCCT.
+
+           Acknowledgement                       grained Multimodal In-Context Learning via Representation
+                                                              Engineering. In Second Conference on Language Modeling.Xiaocheng  Feng  and  Xiachong  Feng  are  the  co-
+corresponding  authors  of  this  work. We  thank  the       Li, Y.; Du, Y.; Zhou, K.; Wang, J.; Zhao, W. X.; and Wen,
+anonymous  reviewers  for  their  insightful  comments.       J.-R. 2023. Evaluating object hallucination in large vision-
+This work was supported by the National Natural Science      language models. arXiv preprint arXiv:2305.10355.
+Foundation of China (NSFC) (grant 62522603, 62276078,                                                                      Li, Y.; Yang, J.; Shen, Z.; Han, L.; Xu, H.; and Tang, R.
+U22B2059), the Key R&D Program of Heilongjiang via                                                           2025c.  CATP: Contextually Adaptive Token Pruning for
+grant 2022ZX01A32, and the Fundamental Research Funds                                                                      Efficient and Enhanced Multimodal In-Context Learning.
+for the Central Universities ( XNJKKGYDJ2024013 ).                                                            arXiv preprint arXiv:2508.07871.
+                References                               Li, Y.; Yang, J.; Yun, T.; Feng, P.; Huang, J.; and Tang, R.
+                                                          2025d. Taco: Enhancing multimodal in-context learning via
+Bai,  J.; Bai, S.; Yang, S.; Wang, S.; Tan, S.; Wang, P.;                                                                  task mapping-guided sequence configuration.  In Proceed-
+Lin, J.; Zhou, C.; and Zhou, J. 2023. Qwen-vl: A frontier                                                                ings of the 2025 Conference on Empirical Methods in Natu-
+large vision-language model with versatile abilities. arXiv                                                                     ral Language Processing, 736–763.
+preprint arXiv:2308.12966.
+                                                                 Liu, H.; Li, C.; Li, Y.; and Lee, Y. J. 2024a.  Improved
+Basu, S.; Grayson, M.; Morrison, C.; Nushi, B.; Feizi, S.;                                                                 baselines with visual instruction tuning. In Proceedings of
+and Massiceti, D. 2024. Understanding information storage                                                                 the IEEE/CVF Conference on Computer Vision and Pattern
+and transfer in multi-modal large language models.  arXiv                                                               Recognition, 26296–26306.
+preprint arXiv:2406.04236.
+                                                                 Liu, H.; Li, C.; Li, Y.; Li, B.; Zhang, Y.; Shen, S.; and Lee,
+Chen, Z.; Wang, W.; Tian, H.; Ye, S.; Gao, Z.; Cui, E.; Tong,
+                                                               Y. J. 2024b. LLaVA-NeXT: Improved reasoning, OCR, and
+W.; Hu, K.; Luo, J.; Ma, Z.; et al. 2024. How far are we
+                                                         world knowledge.
+to gpt-4v? closing the gap to commercial multimodal mod-
+els with open-source suites. Science China Information Sci-       Liu, Q.; Mao, J.; and Wen, J.-R. 2025. How do Large Lan-
+ences, 67(12): 220101.                                     guage Models Understand Relevance? A Mechanistic Inter-
+                                                                       pretability Perspective. arXiv preprint arXiv:2504.07898.Fu, C.; Chen, P.; Shen, Y.; Qin, Y.; Zhang, M.; Lin, X.;
+Qiu, Z.; Lin, W.; Yang, J.; Zheng, X.; Li, K.; Sun, X.; and       Liu, S.; Ye, H.; and Zou, J. 2024. Reducing Hallucinations in
+Ji, R. 2023. MME: A Comprehensive Evaluation Bench-      Vision-Language Models via Latent Space Steering. arXiv
+mark for Multimodal Large Language Models.   ArXiv,       preprint arXiv:2410.15778.
+abs/2306.13394.                                                                 Liu, S.; Zheng, K.; and Chen, W. 2024.  Paying more at-
+Golovanevsky, M.; Rudman, W.;  Palit,  V.;  Singh,  R.;       tention to image: A training-free method for alleviating hal-
+and Eickhoff, C. 2024.  What Do VLMs NOTICE? A       lucination in lvlms. In European Conference on Computer
+Mechanistic Interpretability Pipeline for Gaussian-Noise-       Vision, 125–140. Springer.
+free Text-Image Corruption and Evaluation. arXiv preprint
+                                                           Lyu, X.; Chen, B.; Gao, L.; Song, J.; and Shen, H. T. 2024.
+arXiv:2406.16320.
+                                                                  Alleviating hallucinations in large vision-language models
+Huang, Q.; Dong, X.; Zhang, P.; Wang, B.; He, C.; Wang,      through hallucination-induced optimization. arXiv preprint
+J.; Lin, D.; Zhang, W.; and Yu, N. 2024. Opera: Alleviat-      arXiv:2405.15356.
+ing hallucination in multi-modal large language models via
+                                                    Meng, K.; Bau, D.; Andonian, A.; and Belinkov, Y. 2022.over-trust penalty and retrospection-allocation. In Proceed-
+                                                            Locating and editing factual associations in gpt. Advancesings of the IEEE/CVF Conference on Computer Vision and
+                                                                     in neural information processing systems, 35: 17359–17372.Pattern Recognition, 13418–13427.
+                                                        Neo, C.; Ong, L.; Torr,  P.; Geva, M.; Krueger, D.; andHuo, J.; Yan, Y.; Hu, B.; Yue, Y.; and Hu, X. 2024. Mm-
+                                                              Barez,  F. 2024.   Towards  interpreting visual informa-neuron: Discovering neuron-level domain-specific interpre-
+                                                                     tion processing in vision-language models. arXiv preprinttation in multimodal large language model. arXiv preprint
+                                                            arXiv:2410.07149.arXiv:2406.11193.
+Leng, S.; Zhang, H.; Chen, G.; Li, X.; Lu, S.; Miao, C.;        Palit, V.; Pandey, R.; Arora, A.; and Liang, P. P. 2023. To-
+and Bing, L. 2024. Mitigating object hallucinations in large      wards vision-language mechanistic interpretability: A causal
+vision-language models through visual contrastive decod-       tracing tool for blip. In Proceedings of the IEEE/CVF Inter-
+ing. In Proceedings of the IEEE/CVF Conference on Com-       national Conference on Computer Vision, 2856–2861.
+puter Vision and Pattern Recognition, 13872–13882.            Rohrbach, A.; Hendricks, L. A.; Burns, K.; Darrell, T.; and
+Li, Q.; Ye, Z.; Feng, X.; Zhong, W.; Qin, L.; Chen, R.; Li,      Saenko, K. 2018. Object hallucination in image captioning.
+B.; Jiang, K.; Wang, Y.; Liu, T.; et al. 2025a. CAI: Caption-      arXiv preprint arXiv:1809.02156.
+Sensitive Attention Intervention for Mitigating Object Hal-       Salin, E.; Farah, B.; Ayache, S.; and Favre, B. 2022. Are
+lucination in Large Vision-Language Models. arXiv preprint      vision-language transformers learning multimodal represen-
+arXiv:2506.23590.                                                 tations? a probing perspective. In Proceedings of the AAAI
+Li, Y.; Cao, Y.; He, H.; Cheng, Q.; Fu, X.; Xiao, X.; Wang,      Conference on Artificial Intelligence, volume 36, 11248–
+T.; and Tang, R. 2025b. M²IV: Towards Efficient and Fine-      11257.
+
+Sun, Z.; Shen, S.; Cao, S.; Liu, H.; Li, C.; Shen, Y.; Gan,
+C.; Gui, L.-Y.; Wang, Y.-X.; Yang, Y.; et al. 2023. Align-
+ing large multimodal models with factually augmented rlhf.
+arXiv preprint arXiv:2309.14525.
+Tang, K.; You, J.; Ge, X.; Li, H.; Guo, Y.; and Huang, X.
+2025.  Mitigating Hallucinations via Inter-Layer Consis-
+tency Aggregation in Large Vision-Language Models. arXiv
+preprint arXiv:2505.12343.
+Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones,
+L.; Gomez, A. N.; Kaiser, Ł.; and Polosukhin, I. 2017. At-
+tention is all you need. Advances in neural information pro-
+cessing systems, 30.
+Wang, P.; Bai, S.; Tan, S.; Wang, S.; Fan, Z.; Bai, J.; Chen,
+K.; Liu, X.; Wang, J.; Ge, W.; et al. 2024. Qwen2-vl: En-
+hancing vision-language model’s perception of the world at
+any resolution. arXiv preprint arXiv:2409.12191.
+Ye, Z.; Li, Q.; Feng, X.; Qin, L.; Huang, Y.; Li, B.; Jiang,
+K.; Xiang, Y.; Zhang, Z.; Lu, Y.; et al. 2025. CLAIM: Mit-
+igating Multilingual Object Hallucination in Large Vision-
+Language Models with Cross-Lingual Attention Interven-
+tion. arXiv preprint arXiv:2506.11073.
+You, H.; Zhang, H.; Gan, Z.; Du, X.; Zhang, B.; Wang, Z.;
+Cao, L.; Chang, S.-F.; and Yang, Y. 2023. Ferret: Refer and
+ground anything anywhere at any granularity. arXiv preprint
+arXiv:2310.07704.
+Yu, T.; Zhang, H.; Yao, Y.; Dang, Y.; Chen, D.; Lu, X.; Cui,
+G.; He, T.; Liu, Z.; Chua, T.-S.; et al. 2024. Rlaif-v: Align-
+ing mllms through open-source ai feedback for super gpt-4v
+trustworthiness. arXiv preprint arXiv:2405.17220.
+Zhang, Y.; Shen, G.; Ning, K.; Ren, T.; Qiu, X.; Wang,
+M.; and Kong, X. 2025. Improving Region Representation
+Learning from Urban Imagery with Noisy Long-Caption Su-
+pervision. arXiv preprint arXiv:2511.07062.
+Zhong, W.; Feng, X.; Zhao, L.; Li, Q.; Huang, L.; Gu, Y.;
+Ma, W.; Xu, Y.; and Qin, B. 2024. Investigating and Miti-
+gating the Multimodal Hallucination Snowballing in Large
+Vision-Language Models. arXiv:2407.00569.

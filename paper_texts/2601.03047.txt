@@ -1,0 +1,3182 @@
+           When the Coffee Feature Activates on Coffins:
+          An Analysis of Feature Extraction and Steering for
+                         Mechanistic Interpretability
+
+                   Raphael Ronge1*†, Markus Maier1† and Frederick Eberhardt2
+
+                   1Department of Philosophy of Nature and Technology, Munich School of
+                       Philosophy, Kaulbachstraße 31a, Munich, 80539, Bavaria, Germany.
+                      2Division of the Humanities and Social Sciences, California Institute of2026               Technology, 1200 East California Boulevard, Pasadena, 91125, CA, USA.
+Jan                    *Corresponding author(s). E-mail(s): raphael.ronge@hfph.de;
+6                    Contributing authors: markus.maier@hfph.de; fde@caltech.edu;
+                             †These authors contributed equally to this work.
+
+
+
+                                                  Abstract
+
+                         Recent work by Anthropic on Mechanistic interpretability claims to understand[cs.LG]                 and control Large Language Models by extracting human-interpretable features
+                        from their neural activation patterns using sparse autoencoders (SAEs). If suc-
+                                cessful, this approach offers one of the most promising routes for human oversight
+                             in AI safety. We conduct an initial stress-test of these claims by replicating their
+                       main results with open-source SAEs for Llama 3.1. While we successfully repro-
+                        duce basic feature extraction and steering capabilities, our investigation suggests
+                           that major caution is warranted regarding the generalizability of these claims. We
+                             find that feature steering exhibits substantial fragility, with sensitivity to layer
+                              selection, steering magnitude, and context. We observe non-standard activation
+                          behavior and demonstrate the difficulty to distinguish thematically similar fea-
+                            tures from one another. While SAE-based interpretability produces compelling
+                          demonstrations in selected cases, current methods often fall short of the system-
+                              atic reliability required for safety-critical applications. This suggests a necessary
+                                shift in focus from prioritizing interpretability of internal representations toward
+                               reliable prediction and control of model output. Our work contributes to a more
+                        nuanced understanding of what mechanistic interpretability has achieved andarXiv:2601.03047v1                      highlights fundamental challenges for AI safety that remain unresolved.
+
+                       Keywords: Mechanistic Interpretability, Sparse Autoencoders, Feature Steering,
+                           Large Language Models, AI Safety, Explainable AI
+
+
+                                                      1
+
+1 Introduction
+
+Mechanistic interpretability (MI) is a form of explainable AI. It refers to a broad set of
+recent approaches to understanding, and ultimately controlling, the behavior of Large
+Language Models (LLMs). The core idea is to construct semantic representations – so-
+called “features” – from the neural activation patterns of the network, that are both
+human-interpretable and controllable. That is, the extracted features are supposed to
+map straightforwardly onto human concepts and should be manipulable to influence
+the LLM output in a meaningful way.
+   The proposal is intriguing: If it is possible to faithfully map the inner workings of
+an LLM with its highly distributed representations into a representation that lends
+itself to human interpretation, and  if it is in addition possible to manipulate these
+interpretable features such that their role in the output is correspondingly emphasized
+or de-emphasized, then we have achieved a causal understanding of the inner workings
+of an LLM. A causal understanding of a system is considered the ultimate goal of
+understanding in many scientific domains. In the case of an LLM, such a level of
+understanding would in addition be a boon for AI safety, since it would allow control
+over the LLM in a form that is familiar to the human: emphasize or de-emphasize, or
+even disallow, generation of text on certain topics by regulating the features that are
+semantically involved in the topic of interest.
+   This approach has been gaining traction over the last few years, as can be seen
+from the contributions of different research groups (e.g., Gao et al. 2024, 2025; Geiger
+et al. 2025), the growing number of review articles (e.g., R¨auker et al. 2023; Bereska
+and Gavves 2024; Sharkey et al. 2025), and dedicated workshops on mechanistic inter-
+pretability at well-known conferences (e.g., ICML 2024; NeurIPS 2025). In the context
+of our investigation, however, we will focus on recent work by Anthropic. Here we can
+draw on a sequence of publications (Elhage et al. 2022; Bricken et al. 2023; Templeton
+et al. 2024; Durmus et al. 2024) and an excellent open-source resource that Neuron-
+pedia has provided for users to analyze various open source LLMs with pre-trained
+resources (Lin 2023). In many ways, Anthropic’s work can be seen as representative
+of the applied MI research.
+   In Scaling Monosemanticity (Templeton et al. 2024) the Anthropic team extracts
+from the real-world Claude 3.0 Sonnet model a large number of features that they
+claim to be “generally interpretable”, and show how these features can be emphasized
+or de-emphasized (feature steering) to influence their role in the LLM output. These
+results build on their prior work in simpler models showing how a network may inter-
+nally represent input features in a superposition, i.e. where a model represents more
+features than it has dimensions (Elhage et al. 2022). These superpositioned features
+can be disentangled again using so-called sparse autoencoders (SAEs) (Bricken et al.
+2023). SAEs project the neural activations into a higher dimensional space where there
+are enough neurons to achieve a one-to-one mapping between feature and neuron. In
+that sense then the features are monosemantic: there is a neuron for each feature in
+the SAE, one can control that feature through control of the corresponding neuron,
+and – ideally – the feature is human-interpretable. In a recent blogpost the team has
+then extended this approach to identify monosemantic features across different layers
+
+
+
+                                     2
+
+of the network using so-called crosscoders (Lindsey et al. 2024), but we will focus on
+the work in Templeton et al. (2024).
+   In the following, we provide an initial stress-test of Anthropic’s claims. We attempt
+to reproduce their results and test them in a similar setting under slightly differ-
+ent circumstances, with the overall aim to address the question of whether their
+approach of semantic feature extraction indeed offers a promising route for AI safety.
+In Section 2 we first summarize the motivation underlying the approach of mechanis-
+tic interpretability. In Section 3 we describe Anthropic’s central claims about their
+results regarding mechanistic interpretability. Section 4 then describes our attempts
+at reproducing Anthropic’s findings, while Section 5 covers our own analysis of the
+interpretability and steerability of some of the features we found. We discuss our
+results and their implications in Section 6, and conclude in Section 7.
+
+2 Background: Mechanistic Interpretability
+
+Mechanistic interpretability is one approach to providing an understanding of the
+behavior of AI systems (mostly LLMs) by aiming
+
+    [...] to completely specify a neural network’s computation, potentially in a format as
+   explicit as pseudocode (also called reverse engineering), striving for a granular and precise
+  understanding of model behavior. (Bereska and Gavves 2024, 1)
+
+While there is no consensus on the precise demarcation of MI from other approaches
+to model interpretation (see Rai et al. (2025, 8); Saphra and Wiegreffe (2024)), MI
+can be broadly seen as aiming to uncover a mapping between the activations of
+neurons in the network and features that permit an interpretable description of what
+the network is doing:
+
+  Mechanistic interpretability seeks to understand neural networks by breaking them into
+  components that are more easily understood than the whole. By understanding the function
+   of each component, and how they interact, we hope to be able to reason about the behavior
+   of the entire network. (Bricken et al. 2023)
+
+The approach was originally motivated by the so-called linear representation hypoth-
+esis. The idea  is that a neural network represents semantically meaningful input
+features as directions in its activation space (Elhage et al. 2022) and that the task of
+understanding the network’s inner operations is a matter of decoding these features
+again at different points within the network. Famously, Mikolov et al. (2013) describe
+how a recurrent neural network language model implicitly learns certain vector-space
+word representations v(x), allowing for basic algebraic operations of the activation
+vectors, such as v(“king”) −v(“man”) + v(“woman”) ≈v(“queen”). Ultimately, lin-
+earity may just be seen as a useful simplification to illustrate the hypothesis, holding
+empirically in many, but not all cases (Bereska and Gavves 2024, 8-9). Others, such
+as Geiger et al. (2025, 31) propose to relax this restriction to include more general
+decompositions. In addition, it is now widely recognized that there may well be more
+encoded features than there are model dimensions, such that features are said to be
+represented in a “superposition” (Arora et al. 2018; Olah et al. 2020; Elhage et al.
+2022; Cunningham et al. 2023).
+
+
+
+                                     3
+
+   There are different approaches to discover, extract, and study functionally useful
+features in LLMs. One particular technique used in MI research in general, and by
+Anthropic in particular, are sparse autoencoders (Rai et al. 2025, 15-16). As Bricken
+et al. (2023) state,
+
+    [...] we use a weak dictionary learning algorithm called a sparse autoencoder to generate
+  learned features from a trained model that offer a more monosemantic unit of analysis
+  than the model’s neurons themselves.
+
+    Traditionally, an autoencoder is a network that tries to learn an approximation
+to the identity function through a (normally) narrow bottleneck: first encoding the
+input in a lower dimensional space and subsequently reconstructing the information.
+The main idea is that the network identifies and uses any underlying structure in
+the input data in order to compress the information in a lower dimensional space
+before reconstructing the input. In contrast to this traditional approach to
+autoencoders with their lower-dimensional bottleneck, the intermediate layer of a
+sparse autoencoder has many more neurons than the hidden layers in the base LLM.
+The sparsity is enforced via added constraints – in the case of Anthropic this is the
+inclusion of an l1 penalty to the mean squared error loss (Bricken et al. 2023).1 The
+working assumption of MI is that within the LLM, features are represented and
+processed in an entangled representation, and the goal for the SAE is to “disentangle”
+these mixed activations by projecting them to a higher-dimensional space:
+
+  Once the SAE is trained, it provides us with an approximate decomposition of the model’s
+   activations into a linear combination of “feature directions” (SAE decoder weights) with
+   coefficients equal to the feature activations. (Templeton et al. 2024)
+
+While the approach of extracting features using SAEs is in principle scalable, there
+are practical constraints (e.g., expended resources), pragmatic decisions (e.g., particu-
+lar choices of the relevant hyperparameters), and theoretical limitations that influence
+the quality and “completeness” of the features. For example, the largest SAE used by
+Anthropic in Templeton et al. (2024) has a dimension of around 34 million, focusing
+only on the residual stream activations in the middle of their model due to computa-
+tional costs of the SAEs (and to prevent interference from other layers). By their own
+account, they believe this to be orders of magnitude short of finding a “complete” set
+of features, though one should note that no precise account of what would constitute
+a “complete set of features” is given.
+   For the remainder of this paper we will adopt the technical meaning of feature as
+referring to a unit in a high-dimensional layer in the SAE that is used to disentangle
+the model activations (Templeton et al. 2024). Consequently, one of the important
+questions to grasp the notion of human-interpretability, will be to determine the rela-
+tion between these features and human concepts. Freiesleben (2026) offers a definition
+of what it means for a prediction model, such as an LLM, to represent a learned
+(human) concept C in model part U:
+
+1. The model part U coactivates when exhibited to instances of the concept C in the
+   input.
+
+
+  1For a discussion of the tendency of the l1 norm to prefer sparse solutions in various problems, see (Elad
+2010, ch. 1).
+
+
+
+                                     4
+
+2. Manipulating the model part U changes the functional role of the concept C in the
+   prediction.
+
+Freiesleben (2026, 277) offers the following simple example:
+
+  An ANN represents the concept of addition in a model part U when each time it performs
+  an addition, the part is activated and removing the unit results in ANNs no longer being
+  able to perform common addition problems that they were previously capable of solving.
+
+If we take these criteria as a starting point, then to claim that an SAE-constructed
+feature is human-interpretable means that it has to reliably activate in response to
+a human concept in the input and its manipulation must result in changes to the
+corresponding concept in the output. We will adopt this view as a working hypothesis.
+
+3 Anthropic’s Claims
+
+Our analysis of SAE-based features will focus on two claims by the Anthropic team
+that are explicitly laid out in the proof-of-concept work in Bricken et al. (2023)
+and the follow-up work by Templeton et al. (2024), who scale the approach up to
+production-level LLMs. Both claims form the conceptual basis for much of Anthropic’s
+interpretability research: (1) SAEs produce interpretable features, (2) these can be
+used to steer the models. The research teams at Anthropic essentially propose that
+one is able to understand the computation of an LLM works via claim (1) and that
+one is then able to control the output of said computation via claim (2).
+   Without internal access to Claude 3.0 Sonnet (the model used in Templeton et al.
+(2024)) our analysis is necessarily based on an assumption that is widespread in the MI
+community, and that can also be found in Anthropic’s publications (see, e.g., Bricken
+et al. 2023), namely, universality. In broad terms, universality refers to the idea that
+the same feature(s) can be found across different models. Bereska and Gavves (2024,
+35) distinguish between a strong and a weak notion of universality. While a strong
+version claims that there exist some underlying, fundamental computational primitives
+that all models necessarily converge towards, a weak version instead suggests that the
+features that emerge depend on the given task, dataset, and model architecture, and
+different models will converge towards an optimal solution given these constraints,
+yielding similar features. We adopt a weak form of universality in our analysis, as
+we use a publicly available model (Llama3.1-8B) and assume that our results are
+indicative,  if not representative, of the work done by Anthropic, using their own,
+proprietary models.
+   In the following, we lay out the two claims and show where our subsequent analysis
+of their validity and scope is going to interject.
+
+
+(C1) Sparse autoencoders produce interpretable features.
+We take this to be one of the most important, and most basic, claims underlying
+Anthropic’s interpretability research program. It is made in Bricken et al. (2023) –
+“Sparse autoencoders produce interpretable features that are effectively invisible in
+the neuron basis.” – and repeated in Templeton et al. (2024) – “Sparse autoencoders
+produce interpretable features for large models”.
+
+
+
+                                     5
+
+   SAEs extract, depending on their size, millions of features per layer and researches
+acknowledge that there exists a wide variety of them – varying in scope, specificity
+and abstraction. For example, Templeton et al. (2024) show that there exists a
+“Golden Gate Bridge” feature as well as a feature for “transit infrastructure”; for
+code related content they show features like “code error” and “addition”; and then
+there are very abstact features like “sycophantic praise” and “gender bias awareness”.
+Given the large number of extracted features, it is in practice not possible to
+interpret all of them by hand. Instead, Anthropic uses an automated interpretability
+pipeline (Bricken et al. 2023) that generates descriptions of all features using a
+second LLM. Cunningham and colleagues summarize the basic process as follows:
+
+    [...] the autointerpretability procedure takes samples of text where the dictionary feature
+   activates, asks a language model to write a human-readable interpretation of the dictio-
+  nary feature, and then prompts the language model to use this description to predict
+  the dictionary feature’s activation on other samples of text. The correlation between the
+  model’s predicted activations and the actual activations is that feature’s interpretability
+   score. (Cunningham et al. 2023, 3)
+
+As such, interpretations of features found by SAEs are based entirely on their activa-
+tions on large text samples, and are a priori independent of their influence on model
+behavior.2
+   Anthropic maintains that this approach is a strong contender for obtaining
+feature interpretations that track human concepts. For example, consider the
+following passage:
+
+  Many features are multilingual (responding to the same concept across languages) and mul-
+  timodal (responding to the same concept in both text and images), as well as encompassing
+  both abstract and concrete instantiations of the same idea (such as code with security
+   vulnerabilities, and abstract discussion of security vulnerabilities). (Templeton et al. 2024)
+
+But such enthusiasm has been met with some caution in the literature. Bereska and
+Gavves (2024, 4) note that there is no principled reason for features found in LLMs
+by SAEs to be humanly interpretable, and that extracted features might even
+become less interpretable the bigger and more complex the models become.3
+Durmus et al. (2024) suggest that the automated interpretations should only be seen
+as hypotheses about the concepts the features might correspond to. In other writing,
+Anthropic’s own assessment is also more measured:
+
+  Another issue is that we don’t believe our features are completely monosemantic (some
+  polysemanticity may be hiding in low activations), nor are all of them necessarily cleanly
+   interpretable. (Bricken et al. 2023)
+
+   This points to the crux of understanding Anthropic’s claims: On the one hand
+they acknowledge the sharp distinction between their extracted features and human
+interpretable concepts, and on the other hand it appears to be the driving idea of their
+mechanistic interpretation that the features align with human-interpretable concepts
+in order to gain insights into the inner workings of LLMs. There is, of course, no
+
+
+  2Bricken et al. (2023) provide additional information regarding the specific implementation of their
+automated interpretability method in the Appendix to their work. For more information on automated
+interpretability, the interested reader is referred to Bills et al. (2023).
+  3Note that this claim contradicts the Natural Abstraction Hypothesis, which states that LLMs (and
+cognitive systems in general) converge on similar conceptual representations as humans. (Chan et al. 2023).
+
+
+                                     6
+
+inconsistency in claiming that many features match human concepts and some features
+are not interpretable. But then we need to understand how we identify the features
+that indeed track concepts, how one can manipulate them, and how they interact with
+the non-interpretable features. One can even take a closer look at the interpretable
+features themselves. As features can be very complex – “encompassing both abstract
+and concrete instantiations of the same idea” (Templeton et al. 2024) – some overlap
+between them is inevitable. However, as the number of features is fixed by the SAE and
+no restrictions are imposed on the allowed similarity between them, this can lead to
+individually interpretable features with no clear distinction between them. Moreover,
+recall that automated interpretations are used to generate the human-interpretable
+description of features from the lists of activation patterns on text samples. Could
+features, therefore, correspond to activation patterns that depict abnormal behavior in
+and of themselves, without showing up in the automatically generated interpretations?
+Could these automatic interpretations also mask the context-dependence of activation
+patterns, when at the same time the performance of transformer-based LLMs is so
+heavily linked to their ability to incorporate contextual information?
+
+(C2) Features can be used to steer models.
+This second claim is made in Bricken et al. (2023) – “Sparse autoencoder features
+can be used to intervene on and steer transformer generation.” – and repeated in
+Templeton et al. (2024) for large models: “Features can be used to steer large models
+[...]. This extends prior work on steering models using other methods [...].”
+   Templeton et al. (2024) show how this works for Claude 3.0 Sonnet. The outputs
+of the SAE are spliced back into the transformer. With each neuron of the SAE
+representing one feature, it is possible to increase the output for each feature by some
+multiple of the original value (a step called clamping). Clamping the feature “transit
+infrastructure” to 5× its maximum activation value changes the transformers answer
+to the question “What’s the best way to get to the grocery store down the street? Be
+brief.” from “1. Walk.” to “1. Walk across the bridge” (Templeton et al. 2024).
+   The claim that the features produced by SAEs can be used to successfully influ-
+ence the behavior of practically employed LLMs plays an important double role in
+Anthropic’s work. On the one hand, it is crucial for the overarching motivation behind
+their work on MI, because steering has direct implications for model safety and ethi-
+cal considerations. For example, Durmus et al. (2024) show that feature steering can
+reduce (or increase) social biases: clamping the feature “Neutrality and impartial-
+ity” by a positive value reduces the bias score on the Bias Benchmark for Question
+Answering.
+  On the other hand, manipulability of the features with respect to the output
+of the model is taken as a significant indicator of representational correctness: “To
+verify our feature interpretations, we ran qualitative feature steering experiments,
+where we artificially dialed up and down various features to see if they changed model
+outputs in intuitive ways” (Durmus et al. 2024). As such, the fact that features can
+be employed to influence model behavior is used as practical confirmation of the
+underlying methodology and as a goal to enhance AI safety.
+   Together, both perspectives place a significant burden on the steering capabilities
+of features. The large number of features makes an automatic interpretation process
+
+
+                                     7
+
+necessary, leading us to rely heavily on steering as a fail-safe as well as an important
+tool for AI safety. This raises questions about the interplay between activation, inter-
+pretation and steering. Automated interpretation could result in a feature description
+not corresponding well with its activation. How does this translate into steering behav-
+ior? Even  if they correlate, could there be cases where interpretation and steering
+could lead to a false conception of a feature? Different steering coefficients can be
+chosen to adjust the influence of each clamped feature on the output. Given that we
+can specify the exact steering coefficients for each feature, is it possible to control the
+magnitude of the output change with such precision? Are the magnitudes similar for
+different features, or does each feature have its own sweet spot? Could the position of
+the layer on which the SAE is trained also influence this sweet spot behavior? Finally,
+while it might be helpful to carefully regulate the influence of some features, could
+there also be unexpected side effects of feature steering? That is, for some steering
+coefficient, the output may not change in the way the activation and description led
+us to believe.
+
+4 Replicating Anthropic’s Results
+
+Our goal is to critically examine the two claims underlying Anthropic’s recent work
+on interpretable features in LLMs. As a starting point, we will first reproduce the
+relevant basic results found in Scaling Monosemanticity (Templeton et al. 2024) on a
+publicly available model.
+   In order to reproduce Anthropic’s results – and later test their generalizability and
+expand on Anthropic’s findings – we use an open source LLM and SAE. Specifically,
+we use Llama 3.1 with 8 Billion parameters as our base LLM – a lightweight and
+fast version of Llama. Thanks to Neuronpedia4 we have access to various pre-trained
+SAEs for Llama (Lin 2023). All of the following results are based on all 32 SAEs (one
+for each layer of Llama 3.1) called Llama Scope with an 8-fold multiplication, i.e. 32k
+features per layer (He et al. 2024). To make our results comparable to Anthropic’s
+approach, we selected SAEs that were trained on the residual stream between layers
+rather than on the multilayer perceptrons (MLPs) in each layer. This enables the
+SAEs to access the full information flow between layers, rather than just the output
+of a single MLP at a specific point. We will refer to the SAEs by the layers behind
+which they were trained. For example, “SAE in layer 18” refers to the SAE that was
+trained on the residual stream after the output of the MLP in layer 18 was added back
+in. Additionally, we ensure reproducibility by fixing all of the parameters above, as
+well as seed, temperature, etc. throughout the paper. The automated interpretation
+of features was done by o4-mini (Lin 2025) based on an implementation by OpenAI
+(2025). For a detailed list of our parameters, see Appendix A.1.
+   With this setup, we can extract feature activations for any input and steer the
+LLM’s output using arbitrary steering coefficients for all features of all layers. Below,
+we present one result from each of our tests and provide additional data in the
+Appendix. However, unlike Anthropic, we do not have the resources to be exhaustive
+
+
+  4Neuronpedia can be accessed through its website (https://www.neuronpedia.org/). Most of its functions
+– especially the ones relevant in this paper – are also accessible through an API.
+
+
+                                     8
+
+or even properly representative. Instead, we present exemplary findings to caution
+against hasty generalizations of positive examples often cited in the literature. In the
+following, we show that we are able to replicate Anthropic’s results qualitatively. We
+give an example similar to the ones Templeton et al. (2024) use, check its specificity,
+and its steering capabilities. Finally, we comment on the general trends we can observe
+when working with features.
+
+4.1 Replicating Interpretable Feature Extraction and
+    Activation
+
+As a first step, we show that there exist interpretable features that activate in the
+appropriate contexts. To do so, we need to find a feature that is similar to the “Golden
+Gate Bridge” feature in Templeton et al. (2024): the feature should have a clear-cut
+meaning (as opposed to a feeling or qualitative judgment) and a “normal” activation
+pattern. In our case, the SAEs have over 30, 000 features for each layer. As we describe
+in Section 4.3, the most stable features with regard to activation and steering can be
+found in the middle layers of the network. To illustrate and reproduce Anthropic’s
+results, we select feature 9463 in layer 18 as an example. It meets the above criteria
+and is auto-interpreted as “mentions of coffee and related terms”. In the following, we
+will abbreviate feature number Y in layer X as (X/Y ); so, the feature “mentions of
+coffee and related terms” has the unique identifier (18/9463).
+   As we depict in table 1, given a longer text passage on coffee, this feature activates
+on words like “coffee” and “espresso”, as well as words related to this context. The
+closer the words are to “coffee” itself, the stronger the activation, though it does
+not pick up on every coffee-related term (e.g., “portafilter”, “ristretto”, “crema”).
+In comparison to others, this feature activation is fairly specific: In Section 5.3 we
+compare three features (including this one) with varying context sensitivity and this
+one is not particularly context sensitive.
+
+ As the barista carefully grinds the aromatic espresso beans and tamps them into the
+  portafilter before pulling a silky shot of ristretto, the bustling caf´e fills with the comforting
+  scent of roasted Arabica, while patrons sip their cappuccinos from ceramic mugs, chatting
+  about fair-trade plantations, latte art, crema, and the timeless ritual that makes coffee not
+  just a beverage but a global symbol of morning routines, social connection, and mindful
+  indulgence.
+
+Table 1: Activation of feature “mentions of coffee and related terms” (18/9463) on English
+text. The feature related to coffee activates on and around coffee terms. The closer the words
+are to coffee the higher the activation. Higher opacity indicates stronger activation.
+
+
+
+   Similar to the examples provided by Anthropic, this feature activates in the context
+of coffee in multiple different languages, such as German (table 2) and Japanese (table
+3).5 This shows that it is a multilingual feature, which abstracts to some degree from
+
+
+  5The text examples are automatic translations of our English text. The translations were generated by
+an ML model that is distinct from the Llama 3.1 model that was evaluated in this study, and checked by
+native speakers.
+
+
+                                     9
+
+language specific words and activates in a narrow margin on and around the topic
+of coffee. This is an important characteristic if one intends to steer the feature in a
+model independently of language.
+
+ German: W¨ahrend der Barista die aromatischen Espressobohnen sorgf¨altig mahlt und
+  sie in den Siebtr¨ager dr¨uckt, bevor er einen seidigen Schuss Ristretto zieht, erf¨ullt sich
+  das gesch¨aftige Caf´e mit dem wohligen Duft von ger¨ostetem Arabica, w¨ahrend die G¨aste
+  ihren Cappuccino aus Keramiktassen schl¨urfen und sich ¨uber Fair-Trade-Plantagen, Latte
+  Art, Crema, und das zeitlose Ritual unterhalten, das Kaffee nicht nur zu einem Getr¨ank,
+  sondern zu einem weltweiten Symbol f¨ur Morgenroutine, soziale Kontakte und bewussten
+  Genuss macht.
+
+Table 2: Activation of feature “mentions of coffee and related terms” (18/9463) on German
+text. The feature related to coffee activates on and around coffee terms (even in German).
+The closer the words are to coffee the higher the activation.
+
+
+
+  Japanese: バリスタが香り高いエスプレッソ豆を丁寧に挽き、ポルタフィルターに詰
+ めてから、なめらかなリストレットを注ぎ、やかなカフェには心地よい香りが広がりま
+ す。その間、常連客は陶器のマグカップでカプチーノを飲みながら、フェアトレード、
+ ラテアート、クレマ、そしてコーヒーを巡る儀式について会話します
+
+Table 3: Activation of feature “mentions of coffee and related terms” (18/9463) on Japanese
+text. The feature related to coffee activates on and around coffee terms (even for Japanese
+characters). The closer the characters are to coffee the higher the activation.
+
+
+
+4.2 Replicating Feature Activation Specificity
+
+The next step is to check the specificity of our coffee-feature. We want our feature
+to activate only in the context that its description mentions. The further away the
+content of a text is to the feature, the lower its activation should be. While we are not
+able to test the feature’s activation on a large corpus of data, we can reproduce the
+approach by Anthropic on a small scale. Templeton et al. (2024) propose four text
+categories with regard to feature activation: (0) The feature is completely irrelevant
+throughout the context; (1) The feature is related to the context, but not near the
+highlighted text or only vaguely related; (2) The feature is only loosely related to the
+highlighted text or related to the context near the highlighted text; (3) The feature
+cleanly identifies the activating text.
+  We select multiple sentences that should fall into each of these categories based on
+our feature’s description. Here is an example for each of the levels (see Appendix A.2
+for a detailed list): (0) “The quantum fluctuations in vacuum energy remain a mystery
+in theoretical physics”; (1) “Many people gather in social spaces like bistros and
+lounges to chat before work”; (2) “Sometimes she opted for a macchiato instead of her
+usual hot chocolate”; (3) “He sipped a creamy cappuccino topped with frothed milk at
+the busy coffeehouse.” We can then extract the maximum activation on these sentences
+
+
+
+                                    10
+
+as well as the average over all non-zero activations (“non-zero” to compensate for
+different numbers of tokens). We see in Figure 1 that both the maximum as well as
+the average activations grow from one categroy to the next, showing that our coffee-
+feature activates with specificity in the context of “mentions of coffee and related
+terms”.
+
+                            Activation Strengths of feature (18/9463)
+
+
+                    Max Act.
+                     8    Avg. Act.
+
+
+
+                     6                                                                   Strength
+
+
+                     4
+                                                                                    Activation
+                     2
+
+
+
+                     0
+                             0        1        2        3
+                                        Category
+
+Fig. 1: Activation of feature “mentions of coffee and related terms” (18/9463) on sentences
+belonging to the four specificity categories (category 0 is not related and category 3 is very
+related; see Appendix A.2). The more related the context in a category is to “coffee”, the
+higher the activation.
+
+
+
+4.3 Replicating Feature Steering in Output
+
+Finally, we need to check for the influence this feature can exert on the output of
+the LLM. In order to achieve an effect, a so-called steering coefficient can be used
+to clamp a specific feature. In that case, the output of the SAE for the clamped
+feature consists of the baseline output of the SAE plus that output multiplied by
+the steering coefficient. This method ensures that a steering coefficient of 0 does not
+change the model’s behavior. As shown in table 4, we clamp the coffee-feature with a
+steering coefficient of 2 and use the input “My favorite drink is”. While the baseline
+model outputs alcoholic beverages, the steered model instead generates coffee-related
+outputs. In the following, we always highlight in bold the interesting passages that
+change for the steered model.
+   As we show in table 5, this behavior is consistent for positive and negative clamp-
+ing.  If we clamp the feature negatively (we use a steering coefficient of −2), we
+observe the opposite behavior to earlier: the suppression of coffee-related output. The
+change to “100% natural” might not be entirely grammatically correct, although the
+supplements mentioned in the second sentence are often marketed as “natural”.
+
+
+                                    11
+
+  Steering    My favorite drink is...
+
+  Baseline         ... a margarita but my favorite cocktail is a mojito. I have a lot of different
+              recipes for mojitos, but this one is my favorite. It’s simple and packs a
+              punch. The name of this drink, “Mojito,” means “little drink” in Spanish.
+                   It’s made with [...]
+ Coeff 2           ... coffee. I usually drink my coffee black, but sometimes I like to add a
+                    little milk or cream to it. I also like to add sugar or sweetener to my coffee.
+             Coffee is a brewed beverage with a distinct aroma and flavor. It is one of
+               the most popular drinks in the world, and it has been [...]
+
+Table 4: Steering capability of feature “mentions of coffee and related terms” (18/9463).
+Positively clamping this feature changes the output from alcoholic beverages to coffee-related
+content.
+
+
+
+  Steering    An important part of a Swedish breakfast is grown and harvested mainly in
+                Brazil and is called...
+
+  Baseline         ... 100% Arabica coffee. It comes from the coffee bean which is processed,
+             roasted and ground to make the drink we all know and love. The coffee
+             plant is a tropical evergreen shrub that grows up to 5 meters high if left
+             unpruned [...]
+ Coeff −2        ... 100% natural. This includes the essential vitamins and minerals that
+              your body needs. The protein content of this product is very high, which
+             makes it a good choice for people who are looking to gain muscle mass or
+                 lose weight. It also has a low glycemic index, which means that it will not
+               cause spikes in your [...]
+
+Table 5: Steering capability of feature “mentions of coffee and related terms” (18/9463).
+Negatively clamping this feature changes the output from coffee to some generic product with
+health benefits.
+
+
+
+   Note that Anthropic focuses their work on the “middle layer” of the model because
+they expect it to contain “interesting, abstract features” (Templeton et al. 2024).
+In our analysis, we also considered features and their steering capabilities in earlier
+and later layers of the network. While we do not have the resources for a thorough
+quantitative assessment, we did also qualitatively find that feature steering works best
+for layers in the middle of the network, whereas steering in early layers tends to result
+in chaotic model behavior, and steering in later layers tends to have little influence
+on model output.
+   Regarding the size of useful steering coefficients, we observed a qualitatively similar
+“feature steering sweet spot” as described by Anthropic.6 However, their results only
+show if a steering coefficient negatively impacts the performance of a model (e.g., the
+output only consists of gibberish), not if a steered model shows any change in line with
+
+
+  6Durmus et al. (2024) analyzed 29 different features and tested the capabilities of the steered model for
+different steering coefficients using the MMLU (Massive Multitask Language Understanding) benchmark.
+They observe that a steering coefficient in the range between −5 and 5 does not significantly impact model
+capabilities. Within the “sweet spot” between −5 and 5 the steered model scored similarly well on this
+benchmark, with a steering coefficient of 0 yielding the best accuracy.
+
+
+                                    12
+
+the feature used for steering. In other words, their test does not allow any statement
+about how well the features actually work – maybe they score so well because they
+have little impact on model behavior in the first place.
+  We found that in general, the steering quality depends on the specific feature and
+layer, and on the size of the steering coefficient. Features in the middle of the network
+provide the best compromise between impact and specific control that we found.
+
+   Overall, we were able to replicate Anthropic’s base results on interpretable features
+in LLMs using open-source tools (Llama 3.1 and publicly available SAEs). In short,
+the basic mechanics of feature extraction, activation, and steering work as claimed by
+Templeton et al. (2024), thus setting the stage for our deeper investigation of whether
+these findings generalize reliably.
+
+5 Do the Findings Generalize?
+
+In Section 4 we showed that we are able to reproduce Anthropic’s basic results. We
+now turn to the stronger promise associated with this work that suggests that such
+extraction of interpretable features can provide model understanding and, through
+feature steerability, a tool for AI safety. This requires the proof of concept to gen-
+eralize across a variety of features, contexts and steering settings. We start with a
+closer look at the types of features that are extracted (Section 5.1), at the similar-
+ity and distinctness of the extracted features (Section 5.2), their context-dependence
+(Section 5.3) and at what one might call “spurious activations” (Section 5.4). Finally,
+Section 5.5 focuses in more detail on the relationship between steering and output
+results. This serves as a check of the specific behavior observed in Section 4.3.
+   In the following analysis we rely on (generally, multiple) examples to illustrate our
+points, working on the assumption that if the proposed approach to MI is supposed
+to be a viable candidate for safety-critical settings, then even a few easily detectable
+shortcomings are cause for concern.
+
+5.1 Do the Features Match Their Interpretations?
+
+We first investigated how representative features such as our “mentions of coffee and
+related terms” are, or whether this is a particularly well-behaved example.
+   As we show in the following, there are many other easily interpretable features
+– some of them are considerably more abstract than our original example – that
+show consistent activation patterns and model-steering capabilities. However, we also
+encountered many features that formally resemble those that can be used for steering,
+but for which we have no meaningful interpretation. For these features, neither their
+activation on small text samples, nor their steering capabilities match their alleged
+interpretation.7
+
+5.1.1 Example Features with Successful Interpretations
+
+(1) “expressions of regret, mourning, and sadness” (17/16706)
+
+
+  7Note that these are different from “dead” features that never activate or that have no effect when steered.
+
+
+                                    13
+
+   As expected, this feature activates strongly on negative emotions, such as “regret”,
+“grief”, “sorrow”, and “sadness”. Furthermore, we see lower-level activations for related
+expressions like “heart”, “mourning”, and “ache”/“aching”. The activation pattern
+aligns well with the interpretation of the feature, which is considerably more abstract
+than the coffee-example above.
+  When clamping this feature at a coefficient of 10, we see consistent steering of the
+model output towards negative emotional states, no matter the tone of the original
+input. In one example (Input: “Summer is the time of the year where I”), the model
+output shifts from a happy and grateful reply towards a sorrowful and averse one.
+Similar behavior can be observed with the input “The best thing that ever happened
+to me was”: While the prompt should strongly influence the model towards a positive
+output, the steered model generates a sad and melancholic story. The exact activation
+and steering responses can be found in Appendix B.1.1.
+
+
+(2) “instances of the phrase ‘would have’ or similar expressions indicating
+hypothetical or conditional situations” (19/12491)
+While the interpretation of this feature is rather abstract, all activations in our sample
+text are consistent with this interpretation. The highest activations appear for “have”
+following “would”, whereas “would be” and “could have” show lower activations. This
+shows that the feature activates on specific tokens that are tightly linked to the more
+abstract subjunctive form of text.
+  A similar behavior can be observed for steering. When steering the model by a
+coefficient of 15, the output consistently changes from simple, straightforward answers
+to more complicated outputs including a range of hypothetical/conditional state-
+ments consistently starting with “would” and “would have”. This is not only true for
+open-ended inputs such as “I am going to”, but also for more factual prompts, e.g.,
+“Photosynthesis is characterized by”.
+   Despite the abstractness of this feature, both the activation pattern and the steer-
+ing capabilities seem to align well with its interpretation. See Appendix B.1.2 for
+details.
+
+
+(3) “references to lists and list-making processes” (16/24361)
+This feature activates strongly on words such as “checklist” and “list”, and additionally
+on terms that provide context to these words. Furthermore, we observe activations on
+related descriptions such as “smaller note with labeled items”.
+  When clamped with a steering coefficient of 15, the output of the model based on
+the prompt “Photosynthesis is characterized by” changes from a standard description
+to a labeled list. Additionally, the model included the word “list” twice in its output.
+For the input “Let us talk about” and a steering coefficient of 5, the model generates
+a modified answer which includes a list-making process.
+   Again the interpretation of this feature is consistent with the observed activation
+pattern and steering capabilities. See Appendix B.1.3 for details.
+
+
+
+
+
+                                    14
+
+5.1.2 Examples of Mis-interpreted Features
+
+(1)  “references  to  exposure  to  hazards  or  influential  experiences”
+(18/14711)
+This feature has a rather broad interpretation, referring not only to exposure to haz-
+ards, but influential experiences in general. Accordingly, the activation pattern (see
+table 6) not only shows high values for “exposure in hazardous environments”, but
+also “exposure to new ideas” and similar contexts. While this might still be consid-
+ered as an “influential experience”, we show that the same feature activates strongly
+for exposure in the context of photography – a context that hardly fits the proposed
+feature interpretation.
+
+  Prolonged exposure to loud noise can cause permanent hearing damage, which is why
+  safety guidelines often stress limiting exposure in hazardous environments. At the same
+  time, early exposure to new ideas and influential experiences can shape a person’s world-
+  view in powerful ways. Outside of health and personal growth, the concept of exposure
+  also applies to art: the photographer adjusted the camera settings to get the perfect
+  exposure for the sunset shot, ensuring that the light and colors were captured just right.
+
+Table 6: Activation of feature “references to exposure to hazards or influential experiences”
+(18/14711) on English text. The feature activates on the term “exposure” regardless of the
+context.
+
+
+
+   For a steering coefficient of −10 the feature is capable of influencing the model
+behavior in both contexts. In table 7 we show that the protection from chemical
+experiments is less prominent than one would expect. However, in table 8 one can see
+that “exposure” is also suppressed in the context of photography, which is not to be
+expected from the description.
+   The failure of this and the following features, of course, may have resulted from
+many different sources: Is the feature itself in fact an agglomeration of several different
+human concepts related in one way or another to “exposure”, or did the automated
+interpretation incorrectly describe the feature, or did the steering capability fail?
+
+
+(2) “references to coffee” (29/30028)
+This particular feature does not only activate on “coffee” and related terms, but on
+the token “coff” more generally. This leads to activations in our sample text on “coffee
+shop” as well as “coffin”.
+   As we can show by clamping this feature by a coefficient of −20, the steering
+capabilities of this feature are compatible with the observed activation pattern: Giving
+the input “He told me that, at the funeral, five people lowered the”, the baseline
+model immediately generates text that revolves around “coffin”. The steered model,
+however, omits any reference to “coffin”, instead using related words like “casket”. See
+Appendix B.2.1 for details.
+  We observed a similar behavior for the feature “the word ‘Morocco’ and its varia-
+tions or related concepts” (18/6893). It does not only activate on the word “Morocco”,
+but more general on the token “mor”, as well as words containing these letters like
+
+
+                                    15
+
+  Steering    When doing chemical experiments...
+
+  Baseline         ... in the lab, you should always wear protective glasses to protect your
+             eyes from any splashes or spills. If you don’t have access to protective glasses,
+             you can use a pair of goggles instead. Goggles are made of plastic and have
+              a clear lens that covers your entire eye area.
+            They are designed to protect your eyes from chemicals, dust, [...]
+ Coeff −10      ... in the lab, you should always be careful to pour out your chemicals
+                properly. If you are making a solution, make sure you know what kinds of
+                acids and bases you are mixing together so that you can calculate the pH of
+               the solution. This is important because some chemicals will react with each
+               other when they are mixed together.
+                     If you are mixing two [...]
+
+Table 7: Steering capability of feature “references to exposure to hazards or influential expe-
+riences” (18/14711). Negatively clamping this feature changes the output from explicitly
+mentioning “protection” to only including general descriptions of chemical procedures.
+
+
+
+  Steering     There are multiple settings that a photographer can adjust to change the...
+
+  Baseline         ... exposure of their image. These include shutter speed, aperture, and ISO.
+            The shutter speed is the length of time that the camera’s shutter is open,
+               allowing light to enter the lens and expose the image sensor. A faster
+                shutter speed will result in a brighter image, while a slower shutter speed
+                  will result in a darker image.
+            The aperture is the [...]
+ Coeff −10      ... way a picture looks. These include shutter speed, aperture, and ISO.
+            The shutter speed is the length of time the shutter is open, and the aperture
+                    is the size of the lens opening. A faster shutter speed will make a picture
+             look blurry, while a slower one will make it appear blurry [sic].
+         A photographer can also adjust the ISO to change how [...]
+
+Table 8: Steering capability of feature “references to exposure to hazards or influential expe-
+riences” (18/14711). Negatively clamping this feature suppresses the term “exposure” even
+though it is not contextualized with hazards or influential experiences, but photography.
+
+
+
+“morsel” and “morals”. Steering also shows an influence on all tokens containing “mor”
+not just “Morocco”. The activation pattern and steering results for this feature can
+be found in Appendix B.2.2.
+   This suggests that these features refer neither to the concept of coffee (or coffin),
+nor to Morocco, but rather to the tokens “coff” and “mor”. If that is the case, then
+this undermines the claim of interpretable feature extraction more generally, since the
+goal was to extract features akin to human concepts, not ones that represent character
+sequences.
+
+
+
+
+
+                                    16
+
+5.2 Does a Similar Interpretation Imply Similar Activations
+   and Similar Steering Effects?
+
+When analyzing the feature “mentions of coffee and related terms”, as described
+in Section 4, we encountered many other features with similar interpretations, even
+within one layer. If distinct features actually refer to the same concept, one would
+expect them to behave identically. Conversely, if two features share a similar inter-
+pretation, but their associated activation patterns and steering capabilities differ
+greatly, one ought to be skeptical about whether they refer to the same concept as
+the automated interpretation suggests.
+   To give some sense of the kind of activations – and related problems – we will talk
+about in the next two Sections, we systematically checked the activation patterns of
+all features containing the word “coffee” on coffee-related terms (see Online Resource
+1). Three general observations can be made. First, all “coffee”-features are active for
+at least a single token in our test set of coffee-related terms. Second, one can see that
+activations grow larger for deeper layers of the model. Third, for multi-token words
+like “cappuccino” or “ristretto” most of the features do not activate on all tokens but
+only on a subset. This subset is relatively stable across all features. For example, all
+features we checked that are active for the word “cappuccino” only activate on the
+token “app”.
+   However, we also see some noteworthy behavior of features. Why, for example
+does the general sounding feature “words related to coffee” (27/1729) only activate
+for “frappuccino” and “arabica” and nothing else? While all other coffee drinks get at
+least some amount of activation, why then do only 5 features activate on “macchiato”?
+And finally, why does the feature “sentences that discuss coffee experiences and related
+cultural practices” (27/4442) activate, e.g., on “espresso”, “latte”, and “cappuccino”,
+and “references to coffee and its cultural significance” (27/11953) does not, while both
+of them activate similarly on “arabica”, “robusta”, and “roastery”?
+   The next two Sections will discuss in more detail whether and how we can rely on
+feature descriptions. To better understand the similarity of features in the following,
+we will first consider similar features in a single layer, and then similar features that
+appear in different layers.
+
+5.2.1 Similar Features in a Single Layer
+
+Given the construction of the SAEs, it is not surprising that – depending on the size
+of the SAE – one might have a certain amount of overlap of features. As Templeton
+et al. (2024) describe, features in smaller SAEs tend to “split” into more fine-grained
+features in larger SAEs. For example, a single “San Francisco” feature found in the
+1M SAE splits into two distinct features in the 4M SAE, and into eleven fine-grained
+features in the case of a 34M SAE. Intuitively speaking, the larger SAE is like a
+stronger microscope, allowing for a more detailed analysis of the feature space. This
+implies, however, that these fine-grained features – while close in feature space and
+semantically related – are still distinct from one another.
+
+
+
+
+
+                                    17
+
+   However, as we show in the following, this is not always the case. For example, take
+all coffee-related features in layer 18. As depicted in table 9, there exist five different
+features that broadly refer to coffee, all of which were found through a single SAE.
+    If this is a case of feature splitting where a “coffee-cluster” was split up due to
+the size of the SAE used, then we would expect very similar – but not identical –
+coffee-related behavior across these features. This means that for a set of coffee-related
+words, one would expect most of the features to be activated frequently. However,
+there should be some phrases that only fit into the realm of a single fine-grained feature
+and consequentially only that feature should activate. Alternatively, this seemingly
+large overlap of features could be due to the automatic and imperfect generation
+of interpretations and might not represent the actual differentiating power of the
+underlying features.
+   To analyze this possible discrepancy, we checked the feature activations on differ-
+ent coffee-related terms to see if there is a difference. Specifically, we chose ten words
+per feature that should (based on the feature’s description) lead to a high activation
+of said feature. Because there are differences in the descriptions, we choose words
+that are specific for one category instead of being generally about coffee. For exam-
+ple, words like “WiFi”, “Coffeehouse playlist”, and “Urban roast bar” fit well to the
+description of feature (18/17305): “references to cafes and coffee culture”. While words
+like “Sauvignon Blanc”, “Cold brew”, and “Pinot Noir” are supposedly much better
+suited to generate a high activation for feature “references to drinks, particularly wine
+and coffee” (18/7546). For a full list of words, see the Appendix B.3.1.
+   Of course, some overlap is inherent for these five features. For example, for the very
+general feature “mentions of coffee and related terms” (18/9463) a lot of activation on
+all of the categories is to be expected. We recorded the activation of all features for
+the phrases in all categories. We then rescaled all activations of each feature between
+0 and 1 by its maximal activation. Then the activations were rescaled across all terms
+in each category. Finally, we summed the activations for each feature over the terms of
+one category to compare the discriminatory power between the features (see table 9).
+For fully disjoint features we would expect activations only on the diagonal. This
+would mean a feature exclusively activates on the words specifically chosen for it and
+on nothing else. But even in the case of these five related features we would expect
+the highest activations to be found on the diagonal. This would mean that, while all
+of the features have some overlap regarding their activation on coffee-related terms,
+they still show some discriminatory power by activating more strongly on terms form
+their fine-grained region instead of on generally coffee-related terms.
+   Table 9 shows that feature descriptions seem to be an unfit tool to discriminate
+between features. We see activation of all features on all categories in general without
+any significantly higher activation of a feature on the terms that should cover the
+semantic region given by the category descriptions. This activation on all coffee-related
+terms seems to suggest that these features actually belong to the same semantically
+related cluster – and were split by the fine-graining process described above. Solely
+the feature “references to drinks, particularly wine and coffee” (18/7546) has very low
+activations overall. We will take a closer look at this feature in the next Section 5.3.
+
+
+
+
+                                    18
+
+                                              Terms for Feature
+                                         7546   9463   15276   17350   28590
+
+       “references to drinks, particularly
+                                              0.48     0      1.12     0.15     0.33
+      wine and coffee” (18/7546)
+
+      “mentions of coffee and
+                                              1.89    2.02    1.45     2.5     4.16
+       related terms” (18/9463)
+
+       “references to coffee and coffee-
+                                              3.38    1.81    0.86     2.43     2.68
+       related experiences” (18/15276)
+
+       “references to caf´es and
+                                              2.58    1.15    1.81     4.18     3.35
+       coffee culture” (18/17350)
+
+       “references to coffee and
+                                          0     1.69    0.33     0.96     1.09
+        its cultural significance” (18/28590)
+
+    Table 9: Activation of features (summed over all input terms and normalized for
+     each column) based on inputs from the realm of these features. A comprehensible
+     distinction between features cannot be identified (highest values should be on the
+     diagonal). Feature (18/9463) is the most universally activated on coffee-related
+     terms.
+
+
+
+Contrary to our initial expectation, however, we cannot discriminate the five coffee-
+related features based on their activation on word-categories that were specifically
+chosen to fit their descriptions. This raises the question of why they are distinctly
+named and how to choose the best feature for steering in a specific case based on its
+name.
+
+5.2.2 Similar Features in Different Layers
+
+Since similar features can be identified within a single layer, might this trend also
+be observable across multiple layers? It’s important to note that we can’t expect to
+find the same features on every layer. Each SAE is trained on a single layer – or,
+more precisely, a single point of the residual stream – and there is nothing to ensure
+continuity of features between SAEs on different layers.
+   Across all 32 layers of Llama 3.1 we found over 150 features mentioning “coffee”
+(see Appendix B.3.2). While most of them have slightly different descriptions, we
+found three coffee-features across the network with the exact same description (see
+table 10). As discussed earlier, feature (29/30028) is a case of a poorly auto-interpreted
+feature, because it activates not on “coffee” and related terms, but on the token “coff”.
+
+                        Layer   Feature   Description
+                        6      25623     references to coffee
+                        19     12587     references to coffee
+                        29     30028     references to coffee
+
+                    Table 10: Features that have the exact
+                     same description: “references to coffee”.
+
+
+
+
+
+                                    19
+
+   Although the three features have the same description, they exhibit different acti-
+vation patterns on a coffee-related text (see Appendix B.3.3). They also influence the
+model differently when used for steering, as shown in Appendix B.3.4 (see the steer-
+ing differences for the five coffee-related features on the same layer 18 in Appendix
+B21 and B22 for comparison). This raises a significant challenge for MI: What are we
+supposed to make of features that behave differently despite having the same descrip-
+tion? Such features undermine the basic goal of a robust mapping between human
+interpretable features and model features. Anthropic is working on a method, called
+Sparse Crosscoder, to enable such an analysis of persistent features throughout the
+residual stream of the model (Lindsey et al. 2024), but apart from their findings being
+preliminary at the time of writing, this just extracts one interpretable feature across
+layers. It does not ensure against features with the same interpretation but different
+behavior.
+   Our findings indicate that one cannot rely on the descriptions of features (that
+are based on their activation pattern on the input), either in a single layer or across
+different layers. In both cases, it seems to be more helpful to only analyze their steering
+suitability to draw conclusions about their capabilities.
+
+5.3 How Sensitive Are the Features to Context?
+
+As the examples of successful and unsuccessful feature interpretations in Section 5.1
+showed, feature quality and validity of the automated interpretations can differ signif-
+icantly on a case by case basis. We would expect the feature “references to exposure
+to hazards or influential experiences” (see above), to activate only in a context that
+somehow refers to hazards or influential experiences, and not to all mentions of “expo-
+sure” in every context. This naturally leads us to ask about the context-dependence
+of features. In particular, we tested if there is a difference in activation on words with
+and without the context around them. We found examples of (1) features that are
+overly context-dependent, (2) features that have a high context-dependence, and (3)
+features that show little to no context-dependence whatsoever.
+   In table 11, we depict the context-dependence of three features: “references to
+drinks, particularly wine and coffee” (18/7546), “topics related to coffee, including
+its origins, effects, and cultural significance” (17/17320), and “mentions of coffee and
+related terms” (18/9463). Note that we did not consider longer passages of context.
+In each case, we tested either no context at all, or just a few words preceding (or
+following) the word of interest.
+   As we show, “references to drinks, particularly wine and coffee” (18/7546) is highly
+context-dependent, activating mainly on tokens following the phrases “(hot) cup of” or
+“drank”. This behavior is not even restricted to “wine and coffee” as the interpretation
+suggests, but also activates for “cup of poison” or “drank poison”. The full list of
+phrases can be found in Appendix B.4.1. The right context appears to be essential to
+this feature, as the interpretation would suggest that it should activate on “coffee” on
+its own, but it does not.
+   Second, “topics related to coffee, including its origins, effects, and cultural signif-
+icance” (17/17320) is also context-dependent, but in a much more predictable way
+
+
+
+
+                                    20
+
+ (18/7546): references to   (17/17320): related to    (18/9463): coffee and
+ drinks (wine, coffee)       coffee (origins, effects,    related terms
+                             cultural significance)
+
+  coffee                           coffee                           coffee
+
+ poison                          caffeine                      Espresso
+
+ cup of coffee                    coffee from Africa              caffeine
+
+ cup of poison                 zebras from Africa            Coffin
+
+ We drank coffee.             kwentoeler welrl newr      We drank our coffee in the
+                                   caffeine                    morning
+
+ We drank poison.             Coffee: America’s most       iwern owk ail coffee
+                             popular equipment for
+
+Table 11: Context-dependence of features. “references to drinks, particularly wine and coffee”
+(18/7546) activates on tokens following the phrases “cup of” or “drank”. However, it does
+not activate on the term “coffee” in isolation. “topics related to coffee, including its origins,
+effects, and cultural significance” (17/17320) activates on tokens only in the surroundings of
+coffee-related terms. “mentions of coffee and related terms” (18/9463) activates on the token
+“coffee” (and related terms) regardless of the context.
+
+
+
+than the previous feature. While it lightly activates on words and tokens such as “cof-
+fee” or “caffeine”, we observe the strongest activations when there is a reference to
+coffee in its surrounding. For example, while there is no activation for “Africa” in con-
+nection with “zebras”, we can observe an activation for “Africa” in connection with
+“coffee”. See Appendix B.4.2 for the full list of phrases and activations.
+    Lastly, the feature “mentions of coffee and related terms” (18/9463) does not
+seem to be very context-dependent at all. It activates on “coffee” and related terms
+(including tokens that make up these terms), regardless of the context. See Appendix
+B.4.3 for the full list.
+   All together, features seem to have varying degrees of context sensitivity that is
+not in any way apparent from their interpretation. Our first example (18/7546) is too
+context sensitive to be humanly interpretable at least with its current description.
+The second (17/17320) and third features (18/9463) are less context sensitive or only
+sensitive in a way one would expect for the description. Both are therefore much more
+interpretable and behave in expected ways. As we showed above (Section 4), the third
+feature (18/9463) can be very useful for steering.
+
+5.4 Features With Spurious Activations
+
+In the course of our analysis, we encountered several features with activation patterns
+that clearly do not indicate semantic content.
+    First, we found a family of features that have an activation density of over 90%,
+which we will refer to as hyperactive features. Note that Templeton et al. (2024)
+mention the issue of “dead” features, i.e., features which were not active over a sample
+of 107 tokens. As one might expect, larger SAEs produce larger numbers of dead
+
+
+
+                                    21
+
+features (in absolute, as well as relative terms) compared to their smaller counterparts.
+However, they do not mention features with an unusually high activation density. We
+give an overview of some of these hyperactive features – features that activate on over
+90% of all tokens – in table 12 below.
+
+ Layer Feature Description                                                   Density
+
+ 1     17701  symbols and formatting elements commonly used in programming   93.80%
+                or markup languages
+ 15    9478    references to systems, mechanisms, or structures related to regu-   93.50%
+                 latory or operational frameworks
+ 15    3179    references to discussions or mentions of climate change and its  96.67%
+               impacts
+ 24    29371   numerical data and associated statistics related to various topics   94.95%
+ 30    24133   references to accountability and oversight in institutional settings   93.88%
+ 7     27281   financial and regulatory terms related to government policies and  96.55%
+               economic frameworks
+
+Table 12: Features with an activation density higher than 90%. In other words, they activate
+on more than 90% of tokens.
+
+
+
+   In some cases, one might expect such a relatively high activation density, such
+as with feature (1/17701), which is interpreted as “symbols and formatting elements
+commonly used in programming or markup languages”. In other cases, the explanation
+is not clear. For example, we do not expect a feature interpreted as “references to
+discussions or mentions of climate change and its impacts” (15/3179) to activate
+consistently on over 96% of tokens.
+   Second, we found a family of features (table 13) that activate strongly on the
+<|begin of text|> token, a token that is only present at the very beginning of an
+input to signal the start of the token sequence. Their activation on the beginning
+of sequence can be orders of magnitude higher than their activation on normal text
+tokens. That (some) features activate on this beginning of sequence is to be expected
+– all text samples used for training and description generation include this token. For
+example, our coffee feature also activates on the <|begin of text|> token, however,
+its activation strength is comparable to coffee-related text inputs.
+   Despite this high activation value on the beginning of a text, we observe that
+the model output can be steered consistently with the interpretation (that does not
+refer to the beginning of sequence) in many cases. We show this using the features
+“monetary values and financial information” (20/6246, <|begin of text|> activation:
+156.0) and “phrases related to weight loss and body shaping techniques” (20/21737,
+<|begin of text|> activation: 100.5) as examples (see Appendix B.4 for the results).
+In comparison to other features, however, the model behavior seems to be a little bit
+more erratic and hard to control.
+    It is not entirely clear how steering in general should or could influence a token
+that is by design only present at the very beginning of a sequence. There are, however,
+other special tokens at work during training and deployment of LLMs that are not only
+
+
+
+                                    22
+
+ Layer Feature Description                                                   Activation
+
+ 1     5371    occurrences of the word ”this”                                245.00
+ 1     26183  HTML or CSS structures and elements                        244.00
+ 10    11036   formatted sections or placeholders within text, possibly indica-   140.00
+                  tive of form fields or structured data
+ 10    19323   numerical data related to years and events in history           123.50
+ 20    6246   monetary values and financial information                     156.00
+ 20    21737   phrases related to weight loss and body shaping techniques     100.50
+ 30    19188   phrases and concepts related to guidance and support in edu-   140.00
+                 cational contexts
+ 30    20145   topics related to skincare and personal well-being              131.00
+
+Table 13: Features activating on <|begin of text|> token. Their listed maximum activation
+is only present for the <|begin of text|> token.
+
+
+
+present at the beginning. Dialogue tokens differentiate what the user said and what
+the model generated. Masking tokens are used to train a model on filling gaps with
+the right tokens. And some special tokens differentiate instruction from conversation
+for a model. An unusual response to these tokens by the SAE might have unexpected
+consequences when steering the model.
+
+5.5 Can Features be Steered Precisely?
+
+We showed above that, generally speaking, it is possible to steer model behavior by
+attenuating or amplifying the activation pattern associated with certain features. Are
+the effects of feature steering on model behavior always meaningful and consistent?
+As we will show in the following, the quantitative aspects of model steering can be
+rather nuanced and fickle.
+
+(1) “mentions of tennis and related terms” (16/12285)
+The only tennis-related feature in layer 16 – “mentions of tennis and related terms”
+(16/12285) – is a good example of how steering may not have the effect one expects.
+As we depict in table 14, the input in this case is “My favorite sport is” and the
+baseline model names baseball as its standard output. Clamping the tennis-related
+feature by a coefficient of 1 changes the output of the model from baseball to soccer.
+Furthermore, while the output of the baseline model consistently mentions baseball
+over two paragraphs, the steered model also mentions basketball – but no mention
+of tennis. For a steering coefficient of 2, the model output then does discuss tennis,
+famous tennis players, and their achievements. In a second paragraph, however, the
+model continues mentioning a variety of other sports.
+    It remains unclear what explains this unexpected behavior. It could be that the
+interpretation is insufficient, or that steering a feature can sometimes involve unex-
+pected detours. While tennis content is generated for a steering coefficient of 2, one
+would not expect it to go via soccer for a steering coefficient of 1.
+
+(2) “references to the effects of coffee on health” (15/4922)
+
+
+                                    23
+
+  Steering    My favorite sport is...
+
+  Baseline         ... baseball. I like to play baseball and watch it on TV. I also like to go to
+               the games at the ballpark. My favorite team is the Minnesota Twins.
+                   I have been playing baseball since I was 5 years old. When I was 5, my dad
+               signed me up for Little League Baseball. He didn’t know how to play but [...]
+ Coeff 1           ... soccer. I like to play it and watch it. I play soccer with my friends in
+               the park near my home every weekend. I like to watch it on TV when there
+               are matches between famous teams.
+                   I like to play basketball, too, but I don’t play it very often. My friends and
+                   I sometimes play basketball in the park after we [...]
+ Coeff 2           ... tennis. I like to play tennis and watch it on TV. I’m a big fan of Serena
+            Williams and Roger Federer. They are the best players in the world and
+              they have won many Grand Slam titles.
+                   I also like to play other sports, such as golf, swimming, and skiing. I enjoy
+              watching football and basketball as well.
+           What [...]
+
+Table 14: Steering capability of feature “mentions of tennis and related terms” (16/12285).
+Positively clamping this feature by 1 changes the mentioned sport from “baseball” to “soccer”
+or “basketball”. Increasing the factor further to 2 generates a description of “tennis”, before
+mentioning other sports.
+
+
+
+This is one of the many coffee-related features we found. As depicted in Appendix
+B.6.1, we provided the model with the input “My favorite drink is”. With a steering
+coefficient of 5, this feature works similarly to other coffee features we found and
+studied: it changes the model output from “margarita” to “coffee”. For slightly higher
+(6 and 8) steering coefficients, however, the model generated “a simple cup of hot tea”
+as its first output, only afterwards mentioning coffee. In this case the switch to tea
+seems to be a first sign of breaking, as a steering coefficient of 8 starts to affect the
+correctness of the syntax of the output.
+
+
+(3) “references to pigeons and airborne topics” (18/16371)
+This feature has a rather peculiar interpretation. It combines a specific type of bird
+– “pigeons” – with the general addition “and airborne topics”. Considering only its
+interpretation, it is not obvious how the model behavior would be affected, but an
+increased tendency to mention pigeons seems likely. This is especially true, as the
+feature also activates on “Racing Pigeon”. As can be seen in Appendix B.6.2, we
+provided the model with the input “An example for a bird is”, and the answer of the
+baseline model is “hummingbird”. Contrary to our initial expectations, the steered
+model does not generate “pigeon” as its output, but “American Robin”. This output
+is stable for increasing steering coefficients (2, 5, and 10), with only the additional
+information provided by the model changing – being correct descriptions for American
+Robins.
+
+
+
+
+
+                                    24
+
+6 Discussion
+
+6.1 Reproducibility and Scope of Interpretable Features
+
+Our investigation successfully reproduced Anthropic’s core findings, even while using a
+different model. We confirmed that SAEs can extract semantically meaningful features
+from LLMs, and that these features can be manipulated to produce syntactically
+coherent text that emphasizes or de-emphasizes particular concepts (see Section 4 and
+5.1.1).
+   However, this successful reproduction comes with significant caveats. Alongside
+interpretable features, our analysis revealed numerous features whose automated
+labels fail to align with their actual behavior during activation and steering. We
+showed this behavior in selected cases with features like “references to exposure to
+hazards or influential experiences” (18/14711) and “the word ‘Morocco’ and its varia-
+tions or related concepts” (18/6893) in Section 5.1.2. Importantly, we saw that there
+is no consistent way of determining  if a feature behaves as expected just by look-
+ing at its description. This observation raises concerns about the completeness of
+existing presentations of SAE results, which tend to showcase the most successful
+and interpretable features while leaving the proportion of less interpretable features
+unclear.
+   The challenge of selective presentation in interpretability research has been pre-
+viously acknowledged in the literature. R¨auker et al. (2023) explicitly discuss the
+validity of interpretations and the risks of cherry-picking results. When companies
+conduct research on proprietary models that cannot be independently audited, they
+bear enhanced responsibility for comprehensive and honest reporting. Selective pre-
+sentation may advance a compelling narrative about MI, but it does not provide the
+evidence base needed to assess whether these techniques can actually control model
+behavior reliably enough for real-world deployment. Notably, Marks et al. (2025) orig-
+inally claimed to offer demonstrations on “non-cherry-picked tasks of practical value”,
+but this language was removed in their 2025 update, suggesting evolving recognition
+of these concerns within the field. Our investigation shows just how easy it is to find
+examples that undermine the goals of MI and how hard it is to ensure against them.
+   Associated with this, another critical yet often implicit assumption in SAE-based
+interpretability research concerns the relationship between identified features and
+human concepts. The intuitive appeal of interpretable features stems partly from the
+suggestion that they correspond to concepts humans recognize and employ. However,
+this assumption warrants careful scrutiny.
+   The question is not whether all features learned by language models are “bad”
+or spurious – transfer learning demonstrates that neural networks learn generaliz-
+able patterns beyond task-specific artifacts (Freiesleben 2026, 282). Rather, the issue
+concerns which features correspond to human concepts and how we would deter-
+mine this correspondence. As Freiesleben notes, research on adversarial examples and
+robustness suggests that neural networks learn both, human and non-human concepts
+(Freiesleben 2026, 283-284). The nature of these non-human concepts and whether
+humans can in principle understand them remains an open question.
+
+
+
+
+                                    25
+
+   Our analysis suggests that the features highlighted in prominent interpretability
+demonstrations may not be representative of the broader feature distribution. While
+some features clearly activate in patterns humans recognize and can be described
+using familiar concepts, many others resist straightforward interpretation or exhibit
+activation patterns that do not map cleanly onto human conceptual categories. The
+existence of interpretable features does not imply that most or all features share this
+property.
+   This observation has implications for how we evaluate interpretability claims.
+Anthropic’s earlier blog posts sometimes suggest broad interpretability of identified
+features, though their later work on feature steering adopts more cautious language
+about feature labels and their reliability. The shift in framing may reflect growing
+recognition that human interpretability of a feature – our ability to assign it a descrip-
+tive label – does not necessarily mean the feature corresponds to a concept humans
+employ in their own reasoning, or that our interpretation captures the feature’s actual
+computational role.
+   To make claims about human concepts in language models genuinely worthwhile
+for interpretability, we need systematic understanding of when human-recognizable
+concepts emerge and verification that they “[...] represent in the sense of coactivating
+AND taking the functional role of concepts.” (Freiesleben 2026, 288) This requires
+demonstrating not only that features can be described in human terms, but that they
+function computationally in ways analogous to how humans use those concepts.
+
+6.2 Interpretation-Behavior Gap
+
+A central finding of our analysis concerns the reliability of feature interpretations.
+We identified disconnects between the automated descriptions of features on the one
+hand, and their activation patterns across text samples and their effects when used
+for model steering on the other hand. This misalignment poses significant challenges
+for claims about feature interpretability.
+   The automated labeling methods employed to describe features – which typically
+identify topics in text samples where features activate – do not necessarily capture
+the directionality or causal role of those features. As Durmus et al. (2024) note in
+their work on feature steering, labels related to concepts like discrimination may
+affect discrimination-related outputs “[...] but not necessarily increase (or decrease)
+discrimination or bias in predictable ways.” Our own experiments confirm this concern:
+(1) we observed cases where features seemingly activate in contexts consistent with
+their labels but produce unexpected or incoherent effects when used for steering, e.g.,
+the feature “references to pigeons and airborne topics” (18/16371) in Section 5.5; (2)
+there exist features like “references to coffee” (29/30028) where activation and steering
+consistently influence the token “coff”, but whose automated interpretation suggests
+a conceptual connection to coffee (see Section 5.1.2); (3) even though we find features
+with the exact same description, namely “references to coffee”, across different layers,
+these do not exhibit the same behavior for neither activation nor steering (see Section
+5.2.2).
+
+
+
+
+
+                                    26
+
+   This interpretation-behavior gap appears to have multiple sources. First, feature
+activation exhibits context-dependence that complicates straightforward interpreta-
+tion. What appears to be a coherent concept may in some cases reduce to activation
+on particular words or tokens in specific contexts, creating an illusion of more abstract
+conceptual representation (see the context-dependent features in Section 5.3). Second,
+features with highly similar descriptions often coexist within the same layer (see the
+five coffee-related features in layer 18 shown in Section 5.2.1), raising questions about
+their functional differentiation and relationship to one another. Without clear princi-
+ples for distinguishing between related features, it becomes difficult to claim precise
+understanding of what any individual feature represents.
+   In addition, we found two types of activation patterns that appear entirely spurious
+(see Section 5.4), namely features with a very high activation density, as well as
+features whose activation is disproportionally high for the <|begin of text|> token.
+Both of these activations are not detectable in the feature descriptions themselves.
+This points to another type of gap between interpretation and behavior. As it is not
+clear where their behavior comes from, features seem to be able to encode particular
+behavior that is not encodeable in their interpretation.
+
+6.3 Fragility of Feature Steering
+
+Our experiments reveal that feature steering is a highly sensitive operation character-
+ized by several forms of fragility. The effectiveness and meaning of steering depends
+on the quantitative magnitude of the steering coefficient, the accuracy of the feature’s
+interpretation, and whether the feature responds as expected in diverse contexts. We
+present examples of malfunctioning steering – e.g., the steering of feature “mentions
+of tennis and related terms” (16/12285) resulting in text on sports other than tennis
+– in Section 5.5.
+   The magnitude of steering interventions requires careful calibration, and in general
+depends on the specific layer and network depth. See, e.g., the feature “references to
+the effects of coffee on health” (15/4922) in Section 5.5: the steering works well for
+a factor of 5, produces unexpected results for 6, and breaks the model output for a
+factor of 8. Other features only start to exhibit an influence on model behavior with a
+steering coefficient of 10 and more (see the lists of clamped coffee-features in Appendix
+B.3.4). Durmus et al. (2024) acknowledge this fact, but leave questions unanswered
+(see Section 4.3). Small changes in steering strength can produce disproportionate
+effects, and steering for one intended concept may inadvertently affect homonyms,
+semantically similar terms, or unrelated linguistic patterns (see the examples of mis-
+interpreted features in Section 5.1.2). The boundaries of what is being manipulated
+remain unclear, complicating efforts to achieve targeted behavioral modifications.
+   Due to the layer-specificity of SAEs, our approach does not allow to draw any
+final conclusions on the layer-dependence of features. Because SAEs are trained on
+individual layers, one cannot be sure if two identically interpreted features in subse-
+quent layers actually represent the same concept. However, we encountered several
+nearly identically interpreted features in a single layer (see the coffee-related features
+in Section 5.2.1), which begs the question how these can be meaningfully distinguished
+and then used for steering purposes. While these findings are only (multiple) instances,
+
+
+                                    27
+
+they significantly undermine the suggested generality and applicability of this route
+towards mechanistic interpretability. The broad expectation that in general we will
+be able to find well-interpreted features across a network that can be reliably steered,
+is not warranted.
+   From an AI safety perspective, this  fragility  is particularly concerning. Any
+attempt to use SAE-based steering as a control mechanism would need to account for
+sensitivity to layer positioning, precise parameterization, interpretive accuracy, and
+potential side effects – a combination of requirements that suggests limited robustness
+for practical deployment.
+
+6.4 Representational Faithfulness and Reasoning
+
+Beyond questions of interpretability and steering reliability, it is an open question
+whether the features produced by SAEs provide faithful abstractions of the language
+model’s actual “reasoning” or inference processes. While our approach does not allow
+us to answer this question systematically, we believe the following two issues to be
+central if one wants to make progress in the direction of these strong representational
+claims.
+    First, one would need to show coherence between thematically similar concepts
+across different layers. If SAE-features captured fundamental reasoning primitives
+used throughout the model’s computation, we would expect to find systematic rela-
+tionships or consistent representations of related concepts as information flows through
+the network. The absence of such coherence suggests that features may capture
+layer-specific activation patterns rather than stable cognitive building blocks. Note,
+however, that this might be due to the training of SAEs on individual layers of the
+network. The utility of generalized approaches – such as crosscoders (Lindsey et al.
+2024) – in this context is still up to debate.
+   Second, one would need to find feature integration or composition that mir-
+rors standard forms of reasoning. If the identified features genuinely represented the
+model’s conceptual vocabulary, we would expect to observe systematic interactions
+between features during inference – compositions and combinations that reflect logical
+relationships or inferential steps. An initial move toward that end is taken by Tem-
+pleton et al. (2024) when discussing the potential role of features as computational
+intermediates. They try to determine whether the features are useful for examining
+the intermediate computational steps that would be necessary for a model to reach a
+multi-step conclusion. As they show, features like “Kobe Bryant”, “California”, “Cap-
+itals”, “Los Angeles”, and “Los Angeles Lakers” are evoked by the model to complete
+the sentence “The capital of the state where Kobe Bryant played basketball is”. How-
+ever, there is still a long way to go before reaching reasoning. The authors acknowledge
+that there are only a few examples where these intermediate features are this well
+interpretable. Furthermore, they can only demonstrate activation of these features,
+not any further interaction. Therefore, this does not definitively answer the question of
+whether these features truly capture the model’s representational primitives or merely
+correlate with particular activation patterns.
+   The risk, as Freiesleben (2026, 289) cautions, is that “[p]eople want to believe that
+ANNs are logical concept machines that only need to be scrutinized to become fully
+
+
+                                    28
+
+transparent.” This narrative, if accepted uncritically, can lead to research prone to
+confirmation bias – focusing on impressive examples of interpretable features while
+underestimating the proportion of features that resist interpretation or the challenges
+in verifying that interpretations reflect actual computational function. Such bias has
+real consequences for users who may overestimate our ability to understand and
+control model behavior based on selective demonstrations.
+
+7 Conclusion
+
+Mechanistic interpretability, as a form of explainable AI, refers to a broad set of
+recent approaches to understanding, and ultimately controlling, the behavior of LLMs.
+The core idea is to construct semantic representations – so-called “features” – from
+the neural activation patterns of the network, that are both human-interpretable
+and controllable. There are different approaches to discover, extract, and study such
+functionally useful features in LLMs. One particular technique used in MI research
+are sparse autoencoders. In this work, we analyzed the work on SAE-based extraction
+of interpretable features conducted by Anthropic.
+   Our replication in Section 4 confirmed that interpretable features exist and activate
+appropriately in expected contexts. Our testing revealed that features show genuine
+specificity, with activation strength correlating with contextual relevance. We also
+confirmed that features can effectively steer model behavior in predictable ways, with
+steering effectiveness relative to layer position and size of the steering coefficient.
+   In Section 5, we critically examined the potential to generalize specific findings in
+the context of SAE-based features to larger contexts. This has important implications
+for the role of MI research to provide model understanding, and to be used as a tool
+for AI safety.
+   The interpretability paradigm emphasizes understanding internal mechanisms by
+identifying what features represent and how they activate in response to inputs. While
+this theoretical project remains valuable for researchers seeking to understand neu-
+ral network computations, it may not be the most relevant framework for addressing
+practical safety and deployment concerns. For broader societal purposes, the criti-
+cal question is not whether we can interpret a model’s internal representations, but
+whether we can reliably control its output behavior. London (2019) argues that when
+causal knowledge is incomplete, careful empirical validation of accuracy and reliabil-
+ity should take priority over demands for explanation in medical decision making. The
+same logic applies to LLMs that affect millions of users on a daily basis: If the goal
+is AI safety, reliable control of the model’s output behavior is more important than
+detailed mechanistic interpretations.
+   One step in that direction is taken by Templeton et al. (2024) when discussing
+the features as computational intermediates (see the analysis of the sentence “The
+capital of the state where Kobe Bryant played basketball is” above). In the course of
+this analysis, they discuss ablation and its local approximation attribution. Ablation
+is the gold standard when it comes to determining the influence of a model part –
+in this case a feature – on the output. To measure ablation, each feature one after
+another is turned off(set to zero) for each predicted token in the sequence to measure
+
+
+
+                                    29
+
+the feature’s full (possibly non-linear) contribution to that prediction. While this is a
+precise measurement, it requires significant computational resources. Templeton et al.
+(2024) thus use a form of attribution patching to approximate the ablation measure-
+ments. Simply put, they approximate the influence of a feature on a given prediction
+by its decoder weight. While this method is not able to measure non-linear effects,
+it saves computational cost, as it does not require additional forward-passes through
+the model for each feature. In a footnote they then show that the correlation between
+ablation and attribution is much higher than the correlation between ablation and
+activation (Templeton et al. 2024). This means that the activation pattern associated
+with a feature, which is computed based on the input to a model, is not a great way
+to predict its ability to influence output behavior! However, as we discussed above,
+activation-first is the way features are currently approached.
+   This suggests a necessary shift in focus: from the input-to-feature relationship
+toward the feature-to-output relationship. Rather than asking primarily “what does
+this feature represent?” we should prioritize “what behavioral effects does manip-
+ulating this feature produce, and how reliably can we predict those effects?” The
+distinction parallels pharmaceutical development: we do not require complete mecha-
+nistic understanding of how a drug affects every molecular pathway in the body before
+approving it for use. Instead, we demand rigorous evidence about its effects on patient
+outcomes through systematic testing across diverse populations, clear documentation
+of efficacy and side effects, and reproducible protocols for safe administration. Sim-
+ilarly, for AI safety, the question is not whether we fully understand the internal
+computations, but whether we can reliably predict and control what the system will
+output under various conditions.
+
+
+
+
+
+                                    30
+
+Appendix A  Details: Replicating Anthropic’s
+              Results
+
+A.1  Setup Details
+
+  LLM
+   Name                Llama 3.1
+   Parameters             8 Billion
+
+  SAE
+    Description            Llama Scope (residual stream)
+   Trained SAEs          Llama3 1-8B-Base-L[LAYER]R-8x (Hugging Face)
+    Factor                 8x (Size of hidden layer x 8 = 32,768 features)
+
+   Interpretation
+   Model                   o4-mini
+   Dataset                cerebras/SlimPajama-627B (Hugging Face)
+
+   Steering
+   Temperature              0.5
+   No. of output Tokens   70
+   generated
+   Frequency penalty        1.0
+   Seed                   16
+   Strength Multiplier      1
+                            Strength Multiplier of 1: Steering strengths given in the
+                          paper are identical with the steering coefficients that are mul-
+                                 tiplied with the feature vectors, and are, therefore, a direct
+                         measurement of the influence on the LLM.
+
+                   Table A1: Parameters for SAEs in the paper.
+
+
+
+A.2  Replicating Feature Activation Specificity
+
+ Sentences in for each of Anthropic’s specificity categories to test activation of feature
+ “mentions of coffee and related terms” (18/9463):
+
+• Category 0: The feature is completely irrelevant throughout the context
+
+   – The quantum fluctuations in vacuum energy remain a mystery in theoretical
+     physics.
+   – She spent the afternoon learning about ancient Mesopotamian irrigation tech-
+     niques.
+   – Satellite imagery revealed unexpected changes in polar ice caps over the past
+     decade.
+   – He carefully cataloged every species of beetle he discovered in the rainforest
+     expedition.
+
+• Category 1: The feature is only vaguely related
+
+
+                                     31
+
+   – The caf´e down the street serves pastries and teas in addition to their other
+      offerings.
+   – Early morning routines often involve some kind of beverage before heading to
+     work.
+   – Many people gather in social spaces like bistros and lounges to chat before work.
+   – She walked past a bakery that also sold drinks in takeaway cups on her commute.
+
+• Category 2: The feature is only loosely related to the highlighted text
+
+   – Although she preferred herbal tea, she occasionally grabbed a latte when feeling
+      tired.
+   – He thought about brewing something warm  like espresso while reading the
+     newspaper.
+   – Sometimes she opted for a macchiato instead of her usual hot chocolate.
+   – He debated ordering a frapp´e as he scanned the drink menu at the counter.
+
+• Category 3: The feature cleanly identifies the activating text
+
+   – She poured herself a steaming mug of dark-roast coffee to jump-start her day.
+   – The rich aroma of freshly ground Arabica beans filled the air as the barista
+    tamped the espresso shot.
+   – He sipped a creamy cappuccino topped with frothed milk at the busy coffeehouse.
+   – The cold brew coffee dripped slowly into the carafe, promising a bold and smooth
+      flavor.
+
+Appendix B  Details: Do the Findings Generalize?
+
+B.1  Examples of Successful Interpretations
+
+B.1.1  “expressions of regret, mourning, and sadness” (17/16706)
+
+ Activation pattern:
+
+  The weight of regret settled like a shadow over her heart, each memory a painful echo
+   of choices she could not undo. Grief clung to her like a second skin, and the silence of
+  mourning filled the empty spaces where laughter used to live. She moved through her
+  days with a quiet ache, burdened by sorrow and the haunting presence of what was
+   lost. Remorse whispered in every still moment, reminding her of the paths not taken
+  and the words left unsaid. In the quiet corners of her mind, sadness bloomed like wilted
+  flowers—tender, aching, and impossible to forget.
+
+ Table B2: Activation of feature “expressions of regret, mourning, and sadness” (17/16706)
+ on English text. The feature related to regret, mourning, and sadness activates on and around
+ these terms.
+
+
+
+
+
+                                     32
+
+Steering Capabilities:
+
+  Steering    Summer is the time of the year where I...
+
+  Baseline         ... get to take a break from school and work and just hang out with
+         my family. We are very fortunate to live close to a lot of outdoor activities,
+               including beaches, hiking trails, and nature parks.
+          Our favorite place to go is the beach. Growing up in Southern Califor-
+                 nia, I have been exposed to so many beaches [...]
+ Coeff 10         ... have to take my kids to the beach, and I am not a beach person. I
+             don’t like the sand, and swimming in the sea. So I really hope that one
+              day, I could go to a beach with no sand.
+                   I am not the one who has to go there. My kids have to go [...]
+
+Table B3: Steering capability of feature “expressions of regret, mourning, and sadness”
+(17/16706). Positively clamping this feature changes the output from an overall happy story
+on holiday activities to a narration full of regretful rhetoric.
+
+
+  Steering     The best thing that ever happened to me was...
+
+  Baseline         ... the day I met you and I want to spend the rest of my life with you.
+                Let’s make our love story last forever.
+                   I have been waiting for someone like you my whole life. I am so happy
+             that we found each other and I can’t wait to spend forever with you.
+            Happy Anniversary!
+            You are [...]
+ Coeff 10         ... the day I lost my sight. It was a rainy day and I could not see the
+                 rain. I was in a place where there was no one, but it was a place where there
+              were no people.
+                  It is true that losing your sight is one of the most unfortunate things
+               that can happen to anyone, but it [...]
+
+Table B4: Steering capability of feature “expressions of regret, mourning, and sadness”
+(17/16706). Positively clamping this feature changes the output from from an overall happy
+memory to a narration on permanently lost sight.
+
+
+
+
+
+                                    33
+
+B.1.2  “instances of the phrase ‘would have’ or similar expressions
+        indicating hypothetical or conditional situations” (19/12491)
+
+Activation pattern:
+
+  If things had gone  differently, perhaps she would be standing in a brighter place,
+  untouched by the weight of what could have been. Had she spoken up that day, maybe
+  everything would have changed—perhaps the outcome would have bent toward some-
+  thing softer, something whole. Suppose she’d taken that chance, followed that fleeting
+  instinct—would she now be free of doubt? What if the timing had been just a little kinder,
+  the circumstances a little more forgiving? In another version of the story, maybe she isn’t
+  haunted by questions, living instead in the calm certainty of choices that worked out.
+
+Table B5: Activation of feature “instances of the phrase ‘would have’ or similar expressions
+indicating hypothetical or conditional situations” (19/12491) on English text. The feature
+related to hypothetical or conditional situations activates on “have” following terms like
+“could” and “would”.
+
+
+Steering Capabilities:
+
+  Steering       I am going to...
+
+  Baseline         ... share my own experience of my first ever visit to a Psychic Medium. I
+              have been to a few different ones in the past year and this is the one that
+                 really stood out for me.
+                   I was recommended by a friend who had been to see this lady and really
+               enjoyed it. I was sceptical as I have never [...]
+ Coeff 10         ... have to take a look at that, I do not like the idea of having to go
+              through the entire 3d model of the vehicle and making it look like it was in
+              a wreck. I am sure there is an easier way if you can believe that.
+                   I know there is a way to use the same mesh for multiple objects, but I [...]
+
+Table B6: Steering capability of feature “instances of the phrase ‘would have’ or similar
+expressions indicating hypothetical or conditional situations” (19/12491). Positively clamping
+this feature changes the output to contain a lot more conditional statements.
+
+
+
+
+
+                                    34
+
+  Steering      Photosynthesis is characterized by...
+
+  Baseline         ... the ability of plants to use solar energy to convert carbon dioxide and
+              water into carbohydrates. The carbohydrates are stored in the plant and can
+             be used as a food source for humans and animals. Photosynthesis occurs in
+               the chloroplasts of plant cells, which contain the chlorophyll that absorbs
+                 light energy from the sun.
+            The [...]
+ Coeff 10         ... the ability of plants to use solar energy to convert carbon dioxide and
+              water into carbohydrates. The carbohydrates are stored as starches in the
+                plant, but they would be useless to us if they were not eventually broken
+            down and released as sugars, if we wanted to have some of them. In addition,
+               the plant would have been useless had it not been able [...]
+
+Table B7: Steering capability of feature “instances of the phrase ‘would have’ or similar
+expressions indicating hypothetical or conditional situations” (19/12491). Positively clamping
+this feature changes a scientific description to contain a lot of conditional phrases like “would
+have”.
+
+
+B.1.3  “references to lists and list-making processes” (16/24361)
+
+Activation pattern:
+
+  Before leaving, she double-checked her tasks to make sure nothing was overlooked. Her
+  checklist included: 1) cancel the mail delivery, 2) set the security alarm, and 3) leave a
+  spare key with the neighbor. On her desk, she left a smaller note with labeled items she
+  couldn’t forget to pack: A) her passport, B) phone charger, and C) the envelope marked
+  *For When I’m Gone*. Each list, though simple, held significance — practical on the
+  surface, but deeply tied to the quiet finality of her departure.
+
+Table B8: Activation of feature “references to lists and list-making processes” (16/24361)
+on English text. The feature related to lists activates terms like “list” and “item”, as well as
+on the m-dash.
+
+
+
+
+
+                                    35
+
+Steering Capabilities:
+
+  Steering     Let us talk about...
+
+  Baseline         ... the best way to find a good and reliable web design company. There are
+           many companies out there that claim to be the best, but how do you know
+              which one is right for your business? In this blog post, we will discuss
+           some tips on how to find a web design company that is perfect for your
+               needs!
+             There are many factors to consider [...]
+ Coeff 5           ... the best way to find a good and reliable web design company. There are
+           many companies out there but not all of them will be able to give you what
+             you really want. For your convenience, here is a list of tips that you
+              can follow in order to find the right company.
+               First, you should make sure that the company has an updated website [...]
+
+Table B9: Steering capability of feature “references to  lists and list-making processes”
+(16/24361). Positively clamping this feature changes the output to contain the term “list”, as
+well as “First”, indicating an enumeration.
+
+
+  Steering      Photosynthesis is characterized by...
+
+  Baseline         ... the ability of plants to use solar energy to convert carbon dioxide and
+              water into carbohydrates. The carbohydrates are stored in the plant and can
+             be used as a food source for humans and animals. Photosynthesis occurs in
+               the chloroplasts of plant cells, which contain the chlorophyll that absorbs
+                 light energy from the sun.
+            The [...]
+ Coeff 15         ... the presence of a list of pigments, which are present in the thylakoid
+             membrane. The list is as follows:
+                (a) Chlorophyll a
+               (b) Chlorophyll b
+                 (c) Chlorophyll c
+               (d) Xanthophylls
+                 (e) Carotenoids
+                   (f) Phycoerythrin
+
+Table B10: Steering capability of feature “references to lists and list-making processes”
+(16/24361). Positively clamping this feature changes a scientific description to contain a list
+of terms.
+
+
+
+
+
+                                    36
+
+B.2  Examples of Mis-interpreted Features
+
+B.2.1  “references to coffee” (29/30028)
+
+Activation pattern:
+
+ A coffeeshop is more than just a place to drink—it’s a daily ritual for many. Freshly
+  brewed coffee, warm atmosphere, and the right company can turn simple visits into rich,
+  flavorful experiences that feel both comforting and energizing. Coffins are more than
+  containers; they are symbols of respect and remembrance. Coffins can be simple and plain
+  or richly decorated, depending on tradition and status. Across cultures, a coffin reflects
+  beliefs about death, and serves as a final gesture of honor for the one who has passed.
+
+Table B11: Activation of feature “references to coffee” (29/30028) on English text. The
+feature activates on the token “coff”. Regardless of the context being either “coffeeshop” or
+“coffin”.
+
+
+Steering Capabilities:
+
+  Steering    He told me that, at the funeral, five people lowered the...
+
+  Baseline         ... coffin into the grave but only two could lift it out again.
+           He said he was in a car accident and he had to be cut out of his car with
+               the jaws of life.
+                   I asked him how he was doing and he said “I’m okay, I’m just having a little
+               trouble breathing.” I asked him if he wanted me to call [...]
+ Coeff −20      ... casket into the ground and then stood there in silence. When he asked
+            them what they were doing, they said they were waiting for him to tell them
+             what to do next.
+           He said that he was embarrassed and didn’t know what to say. He was still
+                trying to come to terms with his mother’s death. He had never been in charge
+                         [...]
+
+Table B12: Steering capability of feature “references to coffee” (29/30028). Negatively clamp-
+ing this feature suppresses the term “coffin” even though it does not relate to “coffee” (except
+for the same beginning of the words).
+
+
+
+
+
+                                    37
+
+B.2.2  “the word ‘Morocco’ and its variations or related concepts”
+       (18/6893)
+
+Activation pattern:
+
+  Morrison always loved mornings in Morocco, where the morning sun painted the streets
+  with golden light. The moral of his travels, he often thought, was that even the smallest
+  morsels of experience could teach profound lessons. Over breakfast, he’d savor morsels
+  of local pastries while reflecting on memories from past adventures, letting each moment
+  shape his morals and outlook. In the quiet of the morning, Morrison felt that life’s true
+  richness came from noticing these little morsels of beauty, connection, and meaning every-
+  where he went.
+
+Table B13: Activation of feature “the word ‘Morocco’ and its variations or related concepts”
+(18/6893) on English text. The feature activates on “Morocco”, as well as, the term “moral”
+and tokens just entailing “or”.
+
+
+Steering Capabilities:
+
+  Steering   A country in North Africa is called...
+
+  Baseline         ... Algeria. It  is located on the Mediterranean Sea and  is bordered by
+                Tunisia, Libya, Niger, Mali, Mauritania, and Morocco. The country has a
+               population of over 40 million people and is the largest country in Africa. The
+                   official language of Algeria is Arabic but French is also widely spoken.
+             Algeria has a diverse geography with mountains, [...]
+ Coeff 10         ... Morocco. It is located on the Mediterranean coast and is bordered by
+               Algeria to the west and the Atlantic Ocean to the south. The capital of
+           Morocco is Rabat, but it also has Casablanca as its largest city. The official
+              language of Morocco is Arabic, but French and Spanish are also spoken there.
+           Morocco has a population of around [...]
+
+Table B14: Steering capability of feature “the word ‘Morocco’ and its variations or related
+concepts” (18/6893). Positively clamping this feature changes the mentioned North African
+country from “Algeria” to “Morocco”.
+
+
+
+
+
+                                    38
+
+  Steering    My day starts...
+
+  Baseline         ... with a cup of coffee and a quick glance at the news. I’m usually surprised
+                to see how much has happened during the night, and I’m always amazed at
+            how much time people spend on their phones.
+                    I love starting my day with a cup of coffee, but sometimes it’s hard to find
+               the time to make one. There are so many [...]
+  Coeff 15         ... in the morning when I wake up and go to the bathroom and do my
+             morning routine. After that, I go to the kitchen and make breakfast. Then I
+                get to school in the morning. In the afternoon, I play basketball, play with
+           my friends, or watch TV. In the evening, I go back to my house and then
+                  sleep.
+                          [...]
+
+ Table B15: Steering capability of feature “the word ‘Morocco’ and its variations or related
+ concepts” (18/6893). Positively clamping this feature increases to occurrence of the term
+ “morning” without a reference to “Morocco” at any point.
+
+
+B.3  Similarity of Features
+
+B.3.1  Sets of Words for Coffee-Related Features in Layer 18
+
+The following list contains the terms we choose for each of the five coffee-related
+ features in layer 18. The terms were chosen based on the description so that they
+ should generate a high activation for that specific feature:
+
+• Feature (18/7546): “references to drinks, particularly wine and coffee”
+
+   – Cabernet, Espresso, Merlot, Flat white, Sauvignon Blanc, Cold brew, Pinot Noir,
+     Latte, Macchiato, Ros´e
+
+• Feature (18/9463): “mentions of coffee and related terms”
+
+   – Coffee, Caffeine, Brew, Beans, Arabica, Roast, French press, Drip, Grinder,
+     Percolator
+
+• Feature (18/15276): “references to coffee and coffee-related experiences”
+
+   – Morning ritual, First sip, Brewing aroma, Wake-up cup, Coffee break, Steaming
+    mug, Late-night study fuel, Caf´e chatter, Bitter comfort, Refueling moment
+
+• Feature (18/17350): “references to cafes and coffee culture”
+
+   – Barista, Caf´e ambiance, Third-wave coffee, Latte art, Wi-Fi and workspace,
+     Corner caf´e, Reusable cup, Pour-over station, Coffeehouse playlist, Urban roast
+     bar
+
+• Feature (18/28590): “references to coffee and its cultural significance”
+
+   – Coffeehouse intellectualism, Espresso diplomacy, Java as social glue, Coffee as
+      ritual, Daily grind, Global bean trade, Caffeine capitalism, Slow caf´e movement,
+     Coffee as community, Roasting traditions
+
+
+
+
+
+                                     39
+
+B.3.2  “Coffee” Features (Llama 3.1 8B)
+
+
+ Layer  Feature  Description
+ 0      6040     references to coffee and related beverages
+ 0      21525    references to coffee and related products or concepts
+ 0      25424    variations of the word ”barista” related to coffee making or the
+                    coffee industry
+ 0      26493    references to espresso or coffee-related terms
+ 1      17505    references to coffee shops and houses
+ 1      22048   words and phrases related to coffee and coffins
+ 1      31543    phrases related to beverages, particularly coffee and tea
+ 1      1068     references to coffee and related beverages
+ 1      1912     topics related to health and wellness, specifically in relation to
+                    coffee and its effects
+ 2      7316     references to coffee and espresso
+ 2      10079   words related to coffee shops and houses
+ 2      25767   mentions of cafes or coffee shops
+ 2      26873   terms and phrases related to coffee
+ 3      777      references to coffee and related agricultural products
+ 3      1936     references to tables, shops, and houses, particularly in a coffee
+                shop context
+ 3      2099     references to Starbucks and coffee-related terms
+ 3      15768    references to coffee-related experiences and businesses
+ 3      27596    references to coffee and coffee-related products
+ 3      29228   mentions of cafes and coffee-related establishments
+ 4      5625    mentions of coffee and related beverages
+ 4      6003    mentions of cafes or coffee places
+ 4      1154    terms related to coffee and its preparation or consumption
+ 5      17249   mentions of coffee consumption in relation to cancer risk
+ 5      17365    specific terms related to coffee and coffee culture
+ 5      15894    references to coffee and related products
+ 5      32659    references to Starbucks and related coffee terminology
+ 6      1006     references to the effects of coffee on health, particularly concern-
+                   ing cancer risk
+ 6      17799    references to coffee and tea preparation
+ 6      17744    references to places serving food and beverages, particularly cafes
+               and coffeehouses
+ 6      16797   terms related to coffee and its preparation
+ 6      15111   terms related to coffee and its preparation or consumption
+ 6      21678    references to specific entities, particularly numbers and brands
+                   related to coffee
+ 6      25623    references to coffee
+ 7      13       references to coffee-related terms
+ 7      14416    references to coffee and related products or experiences
+ 7      15261   mentions of coffee and related terms
+
+
+
+                                    40
+
+7      15843    references to coffee and its active ingredient, caffeine
+7      23800    references to social activities that involve beverages, especially
+                   coffee and tea
+7      3001    words and phrases related to coffee consumption and its effects
+              on health
+7      6348     locations and settings related to coffee shops, restaurants, and
+                 public spaces
+7      12342   terms related to coffee-focused initiatives and their impacts on
+                   different communities
+7      30127   mentions of tea and coffee
+8      9164    terms related to coffee and coffee preparations
+8      2642     references to cups of coffee and tea
+8      11299    references to cafes and coffee shops
+8      14805    references to coffee consumption and its potential health effects
+8      27662    patterns and relationships in research findings regarding cancer
+                   risk and influences of coffee consumption
+8      28820   terms related to caffeine and coffee consumption
+8      31736    references to coffee-related topics and products
+9      22136    references to coffee consumption and its relationship to health
+               outcomes
+9      26076    references to studies examining the correlation between coffee
+               consumption and cancer risk
+9      26466    references to coffee-related topics and experiences
+10     19221    phrases related to the consumption of coffee and its impacts on
+                 health
+10     29384    references to coffee and coffee-related experiences
+11     19594    references to coffee consumption and its relationship with cancer
+                   risk
+11     23647    references to coffee and related products or experiences
+12     5988    terms related to cancer, coffee consumption, and marijuana usage
+12     8704     references to coffee and related experiences
+13     9732    terms related to coffee brewing and its cultural significance
+13     23357    references to coffee and its variations
+13     11617    statements related to coffee and its impact on health
+14     3181     references to coffee and its related activities or products
+15     6555    mentions of coffee consumption and its correlation with health
+               outcomes
+15     3366    mentions and discussion of coffee
+15     4922     references to the effects of coffee on health
+15     17398    references to coffee and its preparation
+15     28235    references to coffee and its related business processes
+16     5015     references to coffee and coffee-related establishments
+16     23756    references to studies and data regarding cancer risk associated
+                with coffee consumption
+16     24458    references to coffee and its various implications or characteristics
+
+
+
+                                   41
+
+16     30530    relationships concerning health studies and associations with
+                   coffee consumption
+16     31454    references to drinking beverages, particularly coffee and tea
+17     8387     references to coffee and related terms
+17     17320    topics related to coffee, including its origins, effects, and cultural
+                  significance
+17     30011    references to caf´es and coffee shops
+18     7546     references to drinks, particularly wine and coffee
+18     9463    mentions of coffee and related terms
+18     15276    references to coffee and coffee-related experiences
+18     17350    references to cafes and coffee culture
+18     28590    references to coffee and its cultural significance
+19     12587    references to coffee
+19     22735    references to caf´es or coffee shops
+20     2343     references to coffee-related experiences and businesses
+20     6891     references to coffee and its various contexts
+20     30233    references to social interactions in coffee shops
+21     28489   mentions of coffee and its related contexts
+21     1749     references to the coffee industry and related experiences
+21     4914     specific brand names or references associated with coffee
+21     24045    references to coffee and related terms
+21     24657   numbers and product details related to coffee and kitchen items
+21     30850   mentions of cafes and coffee-related establishments
+22     8201     references to coffee and its various contexts
+22     10804    references to coffee production and supply chains
+22     21262   terms related to coffee and food
+22     21760    phrases related to coffee and its experiences
+23     11578   mentions of coffee and related terms
+23     29983    specific terms and phrases related to coffee and barista culture
+23     4333     variations of the word ”coffee.”
+23     6885     product-related information and details, particularly those asso-
+                 ciated with coffee grinders and other kitchen appliances
+23     7440    terms related to coffee, including references to its preparation and
+               consumption experiences
+23     13942   mentions of cafes and coffee-related establishments
+23     20675    references to coffee and its production
+23     32054    references to commercial kitchen appliances and coffee machines
+24     7629     references to coffee-related products and their cultural signifi-
+                cance
+24     21855   key features and elements related to a coffee experience and
+                 culture
+24     16957   terms related to coffee and its preparation or consumption
+24     22301    references to coffee products and related terms
+24     28061    references to cafes and related coffee establishments
+25     14539   mentions of coffee-related terms
+
+
+
+                                   42
+
+25     11817    references to coffee and caf´e culture
+25     13111    references to coffee experiences and related business activities
+25     19316    information related to the effect of coffee consumption on cancer
+                   risk
+25     22482    references to coffee culture and its social impact
+25     22974    references to cancer and  its associated  risks, particularly in
+                  relation to coffee consumption
+25     27630   mentions of coffee and related terminology in various contexts
+25     29299    references to coffee or related terms
+26     32692    specific names or brand labels related to coffee
+26     3281    mentions of coffee and its variations
+26     10709   mentions of coffee
+26     10896    references to coffee-making equipment and related terms
+26     18981   mentions of Starbucks and related coffee culture
+26     19081    strongly positive sentiments and preferences related to coffee
+26     22463    references to coffee-related businesses and their social impact
+27     1729    words related to coffee
+27     2746     references to coffee-related activities and establishments
+27     3792     references to coffee-making equipment and techniques
+27     4442     sentences that discuss coffee experiences and related cultural
+                  practices
+27     11953    references to coffee and its cultural significance
+27     29811    information related to cancer risk and studies involving coffee
+               consumption
+28     3469     references to tea and coffee
+28     3737     references to coffee and coffee-related establishments
+28     18037    elements related to the  coffee industry and artisanal  coffee-
+              making
+28     20185    elements of coffee brewing equipment and related terminology
+28     20740    references to coffee culture and experiences
+28     24964    references to beverages, particularly those involving alcohol and
+                   coffee
+28     32127   terms related to coffee and its production, particularly focusing
+              on specific origins and qualities
+29     877     economic or statistical information related to coffee production
+              and trade
+29     1349     references to coffee and coffee-related establishments
+29     6546     references to coffee and its cultural significance
+29     6762    mentions of tea and coffee
+29     10040    expressions  related to the  coffee experience and community
+               engagement
+29     23015    references to cancer and its relationship with coffee consumption
+29     29263    information related to coffee brewing methods
+29     30028    references to coffee
+30     13620    references to coffee-related terminology and equipment
+
+
+
+                                   43
+
+ 30     14209    references to beverages, particularly coffee and tea
+ 30     18726    references to coffee and related establishments
+ 30     23901    references to coffee and its production or distribution
+ 30     24229   terms related to the coffee industry and its business practices
+ 30     27565    references to coffee-making equipment and techniques
+ 30     31724    references to coffee and related terms
+ 31     4216     references to coffee, particularly its origins and impacts related
+                   to trade and economics
+ 31     5840     references to methods of brewing coffee
+ 31     11770    references to coffee and related experiences
+ 31     14507    references to various coffee-related products and services
+ 31     22738    references to coffee and coffee-related establishments
+ 31     26080    references to cups of beverages, especially tea and coffee
+
+Table B16: All Features of Llama 3.1 8B (Llama Scope for residual stream) containing the
+word “coffee”.
+
+
+B.3.3  Activation Patterns of “references to coffee” Features
+
+ As the barista carefully grinds the aromatic espresso beans and tamps them into the
+  portafilter before pulling a silky shot of ristretto, the bustling cafe fills with the comforting
+  scent of roasted Arabica, while patrons sip their cappuccinos from ceramic mugs, chatting
+  about fair-trade plantations, latte art, crema, and the timeless ritual that makes coffee not
+  just a beverage but a global symbol of morning routines, social connection, and mindful
+  indulgence.
+
+Table B17: Activation of feature “references to coffee” (6/25623) on English text. The
+feature related to coffee activates on and around coffee terms. The closer the words are to
+coffee the higher the activation. Higher opacity indicates stronger activation.
+
+
+ As the barista carefully grinds the aromatic espresso beans and tamps them into the
+  portafilter before pulling a silky shot of ristretto, the bustling cafe fills with the comforting
+  scent of roasted Arabica, while patrons sip their cappuccinos from ceramic mugs, chatting
+  about fair-trade plantations, latte art, crema, and the timeless ritual that makes coffee not
+  just a beverage but a global symbol of morning routines, social connection, and mindful
+  indulgence.
+
+Table B18: Activation of feature “references to coffee” (19/12587) on English text. The
+feature related to coffee activates on and around coffee terms. The closer the words are to
+coffee the higher the activation. Higher opacity indicates stronger activation.
+
+
+
+
+
+                                    44
+
+ As the barista carefully grinds the aromatic espresso beans and tamps them into the
+  portafilter before pulling a silky shot of ristretto, the bustling cafe fills with the comforting
+  scent of roasted Arabica, while patrons sip their cappuccinos from ceramic mugs, chatting
+  about fair-trade plantations, latte art, crema, and the timeless ritual that makes coffee not
+  just a beverage but a global symbol of morning routines, social connection, and mindful
+  indulgence.
+
+Table B19: Activation of feature “references to coffee” (29/30028) on English text. The
+feature’s descritpion is related to coffee. The feature, however, does not activate on and
+around coffee terms. In Section 5.1.2, we show that it activates on the “coff” token instead
+(note that “coffee” is its own token).
+
+
+B.3.4  Steering of Coffee-Related Features
+
+
+  Steering   Feature   My favorite drink is...
+ Baseline                        ... a margarita but my favorite cocktail is a mojito. I have a lot
+                           of memories of enjoying mojitos with my friends and family.
+                              I love to cook and bake, but I am not very good at it. My best
+                        dish is probably pasta carbonara. I make it every time I go to
+                             Italy.
+               My favorite thing to
+ Coeff 1    6/25623       ... a margarita but my favorite cocktail is a mojito. I have a
+                            lot of different recipes for mojitos, but this one is my favorite.
+                               It’s simple and packs a punch.
+                   The name of this cocktail, “The mojito”, comes from the
+                      Spanish word “mocas” which
+           19/12587     ... a margarita but my favorite cocktail is a mojito. I have a lot
+                           of memories of enjoying mojitos with my friends and family.
+                              I love to cook and bake, but I am not very good at it. My best
+                        dish is probably pasta carbonara. I make it every time I go to
+           29/30028     ... a margarita but my favorite cocktail is a mojito. I have a
+                            lot of different recipes for mojitos, but this one is my favorite.
+                               It’s simple and packs a punch.
+                   The name of this drink, “Mojito,” means “little drink” in
+                        Spanish. It’s made with
+ Coeff 2    6/25623       ... a margarita but my favorite cocktail is a mojito. I have a
+                            lot of different coffee drinks in the morning, but I always have
+                                 it with milk. I don’t really like tea.
+                              I like to cook and bake. My favorite food is pasta and pizza.
+                              I love to eat meat, fish,
+           19/12587     ... a margarita but my favorite cocktail is a mojito. I have a lot
+                           of memories of enjoying mojitos with my friends and family.
+                              I love to cook and bake, but I am not very good at it. My best
+                        dish is probably pasta carbonara. I make it every time I go to
+
+
+
+
+
+                                    45
+
+          29/30028     ... a margarita but my favorite cocktail is a mojito. I have a
+                          lot of different recipes for mojitos, but this one is my favorite.
+                             It’s simple and packs a punch.
+                  The name of this drink, “Mojito,” means “little drink” in
+                      Spanish. It’s made with
+Coeff 5    6/25623       ... a c late but and I love, and is my favorite. Coffee, I love
+                         coffee and, coffee is my coffee. Our, we, coffee.
+                       Coffee Coffee Coffee
+                        Coffee, coffee coffee.
+                       Coffee is delicious
+                           coffee, tea, coffee
+                         coffee coffee,
+                         coffee coffee!
+                       Coffee is the best
+                       Coffee Coffee
+          19/12587     ... coffee. I usually drink it black and without cream. I like to
+                       get my caffeine fix in the morning before I start working. This
+                       helps me stay awake and alert throughout the day.
+                            I love coffee because it is delicious and energizing. It also has
+                 many health benefits, such as reducing the risk of heart disease
+                   and
+          29/30028     ... a margarita but my favorite cocktail is a mojito. I have a
+                          lot of different recipes for mojitos, but this one is my favorite.
+                             It’s simple and packs a punch.
+                  The name of this drink comes from the mojito plant that
+                     grows in Puerto Rico. The plant has small white
+Coeff 10   6/25623       ... in flavor beans„ and, and, beans.
+                     beans coffee coffee Coffee Coffee Coffee coffee coffee cup coffee
+                         coffee Coffee Coffee coffee coffee.
+                                     , coffee. tea coffee cafe Coff Coffee
+                                     . Cafe Coffee C.
+                       Coffee black
+                      Espresso C Coffee tea Breakfast coffee coffee Breakfast
+                      drink
+                       breakfast caffeine espresso c breakfast brew tea Tea cup
+          19/12587     ... coffee. I usually drink it black and without cream. I like to
+                       get my caffeine fix in the morning before I start working. This
+                       helps me stay alert and focused throughout the day.
+                            I love coffee because  it  is a great way to wake up in the
+                     morning. It has caffeine, which is a stimulant that helps
+          29/30028     ... coffee. I usually drink my coffee black, but I like to add
+                     creamer to my coffee when I’m in the mood for something
+                       sweet. I’ve tried a few different brands of creamers, and I’ve
+                     found that some are better than others. In this article,  I’ll
+                      share with you my top 5
+
+
+
+                                   46
+
+Coeff 20   6/25623       ... and„„ and, and, break.
+                     beans coffee coffee Coffee, grounds coffee coffee break coffee
+                                     ... beans coffee coffee.
+                                     , we black morning cream before with and in first before.
+                           coffee.
+                      healthy shop tables with ..., cups early coffee coffee also black
+                      sweet first breakfast on after. breakfast tables tea black coffee
+          19/12587     ... a simple one: a cup of black, with a bit of cream. I love to
+                   add some grounds and cream, and then just sit and drink it.
+                             It’s the perfect way to wake up in the morning. I also like to
+                  make it at home, because it’s so easy to do.
+                   Making coffee at
+          29/30028     ... coffee. I love the smell, taste, and feel of coffee. Coffee has
+                    a lot of benefits for our health like it can increase our energy
+                   and it can help to boost our brain function. I love to drink
+                         coffee with my friends or family in the morning or afternoon.
+                       Coffee is one of the most popular drinks in
+Coeff 30   6/25623     ...„„,-,-co-b-b-c-co-co-c-dr-c   grounds-co-dr   break    cof-
+                          fee   coffeeacial-com-col-gl-co-c-gl  &-menu-b   coffee-client
+                        coffeeCoffeeoffeeerrar474  joe¨ı¿ 1  Joeorders  ¨ı¿ 1   ¨ı¿ 1                                                            2                 2    2474bet-
+                 com  Arab   coffee   joecoffee   punch-script-gl-office    ¨ı¿ 1
+                                                                                           2
+                       caf˜A© bit-go br groundsacial˚a†2
+          19/12587     ... and...
+                   Shop shop shops and shop shops, and then shop
+                       houses, and grounds, and break shops...
+                   and beans, and beans, and beans, beans— bean time
+                   and beans break break break break –break time. ˆa€”house
+                   and grounds, and beans, beansˆa€”beans— bean tables-table
+                        table tables
+          29/30028     ... coffee. I love the smell, taste, and feel of coffee. Coffee is a
+                       big part of my life and has been for many years. I have coffees
+                        in the morning, coffees in the afternoon, coffees at night.
+                       Coffee is one of those things that can be enjoyed at any time
+                         of the day
+Coeff 50   6/25623
+
+
+
+
+
+                                   47
+
+          19/12587     ... and beans beans beans bean grounds beans grounds bean
+                     grounds beans beanshousehouseshousehouse grounds beans
+                          coffee break break break break bean grounds coffee grounds
+                     beans  coffee break shopScriptScript shops grounds shops
+                      shops coffee joe joe bean Joe mug cups mug cuphousehouse-
+                        table table-table-te-table-table tables-table-table filter filters
+                    makers tables tea/es/es
+          29/30028     ...     coffee.      I     love     coffeeseinsinsinsinsinsinsinsin
+                        coffeeeseyeeseyeeseyeeseyeeseyeeseyeeseyeeseyeeseyeesey-
+                       eeseyeeseyeeseyeesyeh Coffe Coffe Coffe Coffe Coffe Coffe
+                       Coffe Coffe Coffe
+
+Table B20: Output for selected positive steering coefficients for all features of Llama 3.1
+with the description “references to coffee”. Although having the same description all three
+features exhibit different steering results. [Note that some outputs are displayed as pictures
+to ensure the correct rendering of uncommon characters.]
+
+
+
+ Steering    Feature  My favorite drink is...
+ Baseline                        ... a margarita but my favorite cocktail is a mojito. I have a lot
+                          of memories of enjoying mojitos with my friends and family.
+                             I love to cook and bake, but I am not very good at it. My best
+                       dish is probably pasta carbonara. I make it every time I go to
+                            Italy.
+              My favorite thing to
+Coeff 1    7546           ... a margarita but my favorite cocktail is a mojito. I have a
+                      margarita almost every day during the summer and I have a
+                      mojito when it’s cold out. I love the fresh mint and lime in a
+                        mojito. It’s so refreshing on a hot summer day.
+                             I don’t know what it is about
+           9463           ... a margarita but my favorite cocktail is a mojito. I have a lot
+                          of memories of enjoying mojitos with my friends and family.
+                             I love to cook and bake, but I am not very good at it. My best
+                       dish is probably pasta carbonara. I make it every time I go to
+                            Italy.
+              My favorite thing to
+           15276         ... a margarita but my favorite cocktail is a mojito. I have a
+                           lot of different recipes for mojitos, but this one is my favorite.
+                             It’s simple and packs a punch.
+                  The name of this drink, “Mojito,” means “little water” in
+                       Spanish. This cocktail has been around since the 16th
+           17350         ... a margarita but my favorite cocktail is a mojito. I have a
+                           lot of memories of sitting in the backyard with my mom and
+                       drinking mojitos. It’s a really simple drink to make and it’s
+                         refreshing, so it’s perfect for summer. I’ve been making them
+                        at home for years, and they’re always a hit
+
+
+
+                                   48
+
+           28590         ... a margarita but my favorite cocktail is a mojito. I have a
+                          lot of different recipes for mojitos, but this one is my favorite.
+                             It’s simple and packs a punch.
+                  The name of this drink comes from the mojito plant that
+                     grows in Puerto Rico. The plant has small white flowers that
+                       are used in many
+Coeff 2    7546           ... a margarita but my favorite cocktail is a mojito. I’m not
+                       sure why but I just love the flavor of mint and lime together.
+                     I’m pretty sure that if you were to ask me what ..., I’d say
+                       margaritas. But I’m also pretty sure that if you were to ask
+                me what my
+           9463           ... coffee. I usually drink my coffee black, but sometimes I like
+                       to add a little milk or cream to it. I also like to add sugar or
+                      sweetener to my coffee.
+                       Coffee is a brewed beverage with a distinct aroma and flavor.
+                           It is one of the most popular drinks in the world, and it has
+                    been around for centuries. Coffee beans
+           15276         ... coffee. I usually drink my coffee black, but sometimes I like
+                       to add a little milk or cream to it. I also like to add sugar or
+                      sweetener to my coffee.
+                       Coffee is a brewed beverage with a distinct flavor. It is usually
+                  made from roasted coffee beans, which are the seeds of the
+                      Coffea plant. The beans are ground and
+           17350         ... coffee. I usually drink my coffee black, but sometimes I like
+                       to add a little milk or cream. If you’re looking for a delicious
+                   and healthy way to enjoy your coffee, consider adding some
+                       milk.
+                    There are many different types of milk that you can use in your
+                           coffee, and each one has its own unique flavor and benefits. In
+                         this blog
+           28590         ... a margarita but my favorite cocktail is a mojito. I have a
+                          lot of different recipes for mojitos, but this one is my favorite.
+                             It’s simple and packs a punch.
+                  The name of this cocktail, “The mojito”, comes from the
+                     Spanish word “mocas” which means “to mix”. The
+Coeff 5    7546           ... a glass of cold water and I usually drink it with my meals.
+                            I have a lot of different types of water, but my favorite is
+                      mineral water.
+                     I’m not sure if this is the best way to describe it, but mineral
+                     water is the most common type of water in the world. It’s also
+                      the most expensive. There are many different
+
+
+
+
+
+                                   49
+
+           9463           ... coffee. I usually drink it black and without cream. I like to
+                       get my caffeine fix in the morning and in the afternoon. This
+                              is why I am always on the lookout for a good cup of coffee.
+                            I love coffee. It’s one of my favorite drinks. I like to make it
+                       at home, but I also enjoy going out for a
+           15276         ... coffee. I usually drink it black, but I also like it with cream
+                       or milk. I love the way the aroma of freshly brewed coffee
+                                  fills my kitchen in the morning and the first sip of coffee in
+                      the morning is one of my favorite things. It’s a little bit like
+                    waking up to a warm hug.
+                            I have been drinking coffee for many
+           17350         ... coffee. I usually drink my coffee black, but sometimes I like
+                       to add a little milk or cream. If you’re looking for a delicious
+                   and healthy way to enjoy your coffee, consider adding some
+                       milk.
+                    There are many different types of milk that you can use in
+                     your coffee, and each one has its own unique flavor. Some
+                      people prefer almond milk
+           28590         ... coffee. I usually drink it black and without sugar. I like to
+                       get my caffeine fix in the morning, but during the day, I have
+                    a few cups of tea instead.
+                            I love all kinds of tea, but my favorites are green and white
+                         teas. I also enjoy rooibos tea, which is an herbal tea that comes
+                    from South
+Coeff 10   7546           ... a glass of wine with my dinner and a beer with my friends.
+                            I have a lot of wine, but I like it with my friends. I’m sure it’s
+                   good for me, but I don’t like it with my friends.
+                     I’m not the only one who likes to drink. My friend, the
+                      bartender at the bar, is always
+           9463           ... coffee. I drink it every morning and sometimes in the after-
+                     noon. I’m not a fan of flavored coffee, but I do like to add
+                    cream and sugar to my cup. My favorite coffee brand is Star-
+                      bucks, but I also like to try other brands as well.
+                     I’m not a big fan of tea, but I do enjoy it sometimes. My
+           15276         ... coffee. I drink it every day and I love to brew it at home. I
+                     have a variety of coffee makers, but my favorite is the French
+                         press.
+                  The French press is a simple way to make a great cup of coffee.
+                             It’s easy to use, and it produces a rich, flavorful brew.
+                  The coffee grounds are steeped in hot
+           17350         ... coffee. I usually drink my coffee black, but sometimes I like
+                       to get a little crazy and add some flavor to it. One of my
+                         favorite ways to do this is with a chai latte. This is a delicious
+                   and warming drink that is perfect for the cold weather.
+                     This chai latte recipe is simple and easy to make. All you need
+
+
+
+                                   50
+
+           28590         ... a ””Duck Pong”” that is a dark roast with milk and honey.
+                           It is very smooth and rich.
+                            I like to drink the ””Duck Pong”” in the evening when I am
+                        relaxing in my garden. The tea has a very smooth taste and
+                               it goes well with the honey and milk.
+                  The tea leaves are from the Y
+Coeff 20   7546           ... a glass of wine from my wine and water while I am reading.
+                            I have a lot of wine and water in the morning while I am
+                        celebrating. I have a few with my friends and some with the
+                      red wine. The red wine is good for your white tea and it is on
+                      the go at night.
+                  The coffee is good for your whiskey,
+           9463           ... and ice, and sometimes I can make it in a shophouse. But, I
+                    need to break break for making beans. So, this maker machine
+                              is really good for me.
+                           It was very good for me because it was easy to make and it
+                   was also really sweet. It was a great cup and I made it at the
+                    shop house.
+                     This
+           15276         ... coffee. I drink it every morning and I usually brew it using
+                    a machine. I have a coffee machine that is made by a brand
+                        called coffee by flavor.
+                       Coffee by flavor is a brand that has been around for more than
+                    10 years, and it’s one of the best on the market. It makes a
+                       great cup of coffee using only two
+           17350         ... coffee. I usually drink it to get a quick boost in the morning
+                       or later in the afternoon when I need to get work done and
+                        can’t afford to sit down for a full meal. I’ve been working on
+                       getting my laptop, reading, and coffee spot at my local cafe.
+                  The place is called ””The Think”” and it’s a great
+           28590         ... the ””C.T.G.E. or the C.T.G.E. B.E.I. (Black Estate 1997)
+                    from the Black Estate of Yr. T.G.B.E.S. (Taste Green Yellow
+                    Broken Leaf S.F.G.E. (S.F.G.E. is a tea grade tea leaf from
+                      the H.B.P.C.A
+Coeff 30   7546           ... a ”” while wine from my wine and s water with my beer. I
+                     have a to while and water with my wine and while.
+                            I have a wine with my to and
+                   and water with my to
+                   and water with s
+                     with s mo
+                     with mo sweet
+                   on s red or
+                      red tea or
+                       tea black or
+                      black wine
+
+
+
+                                   51
+
+           9463           ... and...
+                    / shop talk / beans gr gr gr beans
+                    / ro grounds mug grounds beans beans break break grinder
+                       grinder bean grounds beans bean, grounds, shop, machine,
+                      and, shops, andhouse, k shop)househousehousehouse coffee
+                         coffee coffee bean coffee beans beans ro ro  filter grinding
+                     machines tables tea table makers machines machine beans-be
+                      grounds-co
+           15276         ... coffee flavor coffee coffee coffee and I want to drink brew
+                         coffee flavor coffee brew coffee brew coffee brewing cup water
+                   brew water french americon brewed brewing best brewing
+                     water brewing coffee grind grind
+                        Coffee, how good it is, how delicious it is, and the most brewed
+                         single drink per per brewed filter americon brew tea leaf tea
+                    cup per brewed using grounds gr
+           17350         ... a ””coffee with”” and I usually order a coffee with or to go,
+                       or to sit and have a ””coffee with”” while reading or reading
+                      while drinking.
+                     For a few people, the coffee is the place to sit and read. It’s
+                    a place to sit and read. The place to sit and read, and the
+                      people are sitting.
+
+           28590         ... the ”” C. E. T. Tea B. E  . W  . S. T. F  . G  . S. P... 1
+                      Tst Estate Tea Estate Estate Tea Auctioner Grade Estate
+                     orthodox estate orthodox pek teas leaf orthodox tea leaf tea
+                     orthodox Leaf tea Organic Buk estate estate pekica tea pek
+                       tea leafer grade grade pekica cupr
+Coeff 50   7546
+
+
+
+
+
+           9463
+
+
+
+
+           15276
+
+
+
+
+           17350
+
+
+
+
+
+                                   52
+
+           28590
+
+
+
+
+
+Table B21: Selected positive steering strengths of all features containing the word “coffee”
+in layer 18. [Note that some outputs are displayed as pictures to ensure the correct rendering
+of uncommon characters.]
+
+
+
+
+
+                                   53
+
+Steering     Feature  My ideal breakfast consists of...
+Baseline                         ... a large serving of fruit and a cup of coffee. I love fruit for
+                        breakfast because it is so easy to prepare and it gives me the
+                      energy that I need to start my day. My favorite fruits are
+                         strawberries, blueberries, raspberries, and blackberries. I also
+                            like to eat mangoes, bananas, oranges, and apples.
+                             I always
+Coeff −1    7546           ... a large serving of scrambled eggs, an English muffin, and
+                     a cup of coffee. I know this is not the best way to start the
+                        day, but it is what my body craves. And I am not alone.
+                  The average American consumes 35% of their daily calories
+                        at breakfast. This means that if you consume 2,000
+           9463           ... a large serving of fruit and vegetables, a protein source like
+                         eggs, nuts or seeds, a healthy fat source such as avocado or
+                      nut butter and a carb source like quinoa or toast. I tend to
+                   mix up my breakfast every day so that I don’t get bored. I
+                         also make sure to have something to drink with my breakfast,
+                        usually water
+           15276         ... a large serving of fruit and a bowl of oatmeal. I love oatmeal,
+                    and I love the way it makes me feel. It’s a great way to start
+                       the day, and it’s also healthy. I usually make my oatmeal with
+                    almond milk, but sometimes I’ll make it with coconut milk or
+                      even soy milk. It’s always
+           17350         ... a large serving of fruit and vegetables, a protein source like
+                         eggs, and some sort of whole grain. ˆA I try to avoid refined
+                      carbohydrates because they make me feel sluggish and they
+                       don’t keep me full for long. ˆA I also try to avoid processed
+                       foods because I’m trying to eat as clean as possible.
+               My favorite breakfast is a
+           28590         ... a large serving of scrambled eggs, a piece of bacon, and some
+                         fresh fruit. I like to use organic eggs and try to find the best
+                        quality bacon I can. Bacon is one of those foods that you can
+                         find in every grocery store, but most people don’t know how
+                        to make it at home. This recipe will show you how to make
+Coeff −2    7546           ... a large serving of scrambled eggs, an English muffin or two,
+                    and a side of bacon. I’ll even add some cheese to the eggs if
+                      I’m feeling particularly greedy.
+                      But, if I was forced to choose one thing for breakfast, it would
+                     have to be bacon. I love the smokiness and the salty flavor
+                       that bacon brings to
+
+
+
+
+
+                                   54
+
+           9463           ... a large serving of fruit and vegetables, a protein source like
+                         eggs, and some healthy fats. I love to eat a big bowl of freshly
+                       cut fruit with some eggs or yogurt in the morning. I also like
+                        to have some avocado toast if I’m feeling extra hungry! For
+                      lunch I usually go for something light like a salad or soup, but
+                                    if
+           15276         ... a large serving of fruit and vegetables, a protein source like
+                         eggs, and some healthy fats. I love to eat a big bowl of mixed
+                         berries with sliced avocado and a fried egg on top. This is the
+                         perfect combination for me, but you can choose the fruits and
+                        vegetables that work best for you.
+                      This is an easy recipe that can be made
+           17350         ... a large serving of fruit and vegetables, a protein source like
+                         eggs, chicken or fish, a healthy fat source such as avocado or
+                      coconut oil and a carb source like quinoa or sweet potato. I
+                         love to make up my own smoothies with fresh fruit and vegeta-
+                           bles. I also love to make breakfast bowls using the ingredients
+                       above. There are so many
+           28590         ... a large serving of scrambled eggs, an English muffin with
+                     avocado and smoked salmon, and a cup of coffee. I try to avoid
+                       the carbs as much as possible, and when I do have them it is
+                        usually in the form of a fruit smoothie or some oatmeal. I love
+                        to cook and bake, so breakfast is my favorite meal.
+
+Coeff −5    7546           ... a large serving of scrambled eggs, topped with a generous
+                   amount of chopped fresh herbs, layered on top of a bed of
+                         crispy potatoes and smothered in a generous amount of cheese.
+                             I love the way the eggs cling to the potatoes and the way the
+                       cheese gets all melty on top. It’s such an easy breakfast recipe
+                       that can be made
+           9463           ... a large serving of fruit and vegetables, a protein source like
+                         eggs, and some healthy fats. I love to eat my veggies in the
+                     form of a frittata or omelet, but I also like to make sure I get
+                    enough fruit in my diet. Today I made this delicious mango
+                        breakfast bowl which combines both fruit and vegetables with
+                   some healthy
+           15276         ... a large serving of fruit and vegetables, a protein source like
+                         eggs, chicken or fish, a healthy fat source such as avocado or
+                      nut butter and a carb source like sweet potato or toast. I tend
+                        to mix up what I eat every day so it doesn’t get boring.
+                    Sometimes I make this breakfast bowl which is super filling
+                    and takes no time at
+
+
+
+
+
+                                   55
+
+           17350         ... a large serving of fruit and vegetables, a protein source like
+                         eggs, chicken or fish, a healthy fat source such as avocado or
+                          olive oil and a carb source like quinoa or sweet potato. I love to
+                   make up my own combinations of foods to create the perfect
+                        breakfast for my body. Here are some of my favorite breakfast
+                         recipes that are quick and
+           28590         ... a large serving of eggs and toast, with a side of bacon. I’m
+                      not sure why I love eggs so much, but I do. I would eat eggs
+                           for every meal if I could. And if you’re like me, you’ll want
+                        to have some egg recipes in your arsenal. If you’ve never tried
+                    making an omelet before
+Coeff −10   7546           ... a few slices of bread, some butter, and a handful of different
+                        toppings. I love to get creative with my toppings, and I’ve
+                     found that there are so many different things that you can do
+                        to make your bread topping even better.
+                  You can use anything from sweet to savory ingredients, or you
+                     can even mix them together. There are also tons
+           9463           ... a large serving of fruits and vegetables, a protein, and a
+                               little starch. I eat a variety of grains such as quinoa, farina,
+                     whole grain oats, and whole wheat bread. I love to make my
+                  own granola so that I can control the amount of sugar in it.
+               My favorite breakfast is an open-faced sandwich using sliced
+                     avocado
+           15276         ... a large serving of fruit and vegetables, a healthy helping
+                          of protein, and a generous portion of fat. ˆA I try to avoid
+                       the breads, pastries, and cereals that are so prevalent in the
+                     normal diet. ˆA I am currently working on my first book on
+                       the topic of health and fitness, and I’ve been trying to
+           17350         ... a large serving of fruits and vegetables, a protein-rich source
+                    and some healthy fats. I like to use organic produce as much
+                        as possible, but that is not always an option when it comes
+                        to the cost. I have found that frozen fruits and vegetables are
+                          just as nutritious as fresh produce, so I use them whenever I
+                        can. When using frozen foods
+           28590         ... a large serving of eggs and toast, with a side of pancakes.
+                      I’m not sure why I never thought to combine the two, but I did
+                                it last night and it was a huge success. And guess what? You
+                     can make them in the same pan! It’s like having two meals at
+                        once.
+                  The only problem with this recipe is that
+
+
+
+
+
+                                   56
+
+Coeff −20   7546           ... a set of bags that includes a bag for the books, and another
+                     one for the clothes. The bags are supposed to be made from
+                        materials that are easy to clean, and they must be able to
+                      hold all the items needed for the project. They also have to
+                     be able to store all the required materials, like bags, shoes,
+                          clothes, and
+           9463           ... a large variety of fruits and vegetables that can be easily
+                     found in my local grocery. I enjoy adding some natural protein
+                        to my daily diet, but I prefer to include it in my subsequent
+                       meals. I am not a strict adherer of any nutritionist’s guide-
+                            lines, nor do I require the inclusion of any form of nutritional
+                        information. My approach is to
+           15276         ... a large plate of food and I want to be able to shuffle around
+                              all of them to make sure I have the right combination of things
+                       that I can eat. So my new idea for the next version of the All-
+                  Wrap is to have a large number of sections that can be shuffled
+                      around. The problem is that I have no idea how I could
+           17350         ... a large number of dishes and I want to do everything myself.
+                      For example, I have a garden and I can grow my own vegeta-
+                           bles, I have a huge farm to raise my own animals and I have
+                       the best fishing pond. The only thing left is the river to catch
+                my own fish. If you want to see what I’m talking about,
+           28590         ... a meat-and-sauce-entree, a  piece  of junky crap  (e.g.,
+                     a frozen one-and-a-half-horse-shit-with-a-sprout-on-top), and
+                   some kind of no-nutrition garbage like a stupid-ass-ass-ass-
+                        ass-ass-ass-ass-ass-ass-ass-ass-ass-ASS-ASS-ASS-ASS-
+Coeff −30   7546           ... a set of bags that includes 5, 6 or even 7. The main 5 . 6
+                                      . 7 .1 .2 .3 .4 .5 .6 .7 .1 .2 .3ascalaidas , bagasasas , bagasas ,
+                       bagsasas , bagsasas , bagasas
+           9463           ... a pool of s
+                     neathne s
+                        nest
+                      nnecennlene
+                           nlerrle
+                       nrennegcenst-
+                   ndsmr
+                    n\
+                      renenantgtscendn\
+                      etsnencencnormcnexclestwert\
+                      Cwrlenrstonlltemenantancementmcuncctipse
+           15276         ... a large enough size of the old and the new with all the old
+                    and new in a very good combination. The new is made by the
+                  new and old are made by all in a very good combination.
+                  The name of the new is not to be called as one of the today’s,
+                        or any other, and I have not been able to find
+
+
+                                   57
+
+           17350         ... some sort of number of number I have for my personal . I
+                    do not have to do the . I must for the . The has to be that. I
+                           will for and . The should be ARIKRARIKRARIKRARIKRAI-
+                         .M................A................M........IAMMMMMMAMMMA-
+            MMMMAM
+           28590         ... a non-nurel-need-need-a-neo-need-a-neo-ne-ne-nurel-need-
+                        a-nurel-need-a-nurel-ne-ne-ne-nurel-ne-ne-ne-nure-a-nur-e-
+                          nur-e-nur-et-et-et-et-et-et-et-et-et-rere-rere
+Coeff −50   7546
+
+
+
+
+           9463
+
+
+
+
+           15276
+
+
+
+
+
+           17350
+
+
+
+
+
+           28590
+
+
+
+
+
+Table B22: Selected negative steering strengths of all features containing the word “coffee”
+in layer 18. [Note that some outputs are displayed as pictures to ensure the correct rendering
+of uncommon characters.]
+
+
+
+
+
+                                   58
+
+B.4  Context-Dependence
+
+B.4.1  “references to drinks, particularly wine and coffee” (18/7546)
+
+  coffee         cup of coffee            hsd wekl dfsd coffee
+  poison         cup of poison           hsd wekl dfsd poison
+ cup            hot cup of          We drank coffee.
+  of              hot cup            We drank poison.
+ hot            hot cup of coffee        This is the best museum I have ever
+ cup of          hot cup of poison         Coffee: This is the best museum I have ever
+
+Table B23: Context-dependence of feature “references to drinks, particularly wine and cof-
+fee” (18/7546). The feature generally activates on tokens following the phrases “(hot) cup
+of” or “drank”. However, the features does not activate on the term “coffee” in isolation.
+
+
+
+B.4.2  “topics related to coffee, including its origins, effects, and
+        cultural significance” (17/17320)
+
+  coffee         coffee from Africa        kwentoeler welrl newr caffeine
+  caffeine       coffee from Ethiopia     no sleep because the caffeine
+ from        beans from Ethiopia     This is the best museum I have ever
+  Africa        zebras from Africa        Coffee: This is the best museum I have ever
+  Ethiopia         :                       America’s most popular equipment for
+                Coffee:                    Coffee: America’s most popular equipment for
+
+Table B24: Context-dependence of feature “topics related to coffee, including its origins,
+effects, and cultural significance” (17/17320). The feature activates on tokens only in the
+surroundings of coffee-related terms.
+
+
+
+B.4.3  “mentions of coffee and related terms” (18/9463)
+
+  coffee            caffeine             We drank our coffee in the morning
+   coffee         cappuchino               This is the best museum I have ever
+ cup of coffee    Espresso                    Coffee: This is the best museum I have ever
+  instantcoffee     Caf´e                    Roast (light, medium, dark)
+  coffeebreak      Coffin                 They lowered the coffin
+                 Covfefe                  njowdco f feekd
+                 iwern owk ail coffee        njowdcoffeekd
+
+Table B25: Context-dependence of feature “mentions of coffee and related terms” (18/9463).
+The feature activates on “coffee” and related terms regardless of the context.
+
+
+
+
+
+                                    59
+
+B.5  Curious Activations
+
+B.5.1  Steering: “monetary values and financial information”
+       (20/6246, beginning of text activation: 156.0)
+
+  Steering     The biggest event this week is...
+
+  Baseline         ... the Federal Reserve’s Open Market Committee meeting, which begins on
+               Tuesday. The Fed is widely expected to raise its target for the federal funds
+                rate by 25 basis points to a range of 1.75% to 2%. The Fed will also
+                 issue its quarterly Summary of Economic Projections, which includes
+                forecasts for unemployment and inflation as well as projections [...]
+ Coeff −10      ... the Federal Open Market Committee meeting, and the Fed’s decision on
+              whether to raise interest rates. The FOMC meets twice a year, and
+                 this is one of those meetings. The Fed has been hinting that it will raise
+              interest rates, but most analysts expect that it won’t happen this week.
+            The FOMC meeting takes place on Tuesday [...]
+
+Table B26: Steering capability of feature (20/6246), which is interpreted as “monetary val-
+ues and financial information” and shows a beginning of text activation of 156.0. Negatively
+clamping this feature suppresses to occurrence of explicitly financial terms (percentages, num-
+bers and “quarterly”) to mentioning vague time specifications (e.g., “this week”) or terms
+without numbers (“raise interest rates”).
+
+
+
+B.5.2  Steering: “phrases related to weight loss and body shaping
+       techniques” (20/21737, beginning of text activation: 100.5)
+
+  Steering    My goal for this year is...
+
+  Baseline         ... to get back in shape and to be able to train more than just one day
+            a week. I have been training hard and eating well, but I still have a ways to
+                go. My plan is to continue with my current program, but also add in some
+          new exercises and some new techniques. I am hoping that by adding these
+            new exercises I will [...]
+ Coeff −10      ... to read 50 books and I’m hoping to get there. I’m about a quarter of the
+            way through my list and have already read 13 books. Some of them were
+                short, but I’ve been trying to read more than one book at a time lately.
+                 I’ve also been listening to audiobooks, which has been helping me get [...]
+
+Table B27: Steering capability of feature “phrases related to weight loss and body shaping
+techniques” (20/21737, beginning of text activation: 100.5). Negatively clamping this feature
+changes mentioned goals from exercise related to topics about reading.
+
+
+
+
+
+                                    60
+
+B.6  Coherence in Steering
+
+B.6.1  “references to the effects of coffee on health” (15/4922)
+
+  Steering  My favorite drink is...
+
+  Baseline      ... a margarita but my favorite cocktail is a mojito. I have a lot of
+            memories of enjoying mojitos with my friends and family.
+                 I love to cook and bake, but I am not very good at it. My best dish is probably
+             pasta carbonara. I make it every time I go to Italy.
+        My favorite thing to [...]
+ Coeff 5        ... a simple cup of coffee. I love the flavor of coffee and the taste of freshly
+          ground beans. I also love the aroma of freshly brewed coffee. I make sure to
+           buy whole beans and grind them fresh for my first cup every day.
+            There are many ways to brew coffee, but there is nothing like a French press
+               for making a delicious cup.
+                      [...]
+ Coeff 6        ... a simple cup of hot tea. I drink it without milk and sugar, and I like to
+             enjoy the natural flavor of the tea leaves. I don’t like to add any other flavors
+              or sugar to it.
+              I love coffee, but if you want to make a good cup of coffee, you have to use
+            fresh beans and grind it using a good [...]
+ Coeff 8        ... a simple cup of hot tea, and I want to brew my favorite cup of hot tea.
+         How do I make the best cup of hot tea that is brewed in my own favorite
+             cup, or one of my favorite cups, for every tasting cup coffee grind grind coffee
+             purchase grinding coffee grinder filter grinding groied grind coffee cup black
+            cup he grog [...]
+
+Table B28: Steering capability of feature “references to the effects of coffee on health”
+(15/4922). Positively clamping this feature by 5 changes the output from alcoholic beverages
+to mentioning of “coffee”. Clamping it further (6, 8) results in an increased generation of text
+on “tea”, before breaking down.
+
+
+
+
+
+                                    61
+
+B.6.2  “references to pigeons and airborne topics” (18/16371)
+
+  Steering   An example for a bird is...
+
+  Baseline      ... the hummingbird. The hummingbird is an insectivore and nectarivore.
+                It feeds on insects and nectar from flowers. It has a long, slender bill that
+              allows it to reach the nectar at the bottom of long, tubular flowers.
+            Another example for a bird is the penguin. The [...]
+ Coeff 2        ... the American Robin. This bird can be seen in many different parts of
+             the world. It is known for its beautiful red breast and its melodious song.
+         The American Robin (Turdus migratorius) is a migratory songbird that
+            can be found in North America. It is a member of the thrush [...]
+ Coeff 5        ... the American Robin. This bird can be seen in many different parts of the
+             world. It is known for its beautiful red breast and has been used as a symbol
+               of hope and renewal in many cultures. The American Robin is also known
+               for its ability to fly long distances and has been used as a symbol of migration.
+           The [...]
+ Coeff 10      ... the American Robin. This bird has an average length of 22.5 inches (57
+           cm) and its wingspan is 38.3 inches (97 cm). It weighs 16.4 ozs (465g) and has
+            a record speed of 140 mph (224 km/hr). It has a lifespan [...]
+
+Table B29: Steering capability of feature “references to pigeons and airborne topics”
+(18/16371). Despite its description, positively clamping this feature changes the mentioned
+bird from “hummingbird” to “American Robin”.
+
+
+
+
+
+                                    62
+
+References
+
+Arora S, Li Y, Liang Y, et al (2018) Linear algebraic structure of word senses, with
+  applications to polysemy. arXiv:1601.03764
+
+Bereska L, Gavves S (2024) Mechanistic interpretability for AI safety - a review.
+  Transactions on Machine Learning Research URL https://openreview.net/forum?
+  id=ePUVetPKu6, survey Certification, Expert Certification
+
+Bills S, Cammarata N, Mossing D, et  al (2023) Language models can explain
+  neurons  in language models. URL https://openaipublic.blob.core.windows.net/
+  neuron-explainer/paper/index.html
+
+Bricken T, Templeton A, Batson J, et al (2023) Towards monosemanticity: Decompos-
+  ing language models with dictionary learning. Transformer Circuits Thread URL
+  https://transformer-circuits.pub/2023/monosemantic-features/index.html
+
+Chan L, Lang L, Jenner E (2023) Natural abstractions: Key claims, theorems,
+  and critiques. URL https://www.alignmentforum.org/posts/gvzW46Z3BsaZsLc25/
+  natural-abstractions-key-claims-theorems-and-critiques
+
+Cunningham H, Ewart A, Riggs L, et al (2023) Sparse autoencoders find highly
+  interpretable features in language models. arXiv:2309.08600
+
+Durmus E, Tamkin A, Clark  J,  et  al  (2024)  Evaluating  feature  steering: A
+  case study  in  mitigating  social  biases. URL  https://anthropic.com/research/
+  evaluating-feature-steering
+
+Elad M (2010) Sparse and Redundant Representations. Springer, New York, NY,
+  https://doi.org/10.1007/978-1-4419-7011-4
+
+Elhage N, Hume T, Olsson C, et al (2022) Toy models of superposition. Trans-
+  former Circuits Thread URL https://transformer-circuits.pub/2022/toy model/
+  index.html
+
+Freiesleben T (2026) Artificial neural nets and the representation of human concepts.
+   In: Dur´an JM, Pozzi G (eds) Philosophy of Science for Machine Learning: Core
+  Issues and New Perspectives. Springer Nature Switzerland, Cham, p 273–294, https:
+  //doi.org/10.1007/978-3-032-03083-2 13
+
+Gao L, la Tour TD, Tillman H, et al (2024) Scaling and evaluating sparse autoen-
+  coders. arXiv:2406.04093
+
+Gao L, Rajaram A, Coxon J, et al (2025) Weight-sparse transformers have inter-
+  pretable circuits. arXiv:2511.13653
+
+Geiger A, Ibeling D, Zur A, et al (2025) Causal abstraction: A theoretical foundation
+  for mechanistic interpretability. Journal of Machine Learning Research 26(83):1–64.
+
+
+                                    63
+
+ URL http://jmlr.org/papers/v26/23-0058.html
+
+He Z, Shu W, Ge X, et al (2024) Llama scope: Extracting millions of features from
+  llama-3.1-8b with sparse autoencoders. arXiv:2410.20526
+
+ICML (2024) Mechanistic interpretability workshop 2024. URL https://icml2024mi.
+  pages.dev/
+
+Lin J (2023) Neuronpedia: Interactive reference and tooling for analyzing neural
+  networks. URL https://www.neuronpedia.org
+
+Lin  J  (2025)  automated-interpretability. URL  https://github.com/hijohnnylin/
+  automated-interpretability
+
+Lindsey J, Templeton A, Marcus J, et al (2024) Sparse crosscoders for cross-layer fea-
+  tures and model diffing. URL https://transformer-circuits.pub/2024/crosscoders/
+  index.html
+
+London AJ (2019) Artificial intelligence and black-box medical decisions: accuracy
+  versus explainability. Hastings Center Report 49(1):15–21. https://doi.org/10.1002/
+  hast.973
+
+Marks S, Rager C, Michaud EJ, et al (2025) Sparse feature circuits: Discovering and
+  editing interpretable causal graphs in language models. arXiv:2403.19647
+
+Mikolov T, Yih Wt, Zweig G (2013) Linguistic regularities in continuous space word
+  representations. In: Vanderwende L, Daum´e III H, Kirchhoff K (eds) Proceedings
+  of the 2013 Conference of the North American Chapter of the Association for
+  Computational Linguistics: Human Language Technologies. Association for Com-
+  putational Linguistics, Atlanta, Georgia, pp 746–751, URL https://aclanthology.
+  org/N13-1090/
+
+NeurIPS   (2025)   Mechanistic    interpretability   workshop.  URL   https://
+  mechinterpworkshop.com/
+
+Olah C, Cammarata N, Schubert L, et al (2020) Zoom in: An introduction to cir-
+   cuits. Distill https://doi.org/10.23915/distill.00024.001, URL https://distill.pub/
+  2020/circuits/zoom-in/
+
+OpenAI   (2025)   automated-interpretability.  URL  https://github.com/openai/
+  automated-interpretability
+
+Rai D, Zhou Y, Feng S, et al (2025) A practical review of mechanistic interpretability
+  for transformer-based language models. arXiv:2407.02646
+
+R¨auker T, Ho A, Casper S, et al (2023) Toward Transparent AI: A Survey on Inter-
+  preting the Inner Structures of Deep Neural Networks . In: 2023 IEEE Conference
+  on Secure and Trustworthy Machine Learning (SaTML). IEEE Computer Society,
+
+
+                                    64
+
+  Los Alamitos, CA, USA, pp 464–483, https://doi.org/10.1109/SaTML54575.2023.
+  00039, URL https://doi.ieeecomputersociety.org/10.1109/SaTML54575.2023.00039
+
+Saphra N, Wiegreffe S (2024) Mechanistic? arXiv:2410.09087
+
+Sharkey L, Chughtai B, Batson  J, et  al (2025) Open problems in mechanistic
+  interpretability. arXiv:2501.16496
+
+Templeton A, Conerly T, Marcus J, et al (2024) Scaling monosemanticity: Extract-
+  ing interpretable features from claude 3 sonnet. Transformer Circuits Thread URL
+  https://transformer-circuits.pub/2024/scaling-monosemanticity/index.html
+
+
+
+
+
+                                    65

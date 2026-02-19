@@ -1,0 +1,58 @@
+paper_id,title,authors,year,venue,primary_method,expected_method_rung,arxiv_url,notes
+2211.00593,Interpretability in the Wild: a Circuit for Indirect Object Identification in GPT-2 small,Wang et al.,2022,NeurIPS,Activation Patching,2,https://arxiv.org/abs/2211.00593,CALIBRATION - IOI circuit paper - ground truth for overclaiming pattern
+2202.05262,Locating and Editing Factual Associations in GPT,Meng et al.,2022,NeurIPS,Causal Tracing + ROME,2,https://arxiv.org/abs/2202.05262,CALIBRATION - Seminal ROME paper - causal tracing to locate then edit
+2301.05217,Progress measures for grokking via mechanistic interpretability,Nanda et al.,2023,ICLR,Circuit Analysis,2,https://arxiv.org/abs/2301.05217,CALIBRATION - Modular addition circuit discovery
+2304.14997,Towards Automated Circuit Discovery for Mechanistic Interpretability,Conmy et al.,2023,NeurIPS,Activation Patching,2,https://arxiv.org/abs/2304.14997,ACDC algorithm for automated circuit finding
+2301.04709,Causal Abstraction: A Theoretical Foundation for Mechanistic Interpretability,Geiger et al.,2023,arXiv,DAS/Interchange Intervention,2,https://arxiv.org/abs/2301.04709,Theoretical foundations for DAS
+2407.14008,Investigating the Indirect Object Identification circuit in Mamba,Ensign & Garriga-Alonso,2024,arXiv,Activation Patching,2,https://arxiv.org/abs/2407.14008,IOI circuit in Mamba architecture
+2404.14082,Mechanistic Interpretability for AI Safety -- A Review,Bereska & Gavves,2024,arXiv,Review/Survey,NA,https://arxiv.org/abs/2404.14082,Comprehensive review - good for context
+2501.16496,Open Problems in Mechanistic Interpretability,Sharkey et al.,2025,arXiv,Position Paper,NA,https://arxiv.org/abs/2501.16496,Field-wide open problems
+2504.13151,MIB: A Mechanistic Interpretability Benchmark,Mueller et al.,2025,arXiv,Benchmark,NA,https://arxiv.org/abs/2504.13151,Benchmark for MI methods
+2402.17700,RAVEL: Evaluating Interpretability Methods on Disentangling Language Model Representations,Huang et al.,2024,ACL,DAS/Probing,1-2,https://arxiv.org/abs/2402.17700,Evaluation of disentanglement methods
+2404.03592,ReFT: Representation Finetuning for Language Models,Wu et al.,2024,ACL,Representation Intervention,2,https://arxiv.org/abs/2404.03592,LoReFT and related interventions
+2403.07809,pyvene: A Library for Understanding and Improving PyTorch Models via Interventions,Wu et al.,2024,arXiv,Intervention Library,2,https://arxiv.org/abs/2403.07809,Library paper - methods overview
+2409.04478,Evaluating Open-Source Sparse Autoencoders on Disentangling Factual Knowledge in GPT-2 Small,Chaudhary & Geiger,2024,arXiv,SAE Attribution,1,https://arxiv.org/abs/2409.04478,CALIBRATION - SAE evaluation on factual knowledge
+2501.17148,AxBench: Steering LLMs? Even Simple Baselines Outperform Sparse Autoencoders,Wu et al.,2025,arXiv,Steering Vectors + SAE,2,https://arxiv.org/abs/2501.17148,SAE vs steering vector comparison
+2601.11516,Building Production-Ready Probes For Gemini,Kramár et al.,2026,arXiv,Linear Probing,1,https://arxiv.org/abs/2601.11516,CALIBRATION - Production probing at Google
+2410.08417,Bilinear MLPs enable weight-based mechanistic interpretability,Pearce et al.,2024,arXiv,Weight Analysis,1,https://arxiv.org/abs/2410.08417,Weight-based interpretability
+2406.11779,Compact Proofs of Model Performance via Mechanistic Interpretability,Gross et al.,2024,arXiv,Circuit Analysis,2-3,https://arxiv.org/abs/2406.11779,Formal proofs from MI
+2407.14494,InterpBench: Semi-Synthetic Transformers for Evaluating Mechanistic Interpretability Techniques,Gupta et al.,2024,arXiv,Benchmark,NA,https://arxiv.org/abs/2407.14494,Planted circuits benchmark
+2411.16105,Adaptive Circuit Behavior and Generalization in Mechanistic Interpretability,Nainani et al.,2024,arXiv,Circuit Analysis,2,https://arxiv.org/abs/2411.16105,Circuit generalization study
+2503.10894,HyperDAS: Towards Automating Mechanistic Interpretability with Hypernetworks,Sun et al.,2025,arXiv,DAS/Hypernetworks,2,https://arxiv.org/abs/2503.10894,Automated DAS discovery
+2506.18167,Understanding Reasoning in Thinking Language Models via Steering Vectors,Venhoff et al.,2025,arXiv,Steering Vectors,2,https://arxiv.org/abs/2506.18167,Steering reasoning models
+2506.03292,HyperSteer: Activation Steering at Scale with Hypernetworks,Sun et al.,2025,arXiv,Steering Vectors,2,https://arxiv.org/abs/2506.03292,Scalable steering
+2505.14685,Language Models use Lookbacks to Track Beliefs,Prakash et al.,2025,arXiv,Circuit Analysis,2,https://arxiv.org/abs/2505.14685,Belief tracking circuits
+2510.06182,Mixing Mechanisms: How Language Models Retrieve Bound Entities In-Context,Gur-Arieh et al.,2025,arXiv,Activation Analysis,2,https://arxiv.org/abs/2510.06182,Entity binding mechanisms
+2512.05865,Sparse Attention Post-Training for Mechanistic Interpretability,Draye et al.,2025,arXiv,Attention Analysis,1-2,https://arxiv.org/abs/2512.05865,Sparse attention for MI
+2512.05794,Mechanistic Interpretability of Antibody Language Models Using SAEs,Haque et al.,2025,arXiv,SAE Attribution,1,https://arxiv.org/abs/2512.05794,SAE on protein models
+2404.03646,Locating and Editing Factual Associations in Mamba,Sharma et al.,2024,arXiv,Causal Tracing,2,https://arxiv.org/abs/2404.03646,ROME for Mamba
+2104.08164,Editing Factual Knowledge in Language Models,De Cao et al.,2021,EMNLP,Knowledge Editing,2,https://arxiv.org/abs/2104.08164,Early KnowledgeEditor paper
+2508.21258,RelP: Faithful and Efficient Circuit Discovery in Language Models via Relevance Patching,Jafari et al.,2025,arXiv,Activation Patching,2,https://arxiv.org/abs/2508.21258,Relevance patching method
+2510.01070,Eliciting Secret Knowledge from Language Models,Cywiński et al.,2025,arXiv,Probing + Steering,1-2,https://arxiv.org/abs/2510.01070,Secret knowledge elicitation
+2511.22662,Difficulties with Evaluating a Deception Detector for AIs,Smith et al.,2025,arXiv,Probing,1,https://arxiv.org/abs/2511.22662,Deception detection evaluation
+2601.14004,Locate Steer and Improve: A Practical Survey of Actionable MI,Zhang et al.,2026,arXiv,Survey/Benchmark,NA,https://arxiv.org/abs/2601.14004,Comprehensive actionable MI survey - methods overview
+2601.03047,When the Coffee Feature Activates on Coffins: SAE Critique,Ronge et al.,2026,arXiv,SAE Attribution + Steering,2,https://arxiv.org/abs/2601.03047,SAE stress test - feature extraction reliability
+2512.06681,Mechanistic Interpretability of GPT-2 Sentiment Analysis,Hatua,2025,arXiv,Activation Patching,2,https://arxiv.org/abs/2512.06681,GPT-2 sentiment circuit analysis
+2511.05923,Causal Tracing in VLMs for Hallucination Mitigation,Li et al.,2025,AAAI,Causal Tracing,2,https://arxiv.org/abs/2511.05923,VLM causal tracing with intervention
+2404.15255,How to use and interpret activation patching,Heimersheim & Nanda,2024,arXiv,Activation Patching,2,https://arxiv.org/abs/2404.15255,Methods tutorial - best practices
+2311.17030,Is This the Subspace You Are Looking for? Interpretability Illusion,Makelov et al.,2023,NeurIPS Workshop,Activation Patching,2,https://arxiv.org/abs/2311.17030,Subspace patching critique - dormant pathways
+2507.08802,The Non-Linear Representation Dilemma: Causal Abstraction Limits,Sutter et al.,2025,NeurIPS Spotlight,Causal Abstraction,2,https://arxiv.org/abs/2507.08802,Causal abstraction critique - alignment map complexity
+2601.05679,Falsifying SAE Reasoning Features in Language Models,Ma et al.,2026,arXiv,SAE Attribution,1,https://arxiv.org/abs/2601.05679,SAE reasoning feature falsification
+2601.03595,Controllable LLM Reasoning via SAE-Based Steering,Fang et al.,2026,arXiv,SAE + Steering,2,https://arxiv.org/abs/2601.03595,SAE steering for reasoning control
+2512.05534,On the Theoretical Foundation of Sparse Dictionary Learning in MI,Tang et al.,2025,arXiv,SAE Theory,1,https://arxiv.org/abs/2512.05534,SAE theoretical foundations
+2512.13568,Superposition as Lossy Compression: Measure with SAE,Bereska et al.,2025,TMLR,SAE Analysis,1,https://arxiv.org/abs/2512.13568,SAE superposition measurement
+2511.09432,Group Equivariance Meets MI: Equivariant SAEs,Erdogan & Lucic,2025,NeurIPS Workshop,SAE,1,https://arxiv.org/abs/2511.09432,Equivariant SAE extension
+2509.06608,Small Vectors Big Effects: RL-Induced Reasoning via Steering,Sinii et al.,2025,arXiv,Steering Vectors,2,https://arxiv.org/abs/2509.06608,RL steering vector analysis
+2505.22637,Understanding Steering Vector Reliability,Braun et al.,2025,ICLR Workshop,Steering Vectors,2,https://arxiv.org/abs/2505.22637,Steering reliability analysis
+2505.24859,Beyond Multiple Choice: Steering for Summarization,Braun et al.,2025,ICML Workshop,Steering Vectors,2,https://arxiv.org/abs/2505.24859,Steering evaluation in free-form generation
+2508.11214,How Causal Abstraction Underpins Computational Explanation,Geiger et al.,2025,arXiv,Causal Abstraction,2,https://arxiv.org/abs/2508.11214,Theoretical - causal abstraction foundations
+2410.20161,Causal Abstraction in Model Interpretability: A Compact Survey,Zhang,2024,arXiv,Survey,NA,https://arxiv.org/abs/2410.20161,Causal abstraction survey
+2309.16042,Towards Best Practices of Activation Patching,Zhang & Nanda,2023,ICLR,Activation Patching,2,https://arxiv.org/abs/2309.16042,Patching metrics and methods comparison
+2411.08745,Separating Tongue from Thought: Language-Agnostic Concepts,Dumas et al.,2024,arXiv,Activation Patching,2,https://arxiv.org/abs/2411.08745,Multilingual concept representations
+2507.20936,Dissecting Persona-Driven Reasoning via Activation Patching,Poonia & Jain,2025,EMNLP Findings,Activation Patching,2,https://arxiv.org/abs/2507.20936,Persona encoding in LLMs
+2504.02976,Localized Definitions Distributed Reasoning via Patching,Bahador,2025,arXiv,Activation Patching,2,https://arxiv.org/abs/2504.02976,Knowledge localization in GPT-2
+2503.05613,A Survey on SAEs: Interpreting LLM Internal Mechanisms,Shu et al.,2025,EMNLP Findings,Survey,NA,https://arxiv.org/abs/2503.05613,Comprehensive SAE survey
+2502.03714,Universal SAEs: Interpretable Cross-Model Concept Alignment,Thasarathan et al.,2025,arXiv,SAE,1,https://arxiv.org/abs/2502.03714,Cross-model SAE alignment
+2509.18127,Safe-SAIL: Fine-grained Safety Landscape via SAE,Weng et al.,2025,arXiv,SAE Attribution,1,https://arxiv.org/abs/2509.18127,SAE for safety analysis
+2601.02989,MI of Large-Scale Counting in LLMs,Hasani et al.,2026,arXiv,Circuit Analysis,2,https://arxiv.org/abs/2601.02989,Counting circuit discovery
+2512.18092,Faithful and Stable Neuron Explanations for MI,Yan et al.,2025,arXiv,Neuron Attribution,1,https://arxiv.org/abs/2512.18092,Neuron explanation evaluation

@@ -1,0 +1,942 @@
+                     Editing Factual Knowledge in Language Models
+
+
+                                Nicola De Cao 1,2, Wilker Aziz 1, Ivan Titov 1,2
+                                 1University of Amsterdam, 2University of Edinburgh
+                     { nicola.decao, w.aziz, titov } @uva.nl
+
+
+
+
+                          Abstract                                                KnowledgeEditor   Updated prediction
+
+                                                                                  Regular predictions
+               The factual knowledge acquired during pre-
+                    training and stored in the parameters of Lan-
+                guage Models (LMs) can be useful in down-
+                 stream tasks (e.g., question answering or tex-
+                     tual inference). However, some facts can be
+                                                                                                                       Retain previous knowledge2021             incorrectly induced or become obsolete over
+                   time.  We present KNOWLEDGEEDITOR, a
+                                                                    Figure 1: Left: a model f with parameters θ prefers a
+               method which can be used to edit this knowl-
+                                                                         prediction y for input x (e.g., y is the mode/argmax of aSep           edge and, thus, ﬁx ‘bugs’ or unexpected pre-
+                                                                            discrete distribution parameterized by f(x; θ)). Right:
+8             dictions without the need for expensive re-                                                                   our method uses a hyper-network g to update the pa-
+                    training or ﬁne-tuning.  Besides being com-                                                                     rameters of f to θ′ such that f(x; θ′) prefers an alterna-
+                   putationally efﬁcient, KNOWLEDGEEDITOR                                                                                 tive prediction a without affecting the prediction y′ of
+                 does not require any modiﬁcations in LM pre-                                                              any other input x′ ̸= x. Our model edits the knowledge
+                    training (e.g., the use of meta-learning). In our
+                                                                   about x stored in the parameters of f.
+                  approach, we train a hyper-network with con-[cs.CL]             strained optimization to modify a fact without
+                    affecting the rest of the knowledge; the trained                                                     become a standard practice in NLP. Factual knowl-
+                 hyper-network  is then used  to  predict the
+                                                           edge induced during pre-training can help in down-
+                 weight update at test time. We show KNOWL-
+                                                              stream tasks, but it can also be incorrect or become               EDGEEDITOR’s efﬁcacy with two popular ar-
+                    chitectures and knowledge-intensive tasks: i) a       obsolete over time (e.g., not reﬂecting changes of
+            BERT model ﬁne-tuned for fact-checking, and       heads of states or country populations). Developing
+                          ii) a sequence-to-sequence BART model for        reliable and computationally efﬁcient methods for
+                  question answering. With our method, chang-      bug-ﬁxing models without the need for expensive
+                  ing a prediction on the speciﬁc wording of a                                                                     re-training would be beneﬁcial. See Figure 2 for
+                 query tends to result in a consistent change
+                                                           an example of revising the memory of a model that
+                    in predictions also for its paraphrases. We
+                                                                              initially misremembered Namibia’s capital.               show that this can be further encouraged by ex-
+                    ploiting (e.g., automatically-generated) para-         Unlike conventional Knowledge Bases (KBs)
+                  phrases during training.   Interestingly, our        that explicitly store factual knowledge, neural mod-arXiv:2104.08164v2           hyper-network can be regarded as a ‘probe’ re-        els implicitly memorize facts in their parameters.
+                  vealing which components need to be changed      One cannot easily access and interpret their com-
+                    to manipulate factual knowledge; our analysis       putation and memories (Ribeiro et al., 2016; Be-
+                shows that the updates tend to be concentrated
+                                                                linkov and Glass, 2019; Voita et al., 2019; De Cao
+               on a small subset of components.1
+                                                                           et al., 2020), thus, modifying their knowledge is a
+                                                               challenging problem. Motivated by practical con-          1  Introduction
+                                                                       siderations, we formulate the following desiderata
+           Using pre-trained transformer-based Language    for a method aimed at tackling this problem (see
+           Models (LMs; Vaswani et al., 2017; Devlin et al.,   Section 2 for a more formal treatment):
+            2019; Radford et al., 2019; Lewis et al., 2020; Raf-                                                                                 • Generality: be able to modify a model that
+               fel et al., 2020; Brown et al., 2020) has recently                                                          was not speciﬁcally trained to be editable (i.e.,
+                                                          no need for special pre-training of LMs, such                  1Source code available at https://github.com/
+           nicola-decao/KnowledgeEditor                       as using meta-learning);
+
+                   Semantically equivalent                           Another fact                             Fact to change            Fact that also changes             Another fact
+
+  What is the capital    How is Namibia's     What is the capital            What is the capital    How is Namibia's     What is the capital
+      of Namibia?         capital city called?          of Russia?                        of Namibia?         capital city called?          of Russia?
+
+
+
+   Answers  Scores     Answers  Scores     Answers  Scores             Answers  Scores     Answers  Scores     Answers  Scores
+   Namibia   -0.43     Namibia   -0.32     Moscow   -0.55            Windhoek  -0.06    Windhoek  -0.07     Moscow   -0.56
+     Nigeria    -0.69        Nigeria    -0.79       Nashville   -0.97             Tasman    -1.42      Tasman    -1.50        Ufa      -1.03
+      Nibia     -0.89        Nibia     -0.87        Ufa     -1.22             Windygates  -1.52     Windygates  -1.51       Nashville   -1.04
+   Namibia   -1.08      Tasman    -1.14        Kiev     -1.28              Tasmania   -1.59     Windhoof   -1.53        Kiev     -1.43
+   Tasman    -1.19      Namibia   -1.16      Nashua    -2.09              Windhoof   -1.66     Tasmania   -1.53      Nashua    -2.21
+
+           (a) Model predictions before the update.                         (b) Model predictions with edited parameters.
+
+Figure 2: Predictions from a pre-trained language BART model ﬁne-tuned for closed-book question answering.
+Left: model top-k predictions from Beam Search. Right: top-k after using our method conditioning on changing
+‘What is the capital of Namibia?’ from ‘Namibia’ (wrong) to ‘Windhoek’ (correct prediction). Changing one fact
+also changes a semantically equivalent question and keeps the predictions from other facts the same.
+
+
+    • Reliability: be able to successfully update a    not have to select a subset of parameters to update
+     speciﬁc fact without affecting the rest of the    as we let our model learn that by itself. In fact,
+     acquired knowledge;                         our hyper-network can be regarded as a ‘probe’ re-
+    • Consistency: the changes should be consis-   vealing which components of the network need to
+      tent across equivalent formulations of a fact   be changed to manipulate factual knowledge, i.e.
+      (e.g., when asked to update an answer for one    revealing the ‘causal mediation mechanisms’ (Vig
+     question, answers to its paraphrases should    et al., 2020). We observe that the updates end up
+     change accordingly).                          being concentrated in a restricted set of model com-
+                                                     ponents, even though we do not encourage any kindThe problem has been previously tackled in Zhu
+                                                     of sparsity. Interestingly, the most-updated compo-et al. (2020) and Sinitsin et al. (2020), as discussed
+                                                  nents are different from the groups of parametersin detail in Section 3. However, both do not ensure
+                                                     receiving large gradients (see Figure 4).that the edited model will be ‘reliable’, i.e. that the
+rest of the knowledge would not be badly affected,                                               Contributions  Our contributions are as follows:
+and that the changes are ‘consistent’ across equiv-
+                                                                 • we deﬁne the task of knowledge editing and
+alent inputs. Additionally, Sinitsin et al.’s (2020)
+                                                    propose a set of evaluation metrics;
+method requires expensive specialized training of
+                                                                 • we propose KNOWLEDGEEDITOR that learns
+the original network. While re-training the original
+                                                             to modify LMs memories efﬁciently and reli-
+network was feasible in their applications (e.g., in
+                                                        ably while maintaining consistent predictions
+machine translation), it is problematic when the
+                                                             for semantically equivalent inputs;
+network is a pre-trained LM. We propose a novel
+                                                                 • we verify that our proposed method largelymethod that overcomes these limitations.
+                                                  meets our desiderata—while other baselines
+  We treat editing the memories of a neural model
+                                                   based on ﬁne-tuning fail—testing  it with
+as a learning-to-update problem. We use an efﬁ-
+                                                             different LM architectures on knowledge-
+cient parameterization of a hyper-network that is
+                                                           intensive tasks such as fact-checking and
+trained to update the LM parameters when provided
+                                                 open-domain question answering;
+with a single fact that needs to be modiﬁed. We do
+                                                                 • we analyze the updates for KNOWLEDGEEDI-not require meta-learning, re-training or ﬁne-tuning
+                                          TOR and the alternatives.of the original network. We employ constrained
+optimization in training: we constrain the edited
+                                        2  Task
+model to retain the same predictions as the original
+one regardless of the distance between the original  We want to edit the memory of a neural language
+and updated models in the parameter space. We   model such that when, presented with an input, its
+show how this framework can be extended to incor-   output reﬂects a revised collection of facts. Un-
+porate (e.g., automatically-generated) paraphrases    fortunately, the knowledge of a language model
+in training, further improving consistency. Figure 1    is typically opaque to us, being stored non-locally
+shows an outline of our method.                     across a large number of parameters and architec-
+   Differently from both previous methods, we do    tural components. Thus, concretely, to operational-
+
+ize the task, we seek a change in the model’s pa-        racy of revised predictions for inputs in D;
+rameters that affects predictions from the model      2. retain accuracy: how well θ′ retains the orig-
+only for a speciﬁc input. For a given input x, the         inal predictions of f, measured as accuracy
+prediction a made by the edited model should differ        wrt input-output pairs in sets Ox;
+from the prediction y made by the original model      3. equivalence accuracy: how consistent the pre-
+only if x is inﬂuenced by one of the revised facts.          dictions of the revised model θ′ are for seman-
+                                                                 tically equivalent inputs, measured as accu-
+2.1  Deﬁnition                                                       racy of the revised predictions for all Px;
+More formally, we have a model x 7→f(x; θ) with      4. performance deterioration: how much test
+trained parameters θ, and a dataset of revisions        performance of the updated model deterio-
+⟨x, y, a⟩∈D, i.e., x is an input, y is the prediction          rates.3
+preferred by f(x; θ), and a is an alternative predic-   These values are obtained by comparing predic-
+tion which we would like an edited version of the    tions of f(·; θ) and f(·; θ′) for different subsets of
+model to prefer. Concretely, we keep the model ar-   inputs (e.g., D, Ox, Px) and against different tar-
+chitecture f ﬁxed, and seek alternative parameters    gets (e.g., gold-standard, original predictions, or
+θ′ such that for x, f(x; θ′) would prefer the predic-    alternative predictions). While these metrics are
+tion a instead of y while keeping all other predic-   straightforward to compute in principle, some can
+tions unchanged. In practice, we approximate the   be computationally demanding. For example, re-
+set of ‘all other predictions’ using a ﬁnite data set    tain accuracy depends on predictions for all inputs
+Ox of pairs ⟨x′, y′⟩with x′ ̸= x. Moreover, pre-  we have access to, which is potentially the entirety
+dictions need not be continuous nor differentiable    of the downstream task’s validation/test data.4
+outputs from the model; instead, they may result      Previous work has evaluated similar versions of
+from an arbitrary decision rule based on f(x; θ).    this task differently. Sinitsin et al. (2020) measure
+For example, when f(x; θ) parameterizes a discrete   performance deterioration and success rate but do
+distribution pY |X over the output space, the most    not measure retain accuracy nor equivalence accu-
+standard decision rule is to output the mode of the    racy. A small performance deterioration does not
+distribution: y = arg maxc∈Y pY |X(c|x, θ).2        guarantee high equivalence accuracy as the former
+                                                                is sensitive to changes in cases where the original
+Semantically equivalent inputs  Optionally, for
+                                            model makes wrong decisions. Assessing accuracy
+some revision ⟨x, y, a⟩∈D, we may also have
+                                                       against old or revised facts, which Zhu et al. (2020)
+a set Px of inputs semantically equivalent to x
+                                                     also do, does not help to measure the retain accu-
+(e.g., automatically-generated paraphrases). Such
+                                                        racy. We argue that preserving model predictions
+a set can be used in at least two ways:  i) to ob-
+                                                         for inputs not in D is critical in production settings,
+tain explicit supervision for changes that should
+                                           where model predictions might have been exten-
+be realized in tandem with ⟨x, y, a⟩; and, indepen-
+                                                      sively analyzed and tested. For x′ ̸∈D, we aim
+dently of that, ii) to evaluate whether an edited
+                                                      to maintain all original predictions as well as the
+model makes consistent predictions on semanti-
+                                          model scores f(x′; θ′) itself, effectively avoiding
+cally equivalent inputs. Note that in this work we
+                                                      the need to re-calibrate the models (for example, in
+never use paraphrases at test time, only for training
+                                                     applications where probability estimates are used
+and evaluation of our approach; generating them
+                                                downstream).
+at test time, while potentially helpful, would have
+compromised efﬁciency.                                       3  Related work
+
+2.2  Evaluation                              Modifying transformers  The most straightfor-
+                                           ward strategy to edit the knowledge of a modelTo test if a method g, producing edited parameters
+θ′, meets our desiderata, we measure:             would be to re-train it on a new dataset with addi-
+                                                           tional, modiﬁed, or removed facts. This is often
+  1. success rate: how much g successfully up-
+                                                    unfeasible as LMs require large-scale expensive     dates the knowledge in θ′, measured as accu-
+                                                        training that can hardly be reproduced by the most.
+    2Whereas in text classiﬁcation solving this is straightfor-                              of f(·;θ′)
+ward (for Y is small), in sequence-to-sequence we resort to        31 −accuracyaccuracy of f(·;θ)
+beam search to approximate the mode (for Y is too large or        4During training of g, however, we can use sub-sampling
+unbounded).                                                                       (i.e., mini batches) to approximate the metric.
+
+Sinitsin et al. (2020) propose a meta-learning ap-   reach the prediction quality of alternatives that re-
+proach (Finn et al., 2017) for model modiﬁcation    trieve and use context. Approaches that incentivize
+that learns parameters that are easily editable at test   memorization of factual knowledge show to be ben-
+time (e.g., updating the knowledge of the model    eﬁcial for many downstream tasks suggesting that
+requires only a few SGD steps from these learned    research on methods that effectively edit the mem-
+parameters). To have a reliable method, they em-   ory of a model is indeed important (Zhang et al.,
+ploy a regularized objective forcing the updated   2019; Sun et al., 2019, 2020). Some recent hy-
+model not to deviate from the original one. This    brid approaches that use both implicit and explicit
+technique suffers from three main limitations: i) it   memory show some beneﬁts for question answer-
+requires expensive and specialized pre-training, ii)    ing (Févry et al., 2020; Verga et al., 2020). Notably,
+it is sensitive to many hyper-parameters (e.g., the   language models that only rely on internal implicit
+weights of the regularizers and the subset of param-   memory are state-of-the-art for (multilingual-) En-
+eters to update), and iii) their multitask objective     tity Linking (De Cao et al., 2021a,b). An effective
+does not guarantee reliability (i.e., the model is   mechanism for editing LM’s implicit memory may
+penalized for diverging from the original, rather   be applicable in all these settings.
+than constrained not to).
+                                            Causal Interventions  Identiﬁcation of minimal   Instead of penalizing an updated model for devi-
+                                              changes to neural networks needed to achieve aating from the original one, Zhu et al. (2020) use
+                                                         certain behaviour has been studied in the context ofconstrained optimization. They use a less com-
+                                                   research in interpreting neural networks (Lakretzputationally expensive procedure as they re-ﬁne-
+                                                           et al., 2019; Vig et al., 2020; Elazar et al., 2021;tune on a speciﬁc downstream task (with altered
+                                                Csordás et al., 2021). The components which need
+data). Their method employs either an L2 or L∞
+                                                      to be updated can be interpreted as controllingconstraint between the original model’s parame-
+                                                   or encoding the corresponding phenomena (e.g.,ters and the edited ones. However, a norm-based
+                                                     subject-verb agreement). Much of this research fo-constraint on parameters ignores the highly non-
+                                                cused on modifying neuron activations rather thanlinear nature of LMs and how parameters deter-
+                                                weights and on sparse interventions (e.g., modify-mine the outputs of the model. Indeed, a minimal
+                                                  ing one or a handful of neurons). While far fromchange in parameter space may produce a com-
+                                                our goals, there are interesting connections withpletely different output for many datapoints leading
+                                                our work. For example, our analysis of updates into a potentially unreliable method. Additionally,
+                                                 Section 6.4, though very limited, may shed somethey show the need to select a subset of parameters
+                                                          light on how factual knowledge is encoded in theto be updated, which requires extra development
+                                                 parameters of a model.effort. Zhu et al.’s (2020) method is similar to Elas-
+tic Weight Consolidation (Kirkpatrick et al., 2017),
+                                       4  Method
+a technique developed for preventing catastrophic
+forgetting in neural network models.          We propose to treat the task of editing the mem-
+                                                ory of a neural model as a learning problem. In-
+Knowledge in Language Models  Petroni et al.                                                    stead of deﬁning a handcrafted algorithm to com-
+(2019) show that pre-trained language models re-                                                 pute the new parameters θ′, we learn a KNOWL-
+call factual knowledge without ﬁne-tuning, which                                       EDGEEDITOR:  a model that predicts θ′ condi-
+they do by feeding speciﬁc prompts to LMs. Hand-                                                   tioned on an atomic fact that we want to mod-
+crafted prompts have been found not to be the best                                                                  ify. Concretely, KNOWLEDGEEDITOR is a hyper-
+option to extract knowledge from LMs, and var-                                             network (Ha et al., 2017)—i.e., a neural network
+ious solutions have been proposed to understand                                                        that predicts the parameters of another network.
+what LMs ‘know’ (Jiang et al., 2020; Shin et al.,                                                Since the task requires every other prediction
+2020; Liu et al., 2021). Additionally, Roberts et al.                                                      to stay the same—except the one we desire to
+(2020) show that large models can be ﬁne-tuned to                                        change—we cast the learning task as a constrained
+access their internal memories to answer questions                                                   optimization problem.
+in natural language without any additional context
+and with surprisingly high accuracy—a setting they   Optimization  For an input x, changing the pre-
+referred to as closed-book question answering. Al-    diction of a model f(·; θ) to a corresponds to min-
+though performing quite well, these models cannot    imizing the loss L(θ; x, a) incurred when a is the
+
+target. Preserving the rest of the knowledge cor-   approximately via Monte Carlo (MC) sampling
+responds to constraining the updated parameter θ′    (see Appendix A for more details).  Finally, in
+such that model outputs f(·; θ′) do not change for   sequence-to-sequence models, assessing KL is
+x′ ∈Ox. Our editor g is a neural network parame-    intractable even for a single data point, as the
+terized by φ which we choose by optimising the fol-   sample space Y is unbounded. In such cases we
+lowing objective for each data-point ⟨x, y, a⟩∈D:   approximate the computation on a subset of the
+                                              sample space obtained via beam search.
+        min X L(θ′; ˆx, a)
+           φ                                    Architecture  Instead of predicting θ′ directly,                   ˆx∈Px                         (1)
+                                                our hyper-network predicts a shift ∆θ such that              s.t.  C(θ, θ′, f; Ox) ≤m ,
+                                                             θ′ = θ + ∆θ. A naive hyper-network implementa-
+where Px is the set of semantically equivalent in-    tion might be over-parameterized, as it requires a
+puts to x (for convenience we assume it contains    quadratic number of parameters with respect to the
+at least x), θ′ = θ + g(x, y, a; φ), C is a constraint    size of the target network. Thus, we apply a trick
+on the update, and the margin m ∈R>0 is a hy-    similar to Krueger et al. (2017) to make g tractably
+perparameter. The constraint is used to express    predict edits for modern large deep neural networks
+our desire to preserve model outputs unchanged for     (e.g., BERT). Namely, g makes use of the gradient
+x′ ̸= x. Note that only x, but not the rest of Px,   information ∇θL(θ; x, a) as it carries rich informa-
+are provided as input to the editor, as these will    tion about how f accesses the knowledge stored in
+not be available at test time. In our models, f(x; θ)   θ (i.e., which parameters to update to increase the
+parameterizes a discrete distribution pY |X over the   model likelihood given a).5
+output sample space Y, hence we choose to con-    We ﬁrst encode ⟨x, y, a⟩, concatenating the
+strain updates in terms of sums of Kullback-Leibler    text with special separator and feeding  it to a
+(KL) divergences from the updated model to the    bidirectional-LSTM (Hochreiter and Schmidhuber,
+original one: CKL(θ, θ′, f; Ox) =                  1997). Then, we feed the last LSTM hidden states
+                                                       to a FFNN that outputs a single vector h that con-
+                          pY |X(c|x′, θ)
+ X X pY |X(c|x′, θ) log                  (2)    ditions the further computations. To predict the
+                          pY |X(c|x′, θ′)                           n×m  x′∈Ox c∈Y                                              shift for a weight matrix W    ∈θ, we use
+                                           ﬁve FFNNs conditioned on h that predict vectors
+The constraint pushes the updated model to pre-                                               α, β ∈Rm, γ, δ ∈Rn and a scalar η ∈R. Then
+dict output distributions identical to the original
+one for all x′  ̸=  x. An alternative constraint                         ∆W = σ(η) ·   ˆα ⊙∇W L(W; x, a) + ˆβ    ,
+we could employ is an Lp norm over the param-                                                    (3)
+eter updates such that g is optimized to make a      with   ˆα = ˆσ(α)γ⊤  and   ˆβ = ˆσ(β)δ⊤,
+minimal update to the original model parameter:
+CLp(θ, θ′, f; Ox) = (Pi |θi −θ′i|p)1/p. This con-   where σ is the Sigmoid function (i.e., x 7→(1 +
+                                              exp(−x))−1), and ˆσ indicates the Softmax func-straint was previously used by Zhu et al. (2020).
+                                                      tion (i.e., x 7→exp(x)/ Pi exp(xi)). With thisHowever, such a constraint, expressed purely in
+                                                    formulation, the parameters for the hyper-networkparameter space and without regards to the model
+                                    φ scale linearly with the size of θ. An interpreta-architecture f, does not directly encourage model
+                                                        tion of Equation 3 is that an update ∆W is a gatedoutputs to be close to original ones in function
+                                        sum of a scaled gradient of the objective and a biasspace (i.e., the two functions to be similar). Neural
+                                                   term. The scale for the gradient and the bias aremodels are highly non-linear functions, so we do
+                                                 generated via an outer vector product as it allowsnot expect this type of constraint to be effective.
+                                                        for efﬁcient parameterization of a matrix with justThis will be empirically demonstrated in Section 6.
+                                                     three vectors. The gate lets the model keep some
+Tractable  approximations  Non-linear  con-   parameters unchanged.
+strained  optimization  is  generally  intractable,
+thus we employ Lagrangian relaxation (Boyd   Margin annealing  The margin m is a hyperpa-
+et al., 2004) instead. The constraint itself poses a    rameter and therefore ﬁxed. However, i) it is hard to
+computational challenge, as it requires assessing   choose since it is task-dependent, and ii) it should
+KL for all datapoints in the dataset at each training                                                  5A version of our hyper-network that does not use gradi-
+step. For tractability, we evaluate the constraint     ent information converges far too slowly.
+
+be as small as possible. If the margin is too small,   on a task with a more complex output space: closed-
+however, we risk having a small feasible set, and   book question answering (QA). For that we ﬁne-
+the model may never converge. To address both    tune a BART base model (Lewis et al., 2020) with
+issues, we pick some initial value for the margin    a standard seq2seq objective on the Zero-Shot Rela-
+and anneal it during training conditioned on vali-    tion Extraction (zsRE) dataset by Levy et al. (2017).
+dation performance: when the model successfully  We evaluate on this dataset because it is annotated
+changes > 90% of the predictions, we multiply the   with human-generated question paraphrases that
+margin by 0.8. We stop decreasing the margin once   we can use to measure our model’s robustness to
+it reaches a desirable small value. The annealing    semantically equivalent inputs. We create alterna-
+procedure prevents the model from diverging while    tive predictions for FC simply ﬂipping the labels,
+increasingly tightening the constraint.              whereas for QA we pick all hypotheses enumerated
+                                                    via beam search except the top-1. The latter en-
+5  Experimental Setting                                                    sures high-probability outcomes under the model
+                                                         distribution. We generate semantically equivalentWe aim to evaluate the effectiveness of KNOWL-
+                                                    inputs with back-translation. See Appendix B forEDGEEDITOR  comparing   to   baselines  on
+                                                      technical details on models and data collection.knowledge-intensive tasks where the importance of
+modifying the memory of a large LM has a broad
+                                       6  Resultsimpact. We then test our method on closed-book
+fact-checking and closed-book question answering                                                Table 1 reports the main results for fact-checking
+with the metrics proposed in Section 2.2.                                            and  question  answering.    Overall, KNOWL-
+                                      EDGEEDITOR achieves high performance in all5.1  Baselines
+                                                       metrics. Some other methods also achieve high ac-
+We compare against two baselines: i) ﬁne-tuning                                                 curacy in some metrics but always sacriﬁcing oth-
+and ii) the method proposed by Zhu et al. (2020).                                                        ers (i.e., never meeting all our desiderata at once).
+Fine-tuning corresponds to using standard gradient                                   We compare methods along different metrics (as
+descent, minimizing the loss for the fact/prediction                                              opposed to a single one), as there is no way to pre-
+we want to revise. For this, we follow Sinitsin                                                       cisely determine the importance of each of these
+et al. (2020) and employ RMSProp (Tieleman and                                                      metrics. To gather more insight, we compute their
+Hinton, 2012).6 We set the learning rate to 10−5                                                      stochastic convex combination with coefﬁcients
+and stop upon successfully changing the output                                             sampled from a Dirichlet distribution (with α = 1
+of the model or having reached a maximum of                                                      to ensure a very diverse set of combinations) and
+100 gradient steps. Zhu et al.’s (2020) method                                                     report in Figure 6 in Appendix C an estimate of
+extends ﬁne-tuning with an L∞constraint on pa-                                                    the probability that a system outperforms another
+rameters.7 Following both Sinitsin et al. (2020)                                                   across 1, 000 such combinations. The probability
+and Zhu et al. (2020) we report these baselines                                                   of our full method to outperform all baselines is
+ﬁne-tuning all parameters or just a subset of them.                                                  very high for both FC and QA (≈97% and ≈88%,
+We limit the search to selecting entire layers and                                                         respectively). In Figure 5 in Appendix C, we show
+base our decision on performance on a subset of                                                    the distributions of the combined scores (i.e., the
+the validation set. Note that selecting a subset of                                           raw data for the approximation reported in Fig-
+parameters for update requires an extensive search,                                                  ure 6). We then analyze different aspects of our
+which KNOWLEDGEEDITOR dispenses with by au-                                           method and the baselines.
+tomatically learning it.
+
+                                                    6.1  Success rate
+5.2  Models and data
+                                             Every method achieves an almost perfect successWe evaluate on closed-book fact-checking (FC)
+                                                         rate on fact-checking. All methods but ours applyﬁne-tune a BERT base model (Devlin et al., 2019)
+                                                 updates in a loop, stopping either when the newon the binary FEVER dataset (Thorne et al., 2018)
+                                          model is successfully updated or after reaching afrom KILT (Petroni et al., 2021). We also evaluate
+                                     maximum number of iterations. The success rate
+   6We tried alternatives, RMSProp was the most effective.                                                         for KNOWLEDGEEDITOR is not 100% because we
+   7We search the hyper-parameter for the penalty m ∈
+                                           do not apply more than one update even in case of{10−3, 5 × 10−4, 10−4, 5 × 10−5, 10−5} selecting the best
+based on the sum of success rate and retain accuracy.           failure. To this end, we also show an experiment
+
+                                    Fact-Checking                        Question Answering
+
+                          Success   Retain   Equiv.   Perform.   Success   Retain      Equiv.     Perform.
+   Method                 rate ↑    acc ↑    acc ↑      det ↓      rate ↑    acc ↑      acc ↑*        det ↓
+
+    Fine-tune (1st layer)      100.0     99.44    42.24      0.00      98.68     91.43    89.86 / 93.59     0.41
+    Fine-tune (all layers)     100.0     86.95    95.58      2.25      100.0     67.55    97.77 / 98.84     4.50
+   Zhu et al. (1st layer)      100.0     99.44    40.30      0.00      81.44     92.86    72.63 / 78.21     0.32
+   Zhu et al. (all layers)     100.0     94.07    83.30      0.10      80.65     95.56    76.41 / 79.38     0.35
+
+   Ours CL2                99.10     45.10    99.01     35.29      99.10     46.66    97.16 / 99.24     9.22
+
+   KNOWLEDGEEDITOR    98.80     98.14    82.69      0.10      94.65     98.73    86.50 / 92.06     0.11
+    + loop†                100.0     97.78    81.57      0.59      99.23     97.79    89.51 / 96.81     0.50
+    + Px ‡                 98.50     98.55    95.25      0.24      94.12     98.56    91.20 / 94.53     0.17
+    + Px + loop‡           100.0     98.46    94.65      0.47      99.55     97.68    93.46 / 97.10     0.95
+
+Table 1: Accuracy scores on fact-checking and question answering for the metrics presented in Section 2.2. *We
+report both the accuracy on the set of generated paraphrases (left) and human-annotated (right).†Apply updates in
+a loop, stopping when the update is a success or when reaching a maximum number of iterations (only at test time).
+‡Using paraphrases (semantically equivalent inputs) as additional supervision (only at training time).
+
+
+with our method with multiple updates within a     is ≈98% for both FC and QA). Conversely, as ex-
+loop employing the same stopping criteria as the    pected, our method with CL2 has very low retain
+baselines. Note that we apply this only at test time    accuracy (always < 50%). CL2 suffers from catas-
+(i.e., we do not train for multiple updates). When    trophic forgetting because it does not enforce the
+applying multiple updates also our method reaches   updated model to be close to the original one in
+a 100% success rate on fact-checking and almost    function space (i.e., the two functions to be similar)
+perfect accuracy (> 99%) for QA.8                  but just in parameter space.
+  Closed-book QA is a more challenging task      Fine-tuning all layers is successful but it affects
+since the output space is text and not just a bi-   the previously acquired knowledge negatively: re-
+nary label. In this setting, KNOWLEDGEEDITOR    tain accuracy is ≈87% and ≈68% for FC and
+achieves high accuracy (≈95% or > 99% with   QA, respectively, while performance deterioration
+the loop). Among all methods, KNOWLEDGEEDI-    in ≈2% and ≈4%. Fine-tuning a single layer is
+TOR gets the best success rate while also obtaining   more effective as it prevents over-ﬁtting (the best
+the best retain accuracy. In QA, Zhu et al.’s (2020)   model updates the 1st layer in both FC and QA).
+method does not reach a good success rate (≈80%).   However, in FC the updated model does not gener-
+We searched hyperparameters for their method also    alize on semantic equivalent inputs: the accuracy
+to have high retain accuracy, and indeed that is   on paraphrases is much lower even than versions
+higher than regular ﬁne-tuning. However, unlike    of our methods which do not use paraphrases in
+fact-checking, regular ﬁne-tuning for QA gets al-    training (42% vs. > 81%), and even more so when
+most perfect scores but at the expense of the retain   compared to those which use them (> 94%).
+accuracy. Sequence-to-sequence models are more      Fine-tuning with Zhu et al.’s (2020) method does
+sensitive to a slight parameter shift. This happens    not affect performance for FC much, which is not
+because minor changes may completely alter the    surprising since standard ﬁne-tuning already gets
+top-k prediction from beam search (in the case of   almost perfect scores. Differently, in the QA set-
+QA). Differently, in a binary classiﬁer (in the case    ting, using their constrained optimization boosts
+of FC) the probability of a prediction can change    the retain accuracy (up to +4% to normal ﬁne-
+substantially without crossing the decision bound-   tuning) but at the cost of a low success rate (≈80%
+ary (usually set at 0.5 when not calibrated).         where ﬁne-tuning gets the perfect score).
+
+6.2  Retaining previous knowledge                6.3  Accuracy on paraphrases
+
+KNOWLEDGEEDITOR maintains the predictions in  We evaluate our method both with and without the
+the validation set almost perfectly (retain accuracy    additional supervision of paraphrases to improve
+                                                   generalization—that corresponds to have Px as the
+    8Even if we do not train for multiple subsequent updates,
+                                                            set of paraphrases of x or Px = {x} in Equation 1,its success opens the possibility to add this at training time.
+We leave the exploration of this technique to future work.       respectively. Without this additional supervision,
+
+                    Should not flip (correct)        Should flip (correct)                             Should not flip (correct)        Should flip (correct)                             Should not flip (correct)        Should flip (correct)
+                    Should not flip (wrong)         Should flip (wrong)                              Should not flip (wrong)         Should flip (wrong)                              Should not flip (wrong)         Should flip (wrong)
+
+
+     4                                                  4                                                  4
+
+
+     2                                                  2                                                  2model                                                                        model                                                                        model
+
+     0                                                  0                                                  0updatede                                                                                                                  updatede                                                                                                                  updatede
+
+     2                                                  2                                                  2Logits                                                                                      Logits                                                                                      Logits
+
+     4                                                  4                                                  4
+
+
+            4       2      0       2       4                    4       2      0       2       4                    4       2      0       2       4
+                  Logits original model                               Logits original model                               Logits original model
+         (a) Fine-tune (all layers).                           (b) CL2.                              (c) Ours CKL with Px.
+
+ Figure 3: Distribution of logits of the original model and updated model on FEVER. Fine-tuning all layers (a)
+ leads to many errors, and the probability of the predictions does not stay the same even when they do not cross the
+ decision boundary. CL2 (b) successfully ﬂips labels, but it does not force the predictions to stay the same. For our
+ full method, CKL with Px (c), errors are mainly concentrated around the origin where the model is uncertain, and
+ small perturbations make logits to cross the decision boundary. Better view with colors.
+
+
+KNOWLEDGEEDITOR is already competitive in   methods. With an ideal method, all logits before
+ equivalence accuracy. However, employing this   and after an update have to stay the same (except
+ additional supervision is clearly beneﬁcial on both    the ones we want to change). From that ﬁgure,
+ tasks: we get the same success rate and re-train   we can see distributions of different types of er-
+ accuracy but equivalence accuracy improves by    rors such as datapoints whose predictions were
+> 70% on FC and > 30% on QA, respectively   mistakenly ﬂipped (from true to false or the other
+ (for generated paraphrases). In FC, although ﬁne-  way around). These errors are mostly concentrated
+ tuning of a single layer proved to be optimal in   around the origin, where small perturbations make
+ terms of success rate and retain accuracy, it per-    logits cross the decision boundary. When ﬁne-
+ forms poorly for paraphrases. That is the model    tuning all layers, we can see a clear impact on
+ successfully updates the prediction of a particular    logits, they undergo a lot of change (i.e., points do
+ datapoint, but does not update predictions of para-   not concentrate around the diagonal). Indeed, ﬁne-
+ phrases. This indicates that ﬁne-tuning to edit the    tuning makes many datapoints cross the decision
+ knowledge of a model does not generalize well,   boundary and their probabilities to change from
+ and it overﬁts to speciﬁc inputs. On QA, also Zhu    the original ones. The failure of CL2 is visible in
+ et al. (2020) performs poorly compared to our or    Figure 3b as this method preserves almost none of
+ other methods.                                       the previous predictions. Instead KNOWLEDGEED-
+  When other methods perform on par or better   ITOR preserves almost all of the predicted labels
+ than ours on paraphrases, they do not have good re-   as well as their probabilities (most datapoints in
+ tain accuracy (e.g., see QA ﬁne-tuning on Table 1).   Figure 3c stay on the diagonal).
+ Fine-tuning on QA seems to generalize better than                                  We also report visualizations of the average
+ on FC, but does not preserve previous knowledge.                                                weight updates for the QA experiment in Figure 4.
+ In Table 1 we also report both the accuracy on the                                 We report the setting with additional supervision
+ set of generated and human-generated paraphrases.                                            from paraphrases (but the heatmaps are similar
+ Surprisingly, the scores on human-generated para-                                                 without them). There are three main observations
+ phrases are higher. We speculate that this happens                                            from this plot. First, gradients are mostly concen-
+ because automatic paraphrases are sometimes not                                                           trated on the ﬁrst encoder layer and the last decoder
+ semantically equivalent or ﬂuent.                                                          layer. Gradients explain why the best subset of
+                                                 parameters to update is the ﬁrst layer. Secondly,
+ 6.4  Analysis of model updates
+                                                  ﬁne-tuning does not preserve gradient magnitudes
+ In Figure 3 we plot the distribution of logits of   and updates the whole model almost uniformly.
+ the original and updated model on FC for different   That happens because of the optimizer’s adaptive
+
+     Encoder       Decoder          Encoder       Decoder          Encoder       Decoder
+                                                                                        WVselfWVself                WVself                 WVself             WV                                                                                                                                    self                 WVself
+               WQself                                WQself                                WQself
+WQself            WOself                WQself            WOself                WQself            WOself
+                WKself                                 WKself                                 WKself
+WOself                    FF2                WO                                                                                             self                    FF2                WO                                                                                                                                                                                      self                    FF2
+                        FF1                                                 FF1                                                 FF1WKself                                 WKself                                 WKself
+                WVenc                                 WVenc                                 WVenc
+ FF2            WQenc                          FF2            WQenc                          FF2            WQenc
+               WOenc                                WOenc                                WOenc
+ FF1                                                 FF1                                                 FF1                WKenc                                 WKenc                                 WKenc
+     1 2 3 4 5 6       1 2 3 4 5 6            1 2 3 4 5 6       1 2 3 4 5 6            1 2 3 4 5 6       1 2 3 4 5 6
+      Layer          Layer             Layer          Layer             Layer          Layer
+             (a) Gradients.                          (b) Fine-tune (all layers).                 (c) KNOWLEDGEEDITOR + Px.
+
+Figure 4: Average normalized magnitude of updates on weight matrices across layers for the QA experiment.
+Fine-tuning updates all layers uniformly while our updates are more sparse.
+
+
+learning rate that initially erases the gradient di-   based on a hyper-network that learns to modify
+rection. The gradient direction plays a role only    implicit knowledge stored within LM parameters
+after a couple of gradient steps, but most of the    efﬁciently and reliably. We provide comprehensive
+time, the method only needs one step to modify its    evaluations for our models against different vari-
+knowledge. Lastly, our updates are sparser and are    ants of ﬁne-tuning demonstrating the advantage of
+not consistent with the gradient for changing the   our approach. The magnitude of the updates pre-
+predictions. That indicates that our method learns    dicted by our method may unfold the mechanisms
+to use the gradient in a meaningful way (i.e. ignor-   used by the LMs to encode factual knowledge; we
+ing some directions or manipulating its magnitude).   leave such investigation for future work.
+It is surprising that the knowledge manipulation
+seems to be achieved by primarily modifying pa-
+                                             Ethical Considerations
+rameters affecting the shape of the attention distri-
+       K      Q
+bution (W self and W self) rather than, e.g., values                                             Technology built upon pre-trained LMs inherits
+(W self).V   As we discussed, the hyper-network may                                         some or all of their potential harms (Bender et al.,
+be regarded as a probe providing insights about the
+                                                 2021). Our technology for editing the knowledge
+mechanism used by the model to encode the knowl-
+                                                   of LMs does not exacerbate their potential harms
+edge (Vig et al., 2020). For example, the focus
+                                              and can, in fact, be used to mitigate harms, as mod-
+on the bottom layer is already intriguing, as it con-
+                                                           els can be corrected once problems are discovered.
+trasts with claims that memorization happens in top
+                                              However, we note that malicious uses of our knowl-
+layers of image classiﬁcation models (Stephenson
+                                             edge editor are possible. For example, malicious
+et al., 2021), hinting at substantial differences in
+                                                  agents may use the techniques presented in this
+the underlying memorization mechanisms in NLP
+                                          work to inject incorrect knowledge into LMs.
+and vision. Proper investigation is however outside
+of the scope of this study. See Appendix C for
+some additional analysis.                    Acknowledgments
+
+7  Conclusions                           The authors want to thank Michael Schlichtkrull,
+                                            Lena Voita and Luisa Quarta for helpful discussions
+In this work, we explore the task of editing the fac-   and support.  This project is supported by SAP
+tual knowledge implicitly stored in the parameters    Innovation Center Network, ERC Starting Grant
+of Language Models. For this task, we formally   BroadSem (678254), the Dutch Organization for
+deﬁne desiderata, the objective, and a set of metrics    Scientiﬁc Research (NWO) VIDI 639.022.518, and
+to measure the efﬁcacy of different methods. We    the European Union’s Horizon 2020 research and
+concretely evaluate that on two benchmarks based    innovation programme under grant agreement No
+on closed-book fact-checking and question answer-   825299 (Gourmet).
+ing. We propose KNOWLEDGEEDITOR, a method
+
+References                                                 of the North American Chapter of the Association
+                                                                for Computational Linguistics: Human Language
+Yonatan Belinkov and James Glass. 2019.  Analysis                                                           Technologies, Volume 1 (Long and Short Papers),
+  methods in neural language processing: A survey.                                                      pages 4171–4186, Minneapolis, Minnesota. Associ-
+  Transactions of the Association for Computational                                                              ation for Computational Linguistics.
+   Linguistics, 7:49–72.
+                                                    Yanai Elazar, Shauli Ravfogel, Alon Jacovi, and Yoav
+Emily M. Bender, Timnit Gebru, Angelina McMillan-
+                                                       Goldberg. 2021. Amnesic probing: Behavioral ex-
+  Major, and Shmargaret Shmitchell. 2021. On the
+                                                            planation with amnesic counterfactuals.  Transac-
+  dangers of stochastic parrots: Can language models
+                                                                tions of the Association for Computational Linguis-
+  be too big? In Proceedings of the 2021 ACM Confer-
+                                                                           tics, 9:160–175.
+  ence on Fairness, Accountability, and Transparency,
+  FAccT ’21, page 610–623, New York, NY, USA. As-                                                        Thibault Févry, Livio Baldini Soares, Nicholas FitzGer-
+   sociation for Computing Machinery.                                                                   ald, Eunsol Choi, and Tom Kwiatkowski. 2020. En-
+                                                                            tities as experts: Sparse memory access with entityStephen Boyd, Stephen P Boyd, and Lieven Vanden-
+                                                             supervision. In Proceedings of the 2020 Conference   berghe. 2004. Convex optimization. Cambridge uni-
+                                                 on Empirical Methods in Natural Language Process-   versity press.
+                                                          ing (EMNLP), pages 4937–4951, Online. Associa-
+Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie       tion for Computational Linguistics.
+  Subbiah, Jared Kaplan, Prafulla Dhariwal, Arvind
+                                                    Chelsea Finn, Pieter Abbeel, and Sergey Levine. 2017.   Neelakantan, Pranav Shyam, Girish Sastry, Amanda
+                                                       Model-agnostic meta-learning for fast adaptation of   Askell,  Sandhini  Agarwal,  Ariel  Herbert-Voss,
+                                                    deep networks.  In Proceedings of the 34th Inter-  Gretchen Krueger, Tom Henighan, Rewon Child,
+                                                           national Conference on Machine Learning, ICML  Aditya Ramesh, Daniel M. Ziegler,  Jeffrey Wu,
+                                                       2017, Sydney, NSW, Australia, 6-11 August 2017,  Clemens Winter, Christopher Hesse, Mark Chen,
+                                                  volume 70 of Proceedings of Machine Learning Re-   Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin
+                                                            search, pages 1126–1135. PMLR.  Chess, Jack Clark, Christopher Berner, Sam Mc-
+   Candlish, Alec Radford, Ilya Sutskever, and Dario
+                                                 David Ha, Andrew M. Dai, and Quoc V. Le. 2017.  Amodei. 2020. Language models are few-shot learn-
+                                                      Hypernetworks.   In 5th International Conference   ers. In Advances in Neural Information Processing
+                                                 on Learning Representations, ICLR 2017, Toulon,  Systems 33: Annual Conference on Neural Informa-
+                                                        France, April 24-26, 2017, Conference Track Pro-   tion Processing Systems 2020, NeurIPS 2020, De-
+                                                           ceedings. OpenReview.net.  cember 6-12, 2020, virtual.
+
+                                               Sepp  Hochreiter  and  Jürgen  Schmidhuber.  1997.Róbert Csordás, Sjoerd van Steenkiste, and Jürgen
+                                               Long short-term memory.   Neural computation,  Schmidhuber. 2021.   Are neural nets modular?
+                                                       9(8):1735–1780.   inspecting functional modularity through differen-
+   tiable weight masks. In Submitted to International
+                                               Zhengbao Jiang, Frank F. Xu, Jun Araki, and Graham
+  Conference on Learning Representations.
+                                                      Neubig. 2020. How can we know what language
+Nicola De Cao, Gautier Izacard, Sebastian Riedel, and      models know?  Transactions of the Association for
+                                                     Computational Linguistics, 8:423–438.  Fabio Petroni. 2021a.   Autoregressive entity re-
+   trieval.  In International Conference on Learning
+                                              Mandar Joshi, Eunsol Choi, Daniel Weld, and Luke   Representations.
+                                                          Zettlemoyer. 2017.  TriviaQA: A large scale dis-
+Nicola De Cao, Michael Sejr Schlichtkrull, Wilker       tantly supervised challenge dataset for reading com-
+  Aziz, and Ivan Titov. 2020.  How do decisions       prehension. In Proceedings of the 55th Annual Meet-
+  emerge across layers in neural models?  interpreta-      ing of the Association for Computational Linguistics
+   tion with differentiable masking. In Proceedings of      (Volume 1: Long Papers), pages 1601–1611, Van-
+   the 2020 Conference on Empirical Methods in Nat-      couver, Canada. Association for Computational Lin-
+   ural Language Processing (EMNLP), pages 3243–       guistics.
+  3255, Online. Association for Computational Lin-
+                                                 Marcin  Junczys-Dowmunt,  Roman  Grundkiewicz,   guistics.
+                                                Tomasz Dwojak, Hieu Hoang, Kenneth Heaﬁeld,
+Nicola De Cao, Ledell Wu, Kashyap Popat, Mikel     Tom Neckermann, Frank Seide, Ulrich Germann,
+   Artetxe,  Naman  Goyal,   Mikhail  Plekhanov,     Alham Fikri Aji, Nikolay Bogoychev, André F. T.
+  Luke  Zettlemoyer,  Nicola Cancedda,  Sebastian       Martins, and Alexandra Birch. 2018. Marian: Fast
+   Riedel, and Fabio Petroni. 2021b.   Multilingual       neural machine translation in C++. In Proceedings
+   autoregressive  entity  linking.    arXiv  preprint       of ACL 2018, System Demonstrations, pages 116–
+  arXiv:2103.12528.                                     121, Melbourne, Australia. Association for Compu-
+                                                                  tational Linguistics.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and
+   Kristina Toutanova. 2019.  BERT: Pre-training of    Diederik P. Kingma and Jimmy Ba. 2015. Adam: A
+  deep bidirectional transformers for language under-     method for stochastic optimization.  In 3rd Inter-
+   standing.  In Proceedings of the 2019 Conference       national Conference on Learning Representations,
+
+  ICLR 2015, San Diego, CA, USA, May 7-9, 2015,      2021.  GPT Understands, Too.   arXiv preprint
+  Conference Track Proceedings.                         arXiv:2103.10385.
+
+J. Kirkpatrick, Razvan Pascanu, Neil C. Rabinowitz,   Fabio Petroni, Aleksandra Piktus, Angela Fan, Patrick
+   J. Veness, G. Desjardins, Andrei A. Rusu, K. Milan,      Lewis,  Majid Yazdani,  Nicola De Cao,  James
+  John Quan, Tiago Ramalho, Agnieszka Grabska-      Thorne, Yacine Jernite, Vladimir Karpukhin, Jean
+  Barwinska, Demis Hassabis, C. Clopath, D. Ku-      Maillard, Vassilis Plachouras, Tim Rocktäschel, and
+  maran, and Raia Hadsell. 2017. Overcoming catas-      Sebastian Riedel. 2021.  KILT: a benchmark for
+   trophic forgetting in neural networks. Proceedings      knowledge intensive language tasks. In Proceedings
+   of the National Academy of Sciences, 114:3521 –       of the 2021 Conference of the North American Chap-
+  3526.                                                          ter of the Association for Computational Linguistics:
+                                          Human Language Technologies, pages 2523–2544,
+David Krueger, Chin-Wei Huang, Riashat Islam, Ryan                                                          Online. Association for Computational Linguistics.
+   Turner, Alexandre Lacoste, and Aaron Courville.
+  2017.  Bayesian hypernetworks.   arXiv preprint
+                                                    Fabio  Petroni, Tim Rocktäschel,  Sebastian Riedel,
+  arXiv:1710.04759.
+                                                             Patrick Lewis, Anton Bakhtin, Yuxiang Wu, and
+                                                      Alexander Miller. 2019. Language models as knowl-Tom Kwiatkowski, Jennimaria Palomaki, Olivia Red-
+                                                    edge bases?   In Proceedings of the 2019 Confer-   ﬁeld, Michael Collins, Ankur Parikh, Chris Al-
+                                                      ence on Empirical Methods in Natural Language   berti, Danielle Epstein, Illia Polosukhin, Jacob De-
+                                                        Processing and the 9th International Joint Confer-   vlin, Kenton Lee, Kristina Toutanova, Llion Jones,
+                                                      ence on Natural Language Processing (EMNLP-  Matthew Kelcey, Ming-Wei Chang, Andrew M. Dai,
+                                                   IJCNLP), pages 2463–2473, Hong Kong, China. As-  Jakob Uszkoreit, Quoc Le, and Slav Petrov. 2019.
+                                                              sociation for Computational Linguistics.   Natural questions: A benchmark for question an-
+  swering research.  Transactions of the Association
+   for Computational Linguistics, 7:453–466.            Alec Radford, Jeffrey Wu, Rewon Child, David Luan,
+                                                      Dario Amodei, and Ilya Sutskever. 2019. Language
+Yair Lakretz, German Kruszewski, Theo Desbordes,      models are unsupervised multitask learners. OpenAI
+  Dieuwke Hupkes, Stanislas Dehaene, and Marco Ba-       blog, 1(8):9.
+   roni. 2019.  The emergence of number and syn-
+   tax units in LSTM language models.  In Proceed-   Colin Raffel, Noam Shazeer, Adam Roberts, Kather-
+   ings of the 2019 Conference of the North American       ine Lee, Sharan Narang, Michael Matena, Yanqi
+  Chapter of the Association for Computational Lin-      Zhou, Wei Li, and Peter J. Liu. 2020.  Exploring
+   guistics: Human Language Technologies, Volume 1       the limits of transfer learning with a uniﬁed text-to-
+  (Long and Short Papers), pages 11–20, Minneapolis,       text transformer. Journal of Machine Learning Re-
+  Minnesota. Association for Computational Linguis-      search, 21(140):1–67.
+   tics.
+                                                   Pranav Rajpurkar, Jian Zhang, Konstantin Lopyrev, and
+Nayeon Lee, Belinda Z. Li, Sinong Wang, Wen-tau      Percy Liang. 2016. SQuAD: 100,000+ questions for
+  Yih, Hao Ma, and Madian Khabsa. 2020. Language      machine comprehension of text. In Proceedings of
+  models as fact checkers?   In Proceedings of the       the 2016 Conference on Empirical Methods in Natu-
+  Third Workshop on Fact Extraction and VERiﬁca-       ral Language Processing, pages 2383–2392, Austin,
+   tion (FEVER), pages 36–41, Online. Association for      Texas. Association for Computational Linguistics.
+  Computational Linguistics.
+                                             Marco  Tulio  Ribeiro,  Sameer  Singh,  and  Carlos
+Omer Levy, Minjoon Seo, Eunsol Choi, and Luke
+                                                            Guestrin. 2016.  Model-agnostic interpretability of
+   Zettlemoyer. 2017. Zero-shot relation extraction via
+                                                   machine learning. International Conference on Ma-
+   reading comprehension. In Proceedings of the 21st
+                                                         chine Learning (ICML) Workshop on Human Inter-
+  Conference on Computational Natural Language
+                                                                  pretability in Machine Learning.
+  Learning (CoNLL 2017), pages 333–342, Vancou-
+   ver, Canada. Association for Computational Linguis-
+                                       Adam Roberts, Colin Raffel, and Noam Shazeer. 2020.   tics.
+                                       How much knowledge can you pack into the param-
+Mike  Lewis,  Yinhan  Liu,  Naman  Goyal,  Mar-       eters of a language model?  In Proceedings of the
+   jan Ghazvininejad, Abdelrahman Mohamed, Omer      2020 Conference on Empirical Methods in Natural
+  Levy,  Veselin Stoyanov,  and Luke Zettlemoyer.     Language Processing (EMNLP), pages 5418–5426,
+  2020. BART: Denoising sequence-to-sequence pre-      Online. Association for Computational Linguistics.
+   training for natural language generation, translation,
+  and comprehension. In Proceedings of the 58th An-   Rico Sennrich, Barry Haddow, and Alexandra Birch.
+  nual Meeting of the Association for Computational      2016.  Improving neural machine translation mod-
+   Linguistics, pages 7871–7880, Online. Association        els with monolingual data.  In Proceedings of the
+   for Computational Linguistics.                         54th Annual Meeting of the Association for Compu-
+                                                                tational Linguistics (Volume 1: Long Papers), pages
+Xiao  Liu,  Yanan  Zheng,  Zhengxiao  Du,  Ming      86–96, Berlin, Germany. Association for Computa-
+  Ding,  Yujie Qian,  Zhilin Yang,  and  Jie Tang.       tional Linguistics.
+
+Taylor Shin, Yasaman Razeghi, Robert L. Logan IV,      and VERiﬁcation.   In Proceedings of the 2018
+   Eric Wallace, and Sameer Singh. 2020. AutoPrompt:      Conference  of  the North American Chapter  of
+   Eliciting Knowledge from Language Models with       the  Association  for  Computational  Linguistics:
+  Automatically Generated Prompts.   In Proceed-    Human Language Technologies, Volume 1 (Long
+   ings of the 2020 Conference on Empirical Methods       Papers), pages 809–819, New Orleans, Louisiana.
+   in Natural Language Processing (EMNLP), pages      Association for Computational Linguistics.
+  4222–4235, Online. Association for Computational
+   Linguistics.                                     Tijmen Tieleman and Geoffrey Hinton. 2012. Lecture
+                                               6.5—RmsProp: Divide the gradient by a running av-
+Anton Sinitsin, Vsevolod Plokhotnyuk, Dmitriy Pyrkin,      erage of its recent magnitude. COURSERA: Neural
+   Sergei Popov, and Artem Babenko. 2020. Editable      networks for machine learning, 4(2):26–31.
+   neural networks. In 8th International Conference on
+  Learning Representations, ICLR 2020, Addis Ababa,   Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob
+   Ethiopia, April 26-30, 2020. OpenReview.net.             Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz
+                                                             Kaiser, and Illia Polosukhin. 2017. Attention is all
+Nitish Srivastava, Geoffrey Hinton, Alex Krizhevsky,     you need. In Advances in Neural Information Pro-
+   Ilya Sutskever, and Ruslan Salakhutdinov. 2014.      cessing Systems 30: Annual Conference on Neural
+  Dropout: A simple way to prevent neural networks      Information Processing Systems 2017, December 4-
+  from overﬁtting. Journal of Machine Learning Re-       9, 2017, Long Beach, CA, USA, pages 5998–6008.
+   search, 15(56):1929–1958.
+                                                        Pat Verga, Haitian Sun, Livio Baldini Soares, and
+Cory Stephenson, Suchismita Padhy, Abhinav Ganesh,      William W Cohen. 2020.  Facts as experts: Adapt-
+  Yue Hui, Hanlin Tang, and SueYeon Chung. 2021.      able and interpretable neural memory over symbolic
+  On the geometry of generalization and memoriza-      knowledge. arXiv preprint arXiv:2007.00849.
+   tion in deep neural networks. Proceedings of Inter-
+   national Conference on Learning Representations    Jesse Vig, Sebastian Gehrmann, Yonatan Belinkov,
+  (ICLR).                                            Sharon Qian, Daniel Nevo, Yaron Singer, and Stu-
+                                                                      art Shieber. 2020.  Causal mediation analysis for
+Yu Sun, Shuohuan Wang, Yukun Li, Shikun Feng, Xuyi       interpreting neural NLP: The case of gender bias.
+  Chen, Han Zhang, Xin Tian, Danxiang Zhu, Hao      NeurIPS.
+   Tian, and Hua Wu. 2019.  Ernie: Enhanced rep-
+   resentation through knowledge integration.  arXiv    Elena Voita, Rico Sennrich, and Ivan Titov. 2019. The
+   preprint arXiv:1904.09223.                           bottom-up evolution of representations in the trans-
+                                                          former: A study with machine translation and lan-
+Yu Sun, Shuohuan Wang, Yukun Li, Shikun Feng, Hao      guage modeling objectives.  In Proceedings of the
+   Tian, Hua Wu, and Haifeng Wang. 2020. Ernie 2.0:     2019 Conference on Empirical Methods in Natu-
+ A continual pre-training framework for language un-       ral Language Processing and the 9th International
+   derstanding.  Proceedings of the AAAI Conference       Joint Conference on Natural Language Processing
+  on Artiﬁcial Intelligence, 34(05):8968–8975.           (EMNLP-IJCNLP), pages 4396–4406, Hong Kong,
+                                                        China. Association for Computational Linguistics.
+Ilya Sutskever, James Martens, and Geoffrey E. Hin-
+   ton. 2011.   Generating text with recurrent neu-   John Wieting and Kevin Gimpel. 2018.  ParaNMT-
+   ral networks.   In Proceedings of the 28th Inter-     50M: Pushing the limits of paraphrastic sentence em-
+   national Conference on Machine Learning, ICML      beddings with millions of machine translations. In
+  2011, Bellevue, Washington, USA, June 28 - July 2,      Proceedings of the 56th Annual Meeting of the As-
+  2011, pages 1017–1024. Omnipress.                      sociation for Computational Linguistics (Volume 1:
+                                                Long Papers), pages 451–462, Melbourne, Australia.
+Ilya Sutskever, Oriol Vinyals, and Quoc V. Le. 2014.      Association for Computational Linguistics.
+  Sequence to sequence learning with neural networks.
+   In Advances in Neural Information Processing Sys-   Thomas Wolf, Lysandre Debut, Victor Sanh, Julien
+  tems 27:  Annual Conference on Neural Informa-     Chaumond, Clement Delangue, Anthony Moi, Pier-
+   tion Processing Systems 2014, December 8-13 2014,       ric Cistac, Tim Rault, Remi Louf, Morgan Funtow-
+  Montreal, Quebec, Canada, pages 3104–3112.              icz, Joe Davison, Sam Shleifer, Patrick von Platen,
+                                                         Clara Ma, Yacine Jernite, Julien Plu, Canwen Xu,
+Christian Szegedy, Vincent Vanhoucke, Sergey Ioffe,      Teven Le Scao, Sylvain Gugger, Mariama Drame,
+  Jonathon Shlens, and Zbigniew Wojna. 2016.  Re-      Quentin Lhoest, and Alexander Rush. 2020. Trans-
+   thinking the inception architecture for computer vi-      formers:  State-of-the-art natural language process-
+   sion.  In 2016 IEEE Conference on Computer Vi-       ing. In Proceedings of the 2020 Conference on Em-
+   sion and Pattern Recognition, CVPR 2016, Las Ve-       pirical Methods in Natural Language Processing:
+   gas, NV, USA, June 27-30, 2016, pages 2818–2826.      System Demonstrations, pages 38–45, Online. Asso-
+  IEEE Computer Society.                                   ciation for Computational Linguistics.
+
+James   Thorne,    Andreas   Vlachos,    Christos   Zhengyan Zhang, Xu Han, Zhiyuan Liu, Xin Jiang,
+   Christodoulopoulos,   and  Arpit   Mittal.  2018.     Maosong Sun, and Qun Liu. 2019.  ERNIE: En-
+  FEVER: a large-scale dataset for fact extraction      hanced language representation with informative en-
+
+   tities.   In Proceedings of the 57th Annual Meet-
+   ing of the Association for Computational Linguis-
+   tics, pages 1441–1451, Florence, Italy. Association
+   for Computational Linguistics.
+
+Chen Zhu, Ankit Singh Rawat, Manzil Zaheer, Sri-
+  nadh Bhojanapalli, Daliang Li, Felix Yu, and Sanjiv
+  Kumar. 2020. Modifying memories in transformer
+  models. arXiv preprint arXiv:2012.00363.
+
+A  Relaxation and Approximation of         of the knowledge acquired in pre-training and en-
+    Constrained Optimization               coded in the parameters of the model. For this
+                                                         task, we used the Zero-Shot Relation Extraction
+Given a objective to minimize in the form of
+                                              (zsRE) dataset by Levy et al. (2017). We pre-
+        min   E   [f(x, θ)]                      fer zsRE to other popular QA datasets such as
+           φ    x∼p(x)                  SQuAD (Rajpurkar et al., 2016), Natural Ques-
+               1                            (4)    tions (Kwiatkowski et al., 2019) or TriviaQA (Joshi
+              s.t.  X C(y, θ) ≤m ,
+                |Y|                                    et al., 2017) because it is annotated with human-
+                  x∈Y
+                                                  generated question paraphrases that we can use to
+can be solved with Lagrangian relaxation (Boyd    evaluate our model’s robustness to semantically
+et al., 2004) using a multiplier α ∈R≥0 and be    equivalent inputs. zsRE is speciﬁcally constructed
+approximated by sampling y ∼p(y) to              not to have relation overlaps between training and
+                                                             test (i.e.  it is zero-shot). We re-split the dataset
+   min max f(x, θ) + α · (C(y, θ) −m)  .    (5)    to have the same distribution in training and test
+    φ   α
+                                             splits—we are not interested in zero-shot specif-
+Equation 5 can be evaluated with automatic differ-    ically, so we avoid the additional complexity it
+entiation and optimized via gradient descent.          entails. The original zsRE dataset has 147,909
+                                                         training and 3,724 validation instances respectively.
+B  Experimental setting                       After re-splitting and employing all paraphrases,
+                                    we have 244,173 training and 27,644 validation
+B.1  Fact-checking
+                                                    instances respectively. For this task, we ﬁne-tune
+We evaluate on closed-book fact-checking (FC)                                                a BART base model (Lewis et al., 2020) with a
+using the binary FEVER dataset (Thorne et al.,                                                  standard seq2seq objective, i.e., maximizing the
+2018) from KILT (Petroni et al., 2021). FEVER has                                          model likelihood given the observed output se-
+104,966 training and 10,444 validation instances                                             quence (Sutskever et al., 2011, 2014) and regu-
+respectively. For every input claim x, the model                                                       larized with dropout (Srivastava et al., 2014) and
+predicts the probability f(x; θ) that it may be true.                                                       label smoothing (Szegedy et al., 2016). The ﬁnal
+This is done without retrieving any evidence from                                            model has an accuracy (exact match between model
+a corpus, instead, just by relying on the knowledge                                                     prediction and gold standard) of 22.1%.10
+accumulated during pre-training and encoded in its
+own parameters—this is similar to Lee et al. (2020)
+that investigate closed-book and zero-shot FC us-   B.3  Generating alternative predictions
+ing masked-LMs. Concretely, we ask the LM to
+perform binary classiﬁcation. We ﬁne-tune a BERT   Generation  of  alternative  predictions  is  task-
+base model (Devlin et al., 2019) with an additional   dependent as it requires producing a plausible sub-
+linear layer on top that maps the hidden state cor-    stitute target for a given input—e.g., if we need to
+responding to the BOS (beginning of a sentence)    edit the knowledge about a head of a state, a plau-
+token to the probability of the positive label. Given    sible substitute label should be a person, not a ran-
+the available supervision, we train the architecture   dom (even if well-formed) string. Fact-Checking
+to maximize the model likelihood penalized by en-    is straightforward: we simply ﬂip the label, as it
+tropy regularization and weight decay. The ﬁnal     is binary classiﬁcation. For QA, we exploit high-
+model has an accuracy of 77.1%.9                    probability outcomes under the model distribution
+                                                    as a proxy to plausible revisions. In particular, we
+B.2  Question answering                                                 pick all hypotheses enumerated via beam search
+We also evaluate on a task with a more com-   except the top-1.11
+plex sample space: closed-book question answer-
+ing (QA). Here QA is treated as a sequence-to-
+                                                                    10This is more than reported by Petroni et al. (2021) on thesequence problem from question to answer with-
+                                                                   original split of zsRE. That is because the original split aims
+out retrieving nor providing any evidence (Roberts     at zero-shot evaluation, while we have an overlap of relation
+et al., 2020). This, as in FC, emphasises the role    types between training and validation sets.
+                                                                  11This does not always guarantee that the alternative pre-
+    9This is comparable with what reported by Petroni et al.    dictions have the same semantic type as the original one, but
+(2021) for a larger BART model.                                               it is likely since the model assigns high probability to them.
+
+B.4  Semantically equivalent inputs          Adam (Kingma and Ba, 2015) (learning rate of
+                                                   3e-5) with weight decay (1e-2) and a linear sched-We would like the updated model to be consistent
+                                                      ule with warm-up (50k total number of updates andfor semantically equivalent inputs (see Px in Sec-
+                                            500 warm-up updates). We trained for a maximumtion 2 and 4) as opposed to just learning a new
+                                                   of 20 epochs and employ model selection usingspeciﬁc and isolated datapoint. This consistency is
+                                                 accuracy on the validation set.12indicative of an effective editing mechanism that
+                                     KNOWLEDGEEDITOR models are trained withtaps into the knowledge stored in the model. How-
+                                                a batch size of 1024 for FC and 256 for QA usingever, not all datasets come with paraphrases of its
+                                    Adam (learning rate of 3e-4 for the parameters andinputs (e.g., in our case FEVER does not come
+                                                 1e-1 for the Lagrangian multiplier) with weight de-with paraphrases and zsRE only has paraphrases
+                                              cay (1e-2) and a linear schedule with a warm-upfor 30% for the dataset). To this end, we gen-
+                                               (200k total number of updates and 1k warm-up up-erate semantically equivalent inputs using round-
+                                                        dates). We trained for a maximum of 200 epochstrip translation (Sennrich et al., 2016; Wieting and
+                                              and employ model selection using overall accuracyGimpel, 2018). We employ English-to-German
+                                                   (success rate and retain accuracy) on the valida-and German-to-English Transformer models from
+                                                        tion set (approximated using mini-batches).13 TheMarian Neural Machine Translation (MarianNMT;
+                                             margin for the CKL is annealed between 1e-1 andJunczys-Dowmunt et al., 2018) provided by Hug-
+                                                 1e-3 for the fact-checking model, and between 1e-3gingface Transformers (Wolf et al., 2020). We use
+                                             and 1e-5 for the BART question answering model.beam search with beam size 5 to obtain 25 para-
+                                              For the sequence-to-sequence loss, we employ aphrases. From this set, we exclude any candidate
+                                                    cross-entropy loss with label smoothing of 0.1.paraphrase ˆx of x for which the prediction ˆy sup-
+ported by f(ˆx; θ) does not match the prediction y                           C  Additional Results
+supported by f(x; θ). This ﬁltering ensures that, ac-
+cording to the current model, all paraphrases have   Update Analysis  During preliminary  experi-
+the exact same prediction.                         ments, we studied a version of our hyper-network
+                                                           that did not exploit gradient information (see Equa-
+B.5  Architecture details                           tion 3). Without gradient information, on FC the
+                                            models converged ≈10 times slower to reach theThe original models we want to modify are a BERT
+                                         same accuracy and did not converge for QA (i.e.,base model (Devlin et al., 2019) and a BART base
+                                                    the model was not able to get > 75% success ratemodel (Lewis et al., 2020) for fact-checking and
+                                            and > 50% retain accuracy). That suggest thatquestion answering respectively. They are both
+                                                    the gradients are helpful and actually used by ourTransformer based models with 12 layers each and
+                                               hyper-network but should not used directly, with-hidden size of 768. BERT has 12 heads, where
+                                                  out a modiﬁcation. To better show this, in Table 2BART has 16. They have 110M and 139M param-
+                                    we report correlations between different updateeters respectively. BERT has a vocabulary size of
+                                            methods and the gradient in terms of cosine simi-30,522 where BART has 50,265.
+                                                                 larities between updates. Naturally, ﬁne-tuning and  KNOWLEDGEEDITOR has a small single-layered
+                                                     the gradient are highly correlated, but our methodbidirectional-LSTM with input size 768 and hid-
+                                                  (with and without additional paraphrases supervi-den size of 128. The FFNN that condenses the
+                                                           sion), poorly correlates with the others. Low cosineLSTM states follows a [256, tanh, 1024] architec-
+                                                       similarity can be due to two factors i) the modelture where the 5 FFNN have all a [1024, tanh, d]
+                                                  indeed projects the gradient to a different and morearchitecture where d depends on the weight to mod-
+                                              ‘knowledge preserving’ direction, or ii) the param-ify. In our experiments, we do not use our model
+                                                         eter space is so large that cosine similarity gets toto modify biases, layer norms, word and positional
+                                                   zero very quickly, not revealing the genuine under-embeddings of LMs. Overall, KNOWLEDGEEDI-
+                                                     lying similarity.TOR has 54M and 67M parameters for BERT and
+BART respectively.
+
+B.6  Training details                                12We trained on 4 Nvidia Titian X 12GB which take ap-
+                                                            proximately 10 minutes for FC and 3 hours for QA.
+The original models which we want to mod-                                                      13We trained on 4 Nvidia Titian X 12GB which take ap-
+ify are trained with a batch size of 256 using    proximately 1 day for FC and 3 days for QA.
+
+          ∇θL    Fine-tune   CKL   CKL + Px
+  ∇θL         1.000     0.451     -0.018     -0.025                                 System B
+  Fine-tune     0.451     1.000     -0.010     -0.011
+  CKL         -0.017     -0.010     1.000      0.183                                                                           layer)      layers)     layer)      layers)                                                                                     x       x+loop  CKL + Px   -0.021     -0.011     0.183      1.000                                                                                                                                                   (1st   (all   (1st   (all
+                                                                                 al  al                                                                                                                         et.  et.   CL2   CKL       CKL+loop   CKL+   CKL+
+ Table 2: Average cosine similarities between different                                                                                                                                                                                                                                                                                                                                           fine-tune       fine-tune  Zhu  Zhu   Ours  Our   Ours   Ours   Ours
+ update methods and the gradient for the update as well.
+                                                                                                       fine-tune (1st layer)        22.4  100.0  11.7  69.0   6.0    5.2    4.7    2.8
+ Fine-tuning is applied to all layers.
+                                                                                                      fine-tune (all layers)  77.6         78.3  53.3  99.4  49.9  49.8   6.3    2.7
+
+                                                                               Zhu et. al (1st layer)   0.0   21.7         11.2  68.2   5.7    5.0    4.6    2.7
+
+                   A Zhu et. al (all layers)  88.3  46.7  88.8         92.9  32.8  39.3   3.0    0.2
+
+                                                                                                 Ours CL2  31.0   0.6   31.8   7.1          7.8    8.2    0.9    0.8
+                                                                                                                System            Our CKL  94.0  50.1  94.3  67.2  92.2         71.5   1.5    0.4
+
+                 fine-tune (1st layer)                                                            Ours CKL+loop  94.8  50.2  95.0  60.7  91.8  28.5          5.4    0.0
+                                  (all                               layers)   0.6        fine-tune
+             Zhu et. al                            (1st                                 layer)                                                              Ours CKL+  x  95.3  93.7  95.4  97.0  99.1  98.5  94.6         42.0
+             Zhu et. al (all layers)
+   0.5       Ours CL2                                                                   Ours CKL+ x+loop  97.2  97.3  97.3  99.8  99.2  99.6  100.0  58.0
+              Our CKL
+   0.4       Ours CKL+loop                                  x                                                                        (a) Fact-checking.              Ours CKL+
+              Ours CKL+ x+loopDensity0.3                                                                         System B
+   0.2                                                                                                                                                                                                              layer)      layers)     layer)      layers)                                                                                     x       x+loop                                                                                                                                                   (1st   (all   (1st   (all   0.1                                                                            al  al                                                                                                                         et.  et.   CL2   CKL       CKL+loop   CKL+   CKL+   0.0                                                                                                                                                                                                                                                                                                                    fine-tune       fine-tune  Zhu  Zhu   Ours  Our   Ours   Ours   Ours        88     90     92     94     96     98    100
+                    wTs with w   Dir(1.0)                                         fine-tune (1st layer)        67.8  99.9  99.0  78.6  62.5   0.3   23.8   0.1
+                        (a) Fact-checking.                                                                                                      fine-tune (all layers)  32.2         81.4  77.1  93.0  41.1  20.0  30.9  11.3
+
+                 fine-tune (1st layer)                                                  Zhu et. al (1st layer)   0.1   18.6          1.7   33.4   0.0    0.0    0.0    0.0
+   0.5        fine-tune (all layers)
+             Zhu et. al (1st layer)           A Zhu et. al (all layers)   1.0   22.9  98.3         37.4   0.0    0.0    0.0    0.0
+             Zhu et. al (all layers)
+   0.4       Ours CL2                                                                           Ours CL2  21.4   7.0   66.6  62.6         30.1  14.0  21.9   7.8
+              Ours CKL              Ours CKL+loop                                                                           System            Our CKL  37.5  58.9  100.0 100.0  69.9          1.1    2.7    1.1
+                                  x   0.3       Ours CKL+
+              Ours CKL+ x+loop                                                              Ours CKL+loop  99.7  80.0  100.0 100.0  86.0  98.9         80.2   4.5Density
+
+                                                                                                                                                   x  76.2  69.1  100.0 100.0  78.1  97.3  19.8          2.7   0.2                                                                                      Ours CKL+
+   0.1                                                                                 Ours CKL+ x+loop  99.9  88.7  100.0 100.0  92.2  98.9  95.5  97.3
+
+                                                                                       (b) Question answering.
+   0.0        88     90     92     94     96     98    100
+                    wTs with w   Dir(1.0)                   Figure 6: Probability that system A is better than sys-
+                    (b) Question answering.                 tem B according to a weighted sum of metrics (see indi-
+                                                         vidual values in Table 1) sampling mixing coefﬁcients
+ Figure 5: Probability distributions of weighted sum of    1, 000 times from a Dirichlet distribution (with α = 1
+ metrics according to 1k random assignments sampled    to cover a diverse spectrum of metric combinations).
+ from a Dirichlet distribution (with α = 1—see all val-   The probability that KNOWLEDGEEDITOR (with CKL
+ ues in Table 1). Sampling weights allows to interpret   + Px + loop) is better than competing systems is high
+ the score in a probabilistic way. KNOWLEDGEEDITOR   (> 97% for FC and > 88% for QA) indicating that it
+ (with different variants) presents distributions that are     is highly likely that when assigning some weights to
+ more skewed towards a high score (100) indicating that    the metrics, the weighted sum will be in favour of our
+ it is highly likely that when assigning some weights to    method. Better view with colors.
+ the metrics, the weighted sum will be in favour of our
+ method. Better view with colors.

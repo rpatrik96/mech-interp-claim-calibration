@@ -1,0 +1,1181 @@
+                  Faithful and Stable Neuron Explanations for
+                 Trustworthy Mechanistic Interpretability
+
+
+
+
+                        Ge Yan            Tuomas Oikarinen         Tsui-Wei (Lily) Weng
+                           CSE, UCSD              CSE, UCSD               HDSI, UCSD
+                        geyan@ucsd.edu       toikarinen@ucsd.edu         lweng@ucsd.edu
+
+
+                                                 Abstract2025
+                           Neuron identification is a popular tool in mechanistic interpretability, aiming to
+                             uncover the human-interpretable concepts represented by individual neurons inDec                       deep networks. While algorithms such as Network Dissection and CLIP-Dissect
+                               achieve great empirical success, a rigorous theoretical foundation remains absent,
+                           which is crucial to enable trustworthy and reliable explanations. In this work, we19
+                              observe that neuron identification can be viewed as the inverse process of machine
+                                 learning, which allows us to derive guarantees for neuron explanations. Based
+                           on this insight, we present the first theoretical analysis of two fundamental chal-
+                                 lenges: (1) Faithfulness: whether the identified concept faithfully represents the
+                               neuron’s underlying function and (2) Stability: whether the identification results
+                                 are consistent across probing datasets. We derive generalization bounds for widely[cs.AI]                             used similarity metrics (e.g. accuracy, AUROC, IoU) to guarantee faithfulness,
+                            and propose a bootstrap ensemble procedure that quantifies stability along with
+                    BE (Bootstrap Explanation) method to generate concept prediction sets with guar-
+                               anteed coverage probability. Experiments on both synthetic and real data validate
+                              our theoretical results and demonstrate the practicality of our method, providing
+                            an important step toward trustworthy neuron identification. 1
+
+
+                1  Introduction
+
+                      Despite the rapid development and application of deep neural networks, their lack of interpretability
+                          raises growing concerns [Samek et al., 2017, Zhang et al., 2021]. A popular strategy to “open the
+                      black-box" is to analyze internal representations at the level of individual neurons and associate
+                   them with human-interpretable concepts. This process is known as neuron identification in the
+                           field of mechanistic interpretability, which yields neuron explanations [Bau et al., 2017, Oikarinen
+                    and Weng, 2023]. Over the past few years, many neuron identification methods have been proposed.arXiv:2512.18092v1                     For example, Bau et al. [2017] use curated concept datasets to identify the corresponding concept,
+                      while Oikarinen and Weng [2023] leverage multimodal models to automatically generate neuron
+                        explanations. A growing body of methods has been developed to identify and evaluate concepts
+                      corresponding to neurons [Srinivas et al., 2025, Huang et al., 2023, Gurnee et al., 2023, Mu and
+                      Andreas, 2020, La Rosa et al., 2023, Zimmermann et al., 2023, Bykov et al., 2023, Kopf et al., 2024,
+                  Shaham et al., 2024].
+
+                      Despite rapid empirical progress, systematic comparison and rigorous theoretical understanding of
+                     neuron identification remain limited.  Recently, Oikarinen et al. [2025] unified the evaluation of
+                     neuron identification methods within a single mathematical framework to enable fair comparisons.
+                    However, deeper theoretical foundations are still lacking, which undermines the trustworthiness
+                    and reliability of neuron explanations. Consider a chest-X-ray model that predicts pneumonia and
+
+                         1Our code is available at https://github.com/Trustworthy-ML-Lab/Trustworthy_Explanations.
+
+
+                        39th Conference on Neural Information Processing Systems (NeurIPS 2025) Workshop: Mechanistic Inter-
+                             pretability Workshop at NeurIPS 2025.
+
+attributes its decision to a neuron purportedly representing lung opacity, when in fact the neuron
+responds to hospital-specific markings. Such unfaithful explanations can mislead clinicians, lead to
+harmful treatment decisions, and ultimately erode trust.
+
+These concerns motivate a closer examination of the core obstacles to trustworthy neuron explana-
+tions. In particular, we identify two central challenges in current neuron identification methods:
+
+      1. Faithfulness. Does the identified concept truly capture the neuron’s underlying function?
+      2. Stability.  Is the identified concept consistent across different probing datasets?
+
+Both challenges are closely connected with probing datasets, which are an essential component of
+neuron identification methods that determines the stimuli used to measure neuron activity. However,
+their influence is often overlooked and not rigorously examined. To address these challenges, we
+provide a theoretical analysis grounded in a key observation: neuron identification can be (roughly)
+viewed as an inverse process of learning. This perspective highlights structural parallels between
+neuron identification process and traditional machine learning, enabling us to adapt tools from sta-
+tistical learning theory to formally analyze the effect of probing datasets and bound the performance
+of neuron identification methods.
+
+Our contributions are summarized as follows:
+
+1. New insights for neuron identification. We are the first to show that neuron identification can
+be viewed as an inverse process of learning, revealing structural parallels with traditional machine
+learning. This insight is non-trivial: it enables us to import and adapt tools from statistical learning
+theory to rigorously analyze key questions in neuron identification that prior work could not address,
+including the impact of probing datasets.
+
+2. Rigorous guarantees for explanation faithfulness. We establish the first theoretical guarantees
+for the faithfulness of neuron explanations, answering the critical question of when a concept iden-
+tified by a neuron-identification algorithm can be trusted. Our analysis is derived under a general
+framework, making the results applicable to most existing neuron identification methods. Simula-
+tion studies demonstrate that our theory allows quantitative analysis of how factors such as probing
+dataset size, concept frequency, and similarity metrics affect performance.
+
+3. Quantifying stability of explanations. We present the first formal analysis of probing datasets,
+an essential yet previously overlooked component that determines the stimuli used to measure neu-
+ron activity. Using a bootstrap ensemble over probing datasets, we quantify the stability of neuron
+explanations and design a procedure to construct a set of possible concepts for each neuron, with
+statistical guarantees on the probability of covering the true concept.
+
+The remainder of this paper is organized as follows: Sec. 2 formalizes the notion of neuron iden-
+tification. Sec. 3 provides a rigorous analysis of the faithfulness of neuron explanations with high
+probability guarantees. Sec. 4 quantifies the stability of neuron identification algorithms and estab-
+lishes statistical guarantees.
+
+2  Formalizing Neuron Identification
+
+In this section, we introduce the formal definition of neuron identification and the notations used in
+Sec. 3 and 4. Although we use the term “neuron" identification for simplicity, the framework also
+accommodates larger functional units within the network. Examples include a linear combination of
+neurons (i.e., a direction in representation space), a feature in a Sparse Autoencoder [Cunningham
+et al., 2023], a direction derived by TCAV [Kim et al., 2018], or a linear probe [Alain and Bengio,
+2016]. Below, we formally define neuron representation and concept:
+Neuron representation f(x) : X →R: A neuron representation is a function mapping an input
+x ∈X to an activation value. Here, X denotes the input space (e.g. images 2). For example, a
+neuron in an MLP maps the input to a scalar value. For general neural networks, the output may
+not be a single real number, e.g. for convolutional neural networks (CNN) f(x) is a 2-D feature
+map. For simplicity in similarity calculation, existing works often conduct pooling (avg, max) to
+aggregate the feature into a single real value.
+
+   2The input could also be audio [Wu et al., 2024] or text [Huang et al., 2023, Gurnee et al., 2023]. In this
+work we focus on vision models.
+
+
+                                       2
+
+Concept label c(x): In the literature of neuron identification [Bau et al., 2017, Oikarinen and Weng,
+2023], a concept is usually defined as a human-understandable text description. For example, “cat"
+or “shiny blue feather". Although intuitive, this definition is not a formal mathematical definition.
+In this work, we define concepts as a function: a concept c(x) : X →[0, 1] is a function that takes
+images as input, and outputs the probability of the concept. This definition is consistent with the
+previous works: for example, Bau et al. [2017], Bykov et al. [2024] use human annotations which
+output 1 if the concept is present, otherwise 0. Oikarinen and Weng [2024] use SigLIP [Zhai et al.,
+2023] to automatically estimate the probability that concept c appears.
+
+To search for a concept that describes the neuron representation, different methods use different
+measures (e.g. IoU [Bau et al., 2017], WPMI [Oikarinen and Weng, 2023], AUC [Bykov et al.,
+2024] and F1-score [Gurnee et al., 2023]). Interestingly, these different methods can all be described
+by a general similarity function sim(f, c), which is a functional measuring the similarity between
+concept c(x) and neuron representation f(x). With the similarity function, the neuron identification
+problem can be formulated as:
+
+                                     ˆc(x) = arg max sim(f(x), c(x))                                                                                                   (1)                                       c(x)∈C
+
+where C is the concept set (a function space under our concept definition). In our formal definition,
+sim(f, c) is a functional that takes two functions f and c as input, such as accuracy, correlation or
+IoU. In practice, most works replace the function f(x) and c(x) with their realization f(xi) and
+c(xi) on a probing dataset Dprobe as an empirical approximation, where xi is sampled i.i.d. from the
+underlying distribution. For example, the similarity function of accuracy is defined as the probability
+that two functions have the same value: sim(f, c) = P(f(x) = c(x)). When utilizing a probing
+dataset Dprobe, we can get an unbiased empirical estimation sim(f,ˆ     c; Dprobe) for sim(f, c):
+
+                                                                       |Dprobe|
+                                     1
+                    sim(f,ˆ     c; Dprobe) =   X 1(f(xi) = c(xi)).                     (2)
+                                              |Dprobe|                                                 i=1
+
+Under this approximation, the neuron identification can be formulated as the following optimization
+problem:
+
+[Neuron identification]               ˆc = arg maxc∈C  sim(f,ˆ     c; Dprobe)
+                            where sim(f,ˆ     c; Dprobe) = sim(f(xi),ˆ         c(xi)), xi ∈Dprobe.
+                                                                                                   (3)
+Eq. 3 shows that Dprobe plays a critical role in this approximation, yet a rigorous analysis of its effect
+is still lacking. We address this gap in this work in Sec. 3.2 and 4.
+
+Why do we choose similarity-based definition? Similarity provides a broad and unifying notion
+of a neuron’s concept: many existing definitions can be expressed as special cases of similarity with
+appropriate functions. For example, a common practical criterion is that a neuron represents concept
+c if its activation can successfully classify concept c. This criterion can be formulated as a similarity
+function using standard classification metrics such as F1-score [Huang et al., 2023], AUC [Kopf
+et al., 2024], precision [Zhou et al., 2014] and accuracy [Koh et al., 2020].
+
+3  Theoretical Guarantees for Explanation Faithfulness
+
+In this section, we address a key question in neuron identification: When can we trust a neuron
+explanation produced by a neuron-identification algorithm? We begin with an important observa-
+tion: neuron identification can be viewed as an inverse process of machine learning in Sec. 3.1.
+This perspective enables us to derive formal guarantees for explanation faithfulness in Sec. 3.2 and,
+building on these results, to quantify the stability of neuron explanations in Sec. 4.
+
+
+3.1  Analogy between neuron identification and machine learning
+
+From the formulation in Eq. 3, we observe that the neuron identification problem closely parallels su-
+pervised learning problem. Given a standard classification task and a neural network model h ∈H,
+where H denotes the hypothesis space containing all possible neural network models, the problem
+
+
+                                       3
+
+Figure 1: Analogous relationship between neuron identification and machine learning.  Neuron
+identification searches for a concept matching a neuron, while machine learning searches for a model
+matching human labels. Thus, neuron identification can be viewed as inverse of learning process.
+
+
+can be formalized as minimizing the loss L, which is typically approximated by the empirical loss
+ˆL on a training dataset Dtrain as follows:
+[Machine learning]                     ˆh = arg min   ˆL(h; Dtrain)
+                              h∈H
+                             where ˆL(h; Dtrain) = ˆL(h(xi), y(xi)), xi ∈Dtrain,
+                                                                                                   (4)
+and y(x) denotes the label function and h(x) is the neural network. Comparing Eq. 4 and Eq. 3, we
+see that these two problems share a similar structure: Both are optimization problems with objectives
+of similar form. The left panel of Fig. 1 compares the procedures of these two domains, while
+the right panel lists their detailed correspondences. As illustrated in Fig. 1, neuron identification
+can be roughly viewed as the inverse process of machine learning: during learning, we search for
+neural network (parameters) h(x) that approximates a target human concept y(x) (e.g. ImageNet
+classes), whereas neuron identification instead searches for concept c(x) (or a simple combination
+of concepts) that best matches a specific neuron representation f(x).
+
+Importantly, this observation enables us to leverage and adapt tools from machine learning theory
+while extending them to the unique setting of neuron identification. In the following, we first de-
+velop formal guarantees for the faithfulness of neuron explanations in Sec 3.2, and then extend this
+perspective to perform uncertainty quantification and assess stability in Sec. 4.
+
+3.2  Theoretical Guarantees for Neuron Explanations
+
+In this section, we address the faithfulness challenge: Does the identified concept truly capture the
+neuron’s underlying function? Using the framework introduced in Sec. 2, this question reduces to
+asking whether the identified concept truly achieves high similarity sim(f, c) to neuron represen-
+tation. Building on the analogy between neuron identification and machine learning established in
+Sec. 3.1, we develop a new generalization framework tailored to the neuron identification setting.
+Although inspired by classical learning theory [Shalev-Shwartz and Ben-David, 2014], our analysis
+provides the first formal guarantees on the concept-neuron similarity sim(f, c). We first define the
+generalization gap g for neuron identification as:
+                      g(Dprobe, C, f) ≜sup [sim(f,ˆ     c; Dprobe) −sim(f, c)].                    (5)
+                                  c∈C
+
+We show that this gap g(Dprobe, C, f) can be bounded in Thm.  3.1 under two mild assumptions:
+(i) the concept set C is finite, and (ii) the probing dataset Dprobe is sampled i.i.d. These conditions
+are met by most existing neuron identification methods, e.g., Bau et al. [2017], Oikarinen and Weng
+[2023], Bykov et al. [2024].
+Theorem 3.1. With probability at least 1 −δ,
+
+                                                                  δ
+                                                                                                   (6)                 sup |sim(f,ˆ     c; Dprobe) −sim(f, c)| ≤r(f, Dprobe, |C|),                  c∈C
+
+
+                                       4
+
+where r(f, Dprobe, δ) describes the convergence rate of similarity function sim(f,ˆ     c; Dprobe) and sat-
+isfies
+             P h sim(f,ˆ     c; Dprobe) −sim(f, c) ≥r(f, Dprobe, δ)i ≤δ.                  (7)
+In Eq. 6, the confidence parameter δ is adjusted using a union bound, replacing δ with |C|.δ
+Corollary 3.2. With probability at least 1 −δ,
+
+                                                             δ
+                        sim(f, ˆc) ≥sim(f, c∗) −2r(f, Dprobe, |C|),                         (8)
+where ˆc is selected concept using Eq. 3 and c∗= arg maxc∈C[sim(f, c)] is the optimal concept.
+
+Discussion.  Thm.   3.1 adapts classical generalization theory to the neuron identification set-
+ting, where the objective of interest is sim and sim.ˆ   This provides the first theoretical result on
+the sim(f, c), which is enabled by our key insight in Sec. 3.1. The convergence rate function
+r(f, Dprobe, δ) characterizes how fast the estimator simˆ  converges.  In Sec. 3.2.1, we will derive
+convergence rates for several popular similarity functions, showing that for many commonly used
+                 q −log δ
+similarity estimators r(f, Dprobe, δ) = O(    |Dprobe|). On the other hand, Corollary 3.2 suggests that
+by maximizing similarity on the probing dataset, the identified concept ˆc is approximately optimal,
+within a gap determined by the convergence rate of the similarity function and the size of the concept
+set C. This result guarantees that the concept identified with the probing dataset truly achieves high
+similarity to the target neuron representation.
+
+3.2.1  Convergence Results for popular similarity metrics
+
+From Thm.  3.1 and Corollary 3.2, we see that the convergence rate is a key factor controlling
+the generalization gap.  Therefore, in this section, we derive and examine the convergence rate
+of common similarity metrics.  Table 1 summarizes several common similarity scores and their
+convergence rate r:
+
+      1. Accuracy: This similarity function is used in [Koh et al., 2020], and the convergence rate
+         of accuracy can be estimated via the Hoeffding’s inequality.
+      2. AUROC: This similarity function is used in [Bykov et al., 2023], and the convergence rate
+           is related to concept frequency ρ(c) and can be derived using Thm. 2 in Agarwal et al.
+         [2004]. Fig. 3a plots the convergence rate rAUROC under different ρ and shows that when
+        both ρ and |Dprobe| are small, the convergence rate rAUROC blows up, indicating imbalanced
+        probing datasets may cause larger generalization error and reduce explanation faithfulness.
+      3. Recall, precision, IoU: These similarity functions are used in [Zhou et al., 2014], [Srinivas
+          et al., 2025], [Bau et al., 2017] respectively. To derive their convergence rates, we view
+         these metrics as conditional versions of accuracy: for example, precision can be regarded
+         as computed only on examples where f(x) = 1. Thus, the convergence rate is similar to
+
+ sim Metric   sim(f, c)            sim(f,ˆ     c)                           r(f, Dprobe, δ)
+                   P
+                                                    x∈Dprobe                                                  1(f(x)=c(x))       q log( δ2 ) Accuracy    P(f(x) = c(x))                                                                 |Dprobe|                                    2|Dprobe|
+                                                                                                         2 )              P(f(x) < f(y) |  P {x|c(x)=0} P {y|c(y)=1} 1[f(x)<f(y)] q        log( δ AUROC              c(x) = 0, c(y) = 1)          |{x|c(x)=0}||{x|c(x)=1}|              2ρ(c)(1−ρ(c))|Dprobe|
+                  W11                   F11            q      log( δ2 ) IoU             W01+W11+W10        F01+F11+F10                          2(F11+F10+F01)
+                W11                   F11             q   log( δ2 ) Recall             W01+W11             F01+F11                                2(F11+F01)
+                W11                   F11             q   log( δ2 ) Precision             W10+W11             F10+F11                                2(F11+F10)
+Table 1: Similarity metrics sim(f, c), estimation sim(f,ˆ     c) and their corresponding convergence
+speed r(f, Dprobe, δ). For simplicity, denote Wij = P(f(x) = i, c(x) = j),  i, j ∈{0, 1}, Fij =
+{|f(x)=i,c(x)=j|x∈Dprobe}|
+                                       . For AUROC, ρ(c) is the portion of positive examples in the probing dataset             |Dprobe|
+Dprobe (i.e. the frequency of concept).
+
+
+
+                                       5
+
+          rAcc, differing only in that the effective sample size changes from |Dprobe| to (F11 + F10).
+       The same reasoning applies to Recall and IoU. In practice, users can collect additional data
+          until the effective sample size reaches desired level. Further details are provided in Sec. D.
+
+Summary. So far, we have derived the generalization gap g for several popular similarity metrics.
+These results enable practitioners to select an appropriate metric based on available probing data
+and the properties of the concepts. For example, our experiments in Sec. 3.3 show that AUROC
+converges quickly when concept frequency is high, but much slower when the frequency is low;
+in such cases, switching to other similarity metric can reduce the generalization gap and improve
+performance.
+
+3.3  Simulation studies
+
+To verify the theory developed in Sec. 3.2 and to compare different similarity metrics, we conduct
+simulations on a synthetic dataset that contains ground-truth similarity values and allows us to simu-
+late a variety of settings. Specifically, we use binary concept c(x) ∈{0, 1} for simplicity. Neuron ac-
+tivations f(x) are binarized by setting top-5% activations to 1 and remaining to 0. The joint distribu-
+tion of f, c is controlled by the probability matrix M: Mij = P(f(x) = i, c(x) = j), i, j ∈{0, 1}.
+
+We conduct two experiments: (1) a single-concept study to compare convergence speeds and (2) a
+multi-concept simulation to verify Thm. 3.1.
+
+Experiment 1: Convergence speed.  In Thm.   3.1, the key factor that controls the gap is the
+convergence rate r. To investigate this, we generate synthetic data and compare different similarity
+functions. For the concept, we study the following two settings:
+
+        • Setting 1: M =
+                                                c = 0  c = 1
+                                  f = 0    0.93  0.02
+                                  f = 1    0.02  0.03
+        This case simulates a regular concept.
+        • Setting 2: M =
+                                                c = 0  c = 1
+                                f = 0    0.9499  0.0001
+                                f = 1    0.0491  0.0009
+        This simulates a rare concept (frequency is 0.001), which often occurs when the concept is
+         fine-grained.
+
+We simulate with Nexp = 1000 randomly sampled datasets and plot how the 95% quantile of error
+changes with the number of samples, as shown in Fig. 2. From the simulation results, we can see
+that
+
+
+
+
+
+                    (a) Setting 1                                                  (b) Setting 2
+
+Figure 2: 95% quantile of error of 5 similarity metrics under two settings: (a) balanced concept
+frequency; (b) low concept frequency (0.001). Accuracy converges fastest in both settings.
+
+
+                                       6
+
+(a) Convergence rate rAUROC with respect to prob-         (b) Simulation of the generalization gap predicted
+ing dataset size |Dprobe| under different concept fre-       by Thm.  3.1 versus probing dataset size, showing
+quency ρ(c).                                        an empirical convergence rate of O(1/√n).
+
+               Figure 3: Theoretical and simulation results on generalization gap.
+
+
+
+      1. Accuracy has the fastest convergence in both cases. On regular concept, IoU, recall and
+         precision are similar. AUROC converges faster than them.
+
+      2. For rare concept, the convergence pattern differs: AUROC and recall are much worse than
+         precision and IoU. This matches our analysis in Sec. 3.2, where we showed that AUROC
+        converges much more slowly when the concept frequency is low.
+
+
+Experiment 2: Gap simulation  In this experiment, we further verify Thm. 3.1 via synthetic data.
+Different from Experiment 1 which simulates single concept, this test requires a concept set C. We
+generate the synthetic data with the following steps:
+
+      1. Generate neuron representation. Binarized neuron representation f(x) is generated by
+         setting the top-5% of activations to 1 and the rest to 0, i.e. M10 + M11 = 0.05.
+
+      2. Generate concepts. We generate |C| = 1000 concepts as the candidate set. For each
+        concept ci, we first generate its frequency P(ci(x) = 1) = M01 + M11 from a log-uniform
+         distribution in the interval (10−4, 10−1). Then, we sample M11 = P(f(x) = 1, ci(x) = 1)
+        uniformly from (0, min[P(f(x) = 1), P(ci(x) = 1)]) to ensure validity.  Given M11,
+         the remaining part of M can then be inferred from concept frequency and activation bi-
+         narization.  Given the probabilities, we compute corresponding conditional probability
+        (P(ci(x) | f(x)) and sample ci(x) accordingly.
+
+      3. Experiment and simulation. We repeat the above steps Nexp = 1000 times. We use the
+        sampled neuron representation f(x) and concept activation ci(x) to calculate similarity
+       and select top-ranked concept ˆc. Then, we compute the ground-truth similarity with the
+          real probability matrix M and calculate the error as the difference between similarity of
+         selected concept and max similarity in the candidate set (maxc∈C[sim(f, c)] −sim(f, ˆc)).
+      We take the 95% quantile of error among all experiments to approximate the bound under
+        success probability 1 −δ = 95%.
+
+In Fig. 3b, we plot the simulated gap against the size of the probing dataset |Dprobe|. We observe
+that: (1) All curves have similar slope to the reference O(p 1/n) curve, suggesting an asymptotic
+convergence rate of O( p1/n), which is consistent with our theoretical analysis. (2) For the constant
+term, accuracy has the fastest convergence and AUROC is the second. This matches our simulation
+of r in Experiment 1, Setting 1, supporting our conclusion.
+
+In summary, the simulation experiments empirically validate the correctness of our theory and show
+its potential to help users choose appropriate similarity metric under different settings.
+
+
+                                       7
+
+Figure 4: Illustration of bootstrap ensemble in neuron identification. Multiple probing datasets are
+generated via bootstrapping. Then, neuron identification algorithm is applied to each dataset and
+final concepts are aggregated to estimate the probability of each concept.
+
+
+4  Quantifying stability in Neuron Explanations
+
+In this section, we address the second key challenge in neuron identification methods – stability: Is
+the identified concept consistent across different probing datasets? Leveraging the connection estab-
+lished in Sec. 3.1, we adopt a bootstrap ensemble approach for stability estimation. This method is
+applicable to any neuron identification algorithm without modifying its internal mechanism. Build-
+ing on this bootstrapping framework, we further design a method to construct a prediction set of
+candidate concepts that contains the desired concept with guaranteed probability.
+
+
+4.1  Empirical measurement via Bootstrap ensemble
+
+Bootstrap ensemble [Breiman, 1996] is a machine learning technique used to improve prediction ac-
+curacy and quantify uncertainty. The method aggregates multiple models, each trained on a different
+resampled version of the original dataset obtained via bootstrapping (sampling with replacement).
+The final prediction is typically determined by majority voting, and the confidence is estimated as
+the proportion of models voting for the final prediction [Lakshminarayanan et al., 2017].
+
+For neuron identification, we introduce a bootstrap-based stability framework that resamples the
+probing dataset to produce multiple identification outcomes for a single neuron. This adaptation
+allows us to quantify the stability of the neuron explanations obtained. The procedure is:
+
+      1. Collect bootstrap datasets: Sample K datasets {Di}Ki=1 independently by randomly se-
+         lecting samples from the probing dataset Dprobe with replacement.
+
+      2. Run neuron identification: Apply the neuron identification algorithm to each bootstrap
+         dataset Di and record the predicted concept ci.
+      3. Aggregate predictions: After K runs, estimate the probability of each concept as: P(c) =
+          1 PKi=1 1(ci = c), where 1(·) denotes the indicator function.      K
+
+Fig. 4 summarizes the pipeline. With bootstrap ensemble, the algorithm now outputs probability of
+each candidate concept.
+
+
+4.2  Theoretical guarantees via Concept Prediction-Set Construction
+
+While bootstrap ensembles provide an empirical measure of stability, we also seek theoretical guar-
+antees on the identified concept.  In particular, we want to bound the probability that the most
+frequent concepts in bootstrap ensemble capture the desired concept3. To achieve this, we construct
+a concept prediction set, a set of concepts that are likely to describe the neuron, rather than a single
+best guess. This prediction-set approach can be applied to any neuron identification algorithm with-
+out any modifications. We call this method Bootstrap Explanation (BE) and list the full procedure
+in Alg. 1 in Sec. A.
+
+   3Analogous to the ground truth in conventional machine learning.
+
+
+                                       8
+
+Figure 5: Results of applying bootstrap ensemble to NetDissect and CLIP-Dissect on ResNet-50
+neurons. NetDissect shows more stable, concrete concepts. CLIP-Dissect outputs are more diverse
+and abstract.
+
+
+The following theorem gives a probabilistic guarantee that a desired concept c∗will be included in
+the prediction set constructed via the bootstrap ensemble, under mild assumptions on the candidate
+set and similarity function:
+
+      1. c∗∈C (the desired concept is included in candidate concept set).
+      2. sim(f, c∗) ≥sim(f, c) + ∆, ∀c ∈C, c ̸= c∗, where ∆> 0 is a positive constant. This
+        assumes the similarity function can distinguish the desired concept with other concepts.
+
+With these assumptions, we have the following theorem:
+Theorem 4.1. Let c∗be the desired concept for a given neuron and the assumptions above hold for
+c∗. Let S ⊆C be the prediction set constructed in Alg. 1, and let k(S) = PKi=1[ˆci ∈S] be the
+number of bootstrap trials that predict a concept in S. Then, under these assumptions,
+
+                                 K−k(S)−1
+                         K                  P(c∗∈S) ≥ X         pi(1 −p)K−i,                         (9)                                                              i
+                                         i=0
+where p is the single-trial error probability defined implicitly by the equation r(f, Dprobe, |C|)p = ∆2 .
+
+Thm.  4.1 provides a statistical guarantee on the probability that our desired concept is included in
+the prediction set. See Sec. B.2 for the proof.
+
+4.3  Experiments
+
+We apply our BE method to two base methods: CLIP-Dissect [Oikarinen and Weng, 2023] and
+NetDissect [Bau et al., 2017]. We use a ResNet-50 model trained on the ImageNet dataset [Deng
+et al., 2009], run K = 100 bootstrap samples and choose the bootstrap count threshold t = 0.95K =
+0.95 × 100 = 95 in Alg. 1. The results are shown in Fig. 5.
+
+From the results, we can observe interesting differences between these two methods: (1) CLIP-
+Dissect prefers more abstract concepts. For example, it gives concepts like fostering and biblio-
+graphic. NetDissect, in contrast, tends to identify concrete concepts. (2) In general, CLIP-Dissect
+provides more diverse concepts and sometimes captures ones missed by NetDissect (e.g. Birding
+
+
+                                       9
+
+for Neuron 89). NetDissect is more stable across different bootstrap samples. A potential reason is
+that NetDissect utilizes localization information, which improves stability.
+
+5  Related works
+
+5.1  Neuron identification
+
+The goal of neuron identification is to find a human-interpretable concept that describes the behavior
+and functionality of a specific neuron. A variety of methods have been proposed for neuron iden-
+tification. Network Dissection [Bau et al., 2017] is a pioneering work with the idea of comparing
+neuron activations with ground-truth concept masks. Subsequent work explored extensions such as
+compositional explanations [Mu and Andreas, 2020], automated labeling with CLIP [Oikarinen and
+Weng, 2023], and multimodal summarization [Bai et al., 2024]. More recent approaches expand the
+concept space to linear combinations [Oikarinen and Weng, 2024]. While these advances provide
+useful empirical tools, in this work we aim to fill the gap in a principled theoretical foundation for
+neuron identification.
+
+5.2  Principled framework for neuron identification
+
+To unify the rapid growing neuron identification methods, Oikarinen et al. [2025] design a frame-
+work, summarizing most neuron identification algorithm into three major components: neuron rep-
+resentation, concept activations and similarity metrics. Additionally, two meta-tests are proposed
+to compare similarity metrics. While this work provides a good start point, rigorous theoretical
+analysis is still lacking, which we want to provide in this work.
+
+6  Conclusion and limitations
+
+In this work, we presented a theoretical framework for neuron identification, with the goal of clar-
+ifying the faithfulness and stability of existing algorithms. Building on our key observation that
+neuron identification can be viewed as the inverse process of learning, we introduced the notion
+of generalization gap to quantify and derive formal guarantees for explanation faithfulness. To quan-
+tify stability, we proposed BE procedure to construct concept prediction sets with statistical coverage
+guarantees. Together, these results provide the first principled framework for the trustworthiness
+of neuron identification, complementing existing empirical studies.
+
+Our work also has some limitations: the bound on generalization gap is a general bound for any con-
+cept set. It does not utilize the relation between concepts thus may be improved for specific concept
+sets. The bootstrap ensemble method provides an algorithm-agnostic way to quantify stability and
+generate prediction sets, but also introduces additional computational overhead.
+
+
+
+
+
+                                       10
+
+References
+
+Shivani Agarwal, Thore Graepel, Ralf Herbrich, and Dan Roth. A large deviation bound for the area
+  under the roc curve. Advances in Neural Information Processing Systems, 17, 2004.
+
+Guillaume Alain and Yoshua Bengio.  Understanding intermediate layers using linear classifier
+  probes. arXiv preprint arXiv:1610.01644, 2016.
+
+Nicholas Bai, Rahul Ajay Iyer, Tuomas Oikarinen, and Tsui-Wei Weng. Describe-and-dissect: In-
+   terpreting neurons in vision networks with language models. In ICML 2024 Workshop on Mech-
+   anistic Interpretability, 2024.
+
+David Bau, Bolei Zhou, Aditya Khosla, Aude Oliva, and Antonio Torralba. Network dissection:
+  Quantifying interpretability of deep visual representations. In Proceedings of the IEEE conference
+  on computer vision and pattern recognition, pages 6541–6549, 2017.
+
+Leo Breiman. Bagging predictors. Machine learning, 24:123–140, 1996.
+
+Kirill Bykov, Laura Kopf, Shinichi Nakajima, Marius Kloft, and Marina Höhne. Labeling neural
+  representations with inverse recognition. Advances in Neural Information Processing Systems,
+  36:24804–24828, 2023.
+
+Kirill Bykov, Laura Kopf, Shinichi Nakajima, Marius Kloft, and Marina Höhne. Labeling neural
+  representations with inverse recognition. Advances in Neural Information Processing Systems,
+  36, 2024.
+
+Hoagy Cunningham, Aidan Ewart, Logan Riggs, Robert Huben, and Lee Sharkey. Sparse autoen-
+  coders find highly interpretable features in language models. arXiv preprint arXiv:2309.08600,
+  2023.
+
+Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. Imagenet: A large-scale hi-
+   erarchical image database. In 2009 IEEE conference on computer vision and pattern recognition,
+  pages 248–255. Ieee, 2009.
+
+Alexey Dosovitskiy. An image is worth 16x16 words: Transformers for image recognition at scale.
+  arXiv preprint arXiv:2010.11929, 2020.
+
+Wes Gurnee, Neel Nanda, Matthew Pauly, Katherine Harvey, Dmitrii Troitskii, and Dimitris Bert-
+  simas.  Finding neurons in a haystack:  Case studies with sparse probing.  arXiv preprint
+  arXiv:2305.01610, 2023.
+
+Jing Huang, Atticus Geiger, Karel D’Oosterlinck, Zhengxuan Wu, and Christopher Potts.  Rig-
+  orously assessing natural language explanations of neurons. arXiv preprint arXiv:2309.10312,
+  2023.
+
+Been Kim, Martin Wattenberg, Justin Gilmer, Carrie Cai, James Wexler, Fernanda Viegas, et al.
+   Interpretability beyond feature attribution: Quantitative testing with concept activation vectors
+   (tcav). In International conference on machine learning, pages 2668–2677. PMLR, 2018.
+
+Pang Wei Koh, Thao Nguyen, Yew Siang Tang, Stephen Mussmann, Emma Pierson, Been Kim, and
+  Percy Liang. Concept bottleneck models. In International conference on machine learning, pages
+  5338–5348. PMLR, 2020.
+
+Laura Kopf, Philine L Bommer, Anna Hedström, Sebastian Lapuschkin, Marina Höhne, and Kir-
+    ill Bykov. Cosy: Evaluating textual explanations of neurons. Advances in Neural Information
+  Processing Systems, 37:34656–34685, 2024.
+
+Biagio La Rosa, Leilani Gilpin, and Roberto Capobianco. Towards a fuller understanding of neurons
+  with clustered compositional explanations. Advances in Neural Information Processing Systems,
+  36:70333–70354, 2023.
+
+Balaji Lakshminarayanan, Alexander Pritzel, and Charles Blundell. Simple and scalable predictive
+  uncertainty estimation using deep ensembles. Advances in neural information processing systems,
+  30, 2017.
+
+
+                                       11
+
+Zhuang Liu, Hanzi Mao, Chao-Yuan Wu, Christoph Feichtenhofer, Trevor Darrell, and Saining Xie.
+ A convnet for the 2020s. In Proceedings of the IEEE/CVF conference on computer vision and
+  pattern recognition, pages 11976–11986, 2022.
+
+Jesse Mu and Jacob Andreas. Compositional explanations of neurons. Advances in Neural Informa-
+   tion Processing Systems, 33:17153–17163, 2020.
+
+Tuomas Oikarinen and Tsui-Wei Weng. Clip-dissect: Automatic description of neuron representa-
+   tions in deep vision networks. International Conference on Learning Representations, 2023.
+
+Tuomas Oikarinen and Tsui-Wei Weng. Linear explanations for individual neurons. In Forty-first
+  International Conference on Machine Learning, 2024.
+
+Tuomas Oikarinen, Ge Yan, and Tsui-Wei Weng. Evaluating neuron explanations: A unified frame-
+  work with sanity checks. In International Conference on Machine Learning, 2025.
+
+Wojciech Samek, Thomas Wiegand, and Klaus-Robert Müller.   Explainable  artificial  intelli-
+  gence:  Understanding, visualizing and interpreting deep learning models.   arXiv preprint
+  arXiv:1708.08296, 2017.
+
+Tamar Rott Shaham, Sarah Schwettmann, Franklin Wang, Achyuta Rajaram, Evan Hernandez, Jacob
+  Andreas, and Antonio Torralba. A multimodal automated interpretability agent.  In Forty-first
+  International Conference on Machine Learning, 2024.
+
+Shai Shalev-Shwartz and Shai Ben-David. Understanding machine learning: From theory to algo-
+  rithms. Cambridge university press, 2014.
+
+Anvita A Srinivas, Tuomas Oikarinen, Divyansh Srivastava, Wei-Hung Weng, and Tsui-Wei Weng.
+  Sand: Enhancing open-set neuron descriptions through spatial awareness.  In 2025 IEEE/CVF
+  Winter Conference on Applications of Computer Vision (WACV), pages 2993–3002. IEEE, 2025.
+
+Tung-Yu Wu, Yu-Xiang Lin, and Tsui-Wei Weng. And: audio network dissection for interpreting
+  deep acoustic models. In Proceedings of the 41st International Conference on Machine Learning,
+  pages 53656–53680, 2024.
+
+Xiaohua Zhai, Basil Mustafa, Alexander Kolesnikov, and Lucas Beyer. Sigmoid loss for language
+  image pre-training. In Proceedings of the IEEE/CVF international conference on computer vision,
+  pages 11975–11986, 2023.
+
+Yu Zhang, Peter Tiˇno, Aleš Leonardis, and Ke Tang. A survey on neural network interpretability.
+  IEEE transactions on emerging topics in computational intelligence, 5(5):726–742, 2021.
+
+Bolei Zhou, Aditya Khosla, Agata Lapedriza, Aude Oliva, and Antonio Torralba. Object detectors
+  emerge in deep scene cnns. arXiv preprint arXiv:1412.6856, 2014.
+
+Roland S Zimmermann, Thomas Klein, and Wieland Brendel. Scale alone does not improve mech-
+   anistic interpretability in vision models. Advances in Neural Information Processing Systems, 36:
+  57876–57907, 2023.
+
+
+
+
+
+                                       12
+
+Appendix
+
+
+Contents
+
+
+A  Details on bootstrap ensemble                                                 14
+
+
+B  Formalization of the theories                                                  15
+
+
+C  Related works                                                              17
+
+
+D  Details in recall, precision and IoU’s convergence speed derivation                  18
+
+
+E LLM usage                                                                 18
+
+
+F  Details of simulation study Experiment 1 (Sec 3.3)                                19
+
+
+G Computational cost for Bootstrap Ensemble (BE)                                20
+
+
+H  Additional faithfulness experiments for continuous metrics                        22
+
+
+I  Study on sample numbers (Thm 3.1)                                           24
+
+
+J  Additional bootstrap ensemble (BE) experiments                                 25
+
+
+
+
+
+                                       13
+
+A  Details on bootstrap ensemble
+
+
+Algorithm 1: BE: Generating a concept prediction set for target neuron
+Input: Concept set C, probing dataset Dprobe, target neuron f, neuron identification procedure
+      Identify(C, f, Dprobe), bootstrap sample count K, bootstrap count threshold t
+Output: Prediction set S of candidate concepts
+for i ←1 to K do
+   Sample dataset Di from Dprobe with replacement (same size as Dprobe);
+    Calculate ˆci = Identify(C, f, Di);
+end
+For each concept cj ∈C, count the number of its appearances:
+
+                           K
+                                     kj = X[ˆci = cj]
+                                          i=1
+
+ Sort concepts by frequency, kr1 ≥kr2 · · · ≥krs, s is the number of different concepts
+ generated during bootstrapping;
+Initialize S ←∅, j ←0, cur_count ←0;
+while cur_count < t do
+   Add crj to S: S ←S ∪{crj};
+   Update j ←j + 1, cur_count ←cur_count + krj
+end
+
+
+
+
+
+                                       14
+
+B  Formalization of the theories
+
+B.1  Formalization of Thm. 3.1
+
+Definition B.1. The convergence rate of similarity function is defined as a function that satisfies
+
+             P h sim(f,ˆ     c; Dprobe) −sim(f, c) ≥r(f, Dprobe, δ)i ≤δ.                (10)
+
+Here, Dprobe is randomly sampled from the underlying data distribution D with a fixed size |Dprobe|,
+and the probability is taken over all possible sampled probing datasets.
+
+Proof of Thm. 3.1. For each ci ∈|C|, from the definition of convergence rate, we have
+
+                                                               δ        δ
+                                                                                           (11)           P   sim(f,ˆ     ci; Dprobe) −sim(f, ci) ≥r(f, Dprobe, |C|) ≤ |C|.
+
+Thus, with union bound, we have
+
+                                                                 δ           P                 sup |sim(f,ˆ     c; Dprobe) −sim(f, c)| ≤r(f, Dprobe, |C|)                 c∈C
+                                                                       δ
+          =1 −P  ∪c∈C|sim(f,ˆ     c; Dprobe) −sim(f, c)| > r(f, Dprobe, |C|)
+                                                                     δ                (12)          ≥1 − X P   |sim(f,ˆ     c; Dprobe) −sim(f, c)| > r(f, Dprobe,                                                                  |C|)
+                  c∈C
+                        δ
+          ≥1 −|C|
+                       |C|
+          =1 −δ
+
+
+
+Proof of Corollary 3.2. From the definition,
+
+                                                          ˆc = arg max sim(f,ˆ     c).                                (13)
+                                      c∈C
+
+Thus, sim(f,ˆ       ˆc) ≥ sim(f,ˆ     c∗). From Thm. 3.1, with probability at least 1 −δ, we have
+
+                                     ˆ                          sim(f, ˆc) ≥ sim(f, ˆc) −r(f, Dprobe, δ)                         (14)
+
+and
+                                     ˆ                         sim(f, c∗) ≤ sim(f, c∗) + r(f, Dprobe, δ).                       (15)
+Therefore, we have
+                         sim(f, ˆc) ≥sim(f, c∗) −2r(f, Dprobe, δ)                        (16)
+with probability at least 1 −δ.
+
+B.2  Proof for Thm. 4.1
+
+In this section, we prove Thm. 4.1: Theorem 4.1. Let c∗be the desired concept for a given neuron
+and the assumptions above hold for c∗. Let S ⊆C be the prediction set constructed in Alg. 1, and
+let k(S) = PKi=1[ˆci ∈S] be the number of bootstrap trials that predict a concept in S. Then, under
+these assumptions,
+                                 K−k(S)−1
+                         K                  P(c∗∈S) ≥ X         pi(1 −p)K−i,                      (17)                                                              i
+                                         i=0
+where p is the single-trial error probability defined implicitly by the equation r(f, Dprobe, |C|)p = ∆2 .
+
+Proof. We start the proof by estimating single-trial error rate.
+
+
+                                       15
+
+Lemma B.2. Let p be defined implicitly by the equation
+
+                                         p   ∆
+                                    r(f, Dprobe, |C|) = 2 ,                                (18)
+
+where r(·) is the uniform convergence rate in Thm. 3.1. Then,
+                                          P(ˆc = c∗) ≥1 −p                                   (19)
+
+
+Remark B.3. Lemma B.2 can be easily derived from Thm.    3.1:  with probability 1 −p,
+supc∈C |sim(f,ˆ     c; Dprobe) −sim(f, c)| ≤∆2 , thus
+                sim(f,ˆ     c∗; Dprobe) ≥sim(f, c∗; Dprobe) −∆
+                                                 2
+                             ∆                                (20)                           ≥sim(f, c; Dprobe) +     (Assumption 2)
+                                                2
+                   ≥ sim(f,ˆ     c; Dprobe).
+
+Previously,  we  show  that  for many  similarity  metrics (AUROC,  accuracy,  IoU,  etc.),
+        q −log δ           q −log δ
+r(f, Dprobe, δ) = O(    |Dprobe|), i.e. r(f, Dprobe, δ) ≤Q(    |Dprobe|) for some constant Q > 0. In
+this case, we can plug in δ = |C|p and get
+
+              ∆             p                       s −log |C|p
+                 = r(f, Dprobe,   ≤Q                  ,                        (21)                        2              |C|)          |Dprobe|
+
+
+                        4Q2which gives p ≤|C|e−∆2                                      |Dprobe|. This shows when probing dataset size |Dprobe| and gap between
+desired concept and other concept ∆becomes larger, the error probability p can be reduced.
+
+Suppose we repeat our experiment K times and get {ˆci}Ki=1. Then, we have the following theorem.
+Theorem B.4. Let k∗= PKi=1 1[ˆci = c∗] denotes the number of times target neuron is given during
+K experiments. Then,
+                                                             t
+                        K                     P(k∗≥t) ≥ X      (1 −p)ipK−i                          (22)                                                           i
+                                         i=0
+
+Remark B.5. This could be derived by Lemma B.2 and binomial distribution CDF.
+
+Using Thm. B.4, we can derive:
+                   P(c∗/∈S) ≤P(k∗≤K −k(S))
+                   = 1 −P(k∗≥K −k(S) −1)
+                                   K−k(S)−1                                        (23)
+                          K                   ≤1 − X         (1 −p)ipK−i
+                                                                 i
+                                           i=0
+
+Thus,
+                                 K−k(S)−1
+                         K                  P(c∗∈S) ≥ X         (1 −p)ipK−i,                      (24)                                                              i
+                                         i=0
+finishes the proof.
+
+
+
+
+
+                                       16
+
+C  Related works
+
+C.1  Neuron identification
+
+The goal of neuron identification is to find a human-interpretable concept that describes the behavior
+and functionality of a specific neuron. A variety of methods have been proposed for neuron iden-
+tification. Network Dissection [Bau et al., 2017] is a pioneering work with the idea of comparing
+neuron activations with ground-truth concept masks. Subsequent work explored extensions such as
+compositional explanations [Mu and Andreas, 2020], automated labeling with CLIP [Oikarinen and
+Weng, 2023], and multimodal summarization [Bai et al., 2024]. More recent approaches expand the
+concept space to linear combinations [Oikarinen and Weng, 2024]. While these advances provide
+useful empirical tools, in this work we aim to fill the gap in a principled theoretical foundation for
+neuron identification.
+
+C.2  Principled framework for neuron identification
+
+To unify the rapid growing neuron identification methods, Oikarinen et al. [2025] design a frame-
+work, summarizing most neuron identification algorithm into three major components: neuron rep-
+resentation, concept activations and similarity metrics. Additionally, two meta-tests are proposed
+to compare similarity metrics. While this work provides a good start point, rigorous theoretical
+analysis is still lacking, which we want to provide in this work.
+
+
+
+
+
+                                       17
+
+D  Details in recall, precision and IoU’s convergence speed derivation
+
+In the main text, we mention the key idea of deriving convergence speed r for recall, precision and
+IoU: that is regard them as special case of accuracy where data are limited in a subgroup. For recall:
+                                    P(f(x) = 1, c(x) = 1)
+                              simrecall(f, c) =
+                                           P(c(x) = 1)                                (25)
+                     = P(f(x) = c(x) | c(x) = 1).
+
+Therefore, we can regard calculation of recall as a rejection sampling process: The samples sat-
+isfying c(x) = 1 are kept and others are rejected.  Then, accuracy is calculated on remaining
+samples.  Thus, the convergence speed can be calculated by inserting the effective sample size
+|{c(x) = 1 | x ∈Dprobe}| into the accuracy’s convergence rate:
+
+               s               2
+                                                 log( δ )
+                                          rrecall =                                                       (26)                                      2|{c(x) = 1 | x ∈Dprobe}|.
+
+For precision and IoU, the derivation is similar.
+
+E LLM usage
+
+In this article, LLM is used to check grammar and typos as well as improve the writing.
+
+
+
+
+
+                                       18
+
+F  Details of simulation study Experiment 1 (Sec 3.3)
+
+Experiment 1  The procedure of Experiment 1 can be described as follows:
+
+      1. Generate simulation data. To start, we first generate the simulation data following the
+         settings specified in Sec. 3.3. We generate paired binary variables representing ground-truth
+        concept activations and neuron responses i.i.d. by directly sampling from the probability
+         distribution specified by the probability matrix M.
+      2. Calculate ground truth metrics. Given the probability matrix M, the ground truth value
+         of each metric is calculated according to their definition.
+      3. Simulation. In this step, we run simulation to simulate the convergence speed r(·). In
+        each iteration i, we first sample a new batch of data following step 1 with size Nsample.
+        Then, we estimate each metric using the data sample and calculate the error erri. We
+         repeat the procedure for Nexp = 1000 times, aggregate the erri in each round and report
+         the 0.95-quantile of errors.
+
+
+
+
+
+                                       19
+
+G  Computational cost for Bootstrap Ensemble (BE)
+
+In this section, we study the computational cost of Bootstrap Ensemble.  Theoretically, since the
+BE method requires K times of bootstrapping and running original neuron identification algorithm,
+the running time should scale up linearly with K. In practice, however, the BE time cost is not
+simply K times of original algorithm, as a significant portion of computation can often be shared
+among bootstrap samples, saving much time. Take CLIP-Dissect as an example: The CLIP-Dissect
+algorithm can be roughly divided into three steps:
+
+      1. Collect features from the target model and CLIP model.
+      2. Calculate similarity matrix between target features and CLIP features.
+      3. Select the final concept with highest similarity.
+
+In the implementation of BE, the first step can be shared among bootstrap samples: we pre-compute
+the features of target model and CLIP on the whole probing dataset. For each bootstrap sample,
+we only need to fetch corresponding features, calculate similarity and select the highest similarity
+concept. With this, we run experiments based on a ConvNeXt-base model [Liu et al., 2022].4 The
+profiling results are shown in Fig. 6. We can see that though we do K = 100 bootstrap ensembles,
+the time overhead is only about 30% and the memory overhead is about 15%. Fig. 7 shows how
+runtime changes with K, illustrating that our runtime is as high as K times of original algorithm.
+  Further, to understand the impact of concept number, we compare results on two concept sets:
+
+
+
+
+
+Figure 6: Profiling result of CLIP-Dissect on a ConvNext-base model. K = 100 bootstrap ensem-
+bles are used.
+
+Broden concept set with 1198 concepts and 20k English words with 20000 concepts. The result is
+shown in the table 2. From the results, we can see that bootstrapping time increases significantly with
+
+   4Experiment is done with an NVIDIA RTX A5000 GPU and an AMD Ryzen Threadripper PRO 3975WX
+CPU.
+
+
+
+
+
+             Figure 7: Runtime vs. K for CLIP-Dissect on a ConvNeXt-base model.
+
+
+                                       20
+
+larger concept set. However, we argue the major cause is the latent CLIP-Dissect uses soft-wpmi,
+which is much slower with larger concept set. The bootstrap wrapper itself does not introduce higher
+overhead.
+
+            Stage                 Broden (|C| = 1, 198)  20k (|C| = 20, 000)
+             Activation computation   211.7                  277.6
+            Bootstrapping           64.7                   348.7
+     Table 2: Runtime (s) comparison with two concept sets: Broden and 20k English words.
+
+
+
+
+
+                                       21
+
+H  Additional faithfulness experiments for continuous metrics
+
+In Sec. 3.2, we mainly study bounds for metrics with binarized neuron representation. In this section,
+we conduct experiments on several metrics for continuous neuron representations: AUROC [Bykov
+et al., 2023], AUPRC, correlation [Oikarinen and Weng, 2024] , WPMI [Oikarinen and Weng, 2023]
+and MAD [Kopf et al., 2024]. AUROC has been defined in the main text. To calculate AUPRC, we
+first sort f(xi) for smallest to largest: f(x(1)) ≤f(x(2)) · · · ≤f(x(n)). Thus, the precision at kth
+threshold can be defined as
+                                                   k
+                                        1
+                                 Prec(k) = X c(i),                                 (27)
+                                       k
+                                                 i=1
+
+The recall can be defined as
+                                                      k
+                                        1
+                             Rec(k) :=   X c(i).                              (28)
+                        Pni=1 ci i=1
+
+The AUPRC can be calculated as:
+
+                                                   Prec(k)
+                        simAUPRC(f,ˆ            c) := X                .                         (29)
+                               Pni=1 ci                                                      k|c(k)=1
+
+For MAD,
+                   simMAD(f, c) = Ex|c(x)=1f(x) −Ex|c(x)=0f(x)                    (30)
+
+For WPMI, we take the definition in Oikarinen et al. [2025]:
+
+                 simWPMI = Ef(x)=1[log(c(x)) −λ log[E(c(x))]].                   (31)
+
+Here, we take λ = 1. For correlation:
+
+                          E (f(x) −µf) (c(x) −µc)
+                         simcorr(f, c) :=                                           .                     (32)
+                     q σ2f σ2c
+
+where µf, µc, σf, σc are the mean and standard deviation of f and c, respectively. For those metrics,
+a closed-form expression of convergence rate is challenging to derive. Thus, we conduct empirical
+studies with synthetic data and real ImageNet validation data.
+
+
+H.1  Synthetic experiment
+
+Data generation  For the synthetic dataset, we construct a simple conditional Gaussian data-
+generating process to obtain pairs of binary concept activations and continuous neuron represen-
+tations. For each sample i ∈{1, . . . , n} we first randomly draw a binary concept label ci ∈{0, 1},
+where P(ci = 1) = p is a hyperparameter. Conditioned on ci, we then sample a one-dimensional
+neuron representation zi ∈R from a Gaussian distribution whose mean and variance depend on the
+concept state:
+                    (N(µpos, σ2pos),   if ci = 1,
+                                 zi | ci =
+                                    N(µneg, σ2neg),   if ci = 0,
+
+where (µpos, σpos) and (µneg, σneg) are hyperparameters controlling, respectively, the distribution of
+the neuron activation when the concept is present or absent. In practice, we generate n i.i.d. samples
+{(ci, zi)}ni=1 according to the above process.  In the experiment, we take p = 0.002, µpos = 1,
+µneg = 0, σpos = 0.2, σneg = 0.5.
+
+Experiments  We approximate the ground truth value of metrics with 106 examples, then estimate
+the convergence speed r(·) by calculating the 95% quantile of error. Since the scale of MAD is sig-
+nificantly different from other metrics, we compute the relative error instead. The results are shown                                       √
+in Fig. 8a. From the results, we see all metrics also follow asymptotically O(1/ N) convergence
+speed.
+
+
+                                       22
+
+                       (a) Synthetic dataset                          (b) ImageNet validation dataset
+
+          Figure 8: 95% error quantile on synthetic dataset and ImageNet validation set.
+
+
+H.2  Real data experiment
+
+Furthermore, we conduct an experiment on ImageNet validation set with a ResNet-50 model. We
+choose the final layer neurons and the concepts are the class labels they predict. The results are
+shown in Fig. 8b. Different with the synthetic dataset, the AUROC metric performs significantly
+better with more samples. We hypothesize the reason is those neurons are specific to classify
+these concepts, thus their ability to distinguish concepts (what AUROC is measuring) are especially                                             √
+strong. Besides, we see that similar to synthetic data, most metrics show asymptotically O(1/ N)
+convergence rate.
+
+
+
+
+
+                                       23
+
+I  Study on sample numbers (Thm 3.1)
+
+Thm.  3.1 suggests that more probing samples can reduce the generalization gap, implying bet-
+ter faithfulness. To evaluate this, we conduct a qualitative study using CLIP-Dissect to study the
+ResNet-50 layer 4 neurons on ImageNet validation set with size of probing dataset |Dprobe| =
+100, 1000, 10000, 50000. We show some examples in Fig. 9. From the examples, we can see that,
+with more probing data, the captured concept describes the neurons more accurately, supporting our
+theory.
+
+
+
+
+
+          Figure 9: CLIP-Dissect explanation with different number of probing samples.
+
+
+
+
+
+                                       24
+
+J  Additional bootstrap ensemble (BE) experiments
+
+J.1  Additional examples for BE
+
+In figs. 10 to 13, we present additional results of applying BE on NetDissect and CLIP-Dissect. To
+enable better comparison, we use the Broden [Bau et al., 2017] dataset as the probing dataset and
+corresponding concepts as concept set for both methods.
+
+J.2  Experiments with different architectures
+
+To understand the performance of NetDissect and CLIP-Dissect with different architectures, we add
+additional experiments with ConvNeXt-base [Liu et al., 2022] and ViT-B/16 [Dosovitskiy, 2020].
+We show example images in figs. 14 and 15. We compare (1) the average frequency of top-1 concept
+and (2) the average size of concept set that covers 90% of all runs. Since NetDissect does not support
+Vision Transformer features, we map the embedding back to the corresponding input patch to form
+a 2-D feature map. The result is shown in tables 3 and 4. From the results, we can see that CLIP-
+Dissect provides more diverse concepts except on ConvNeXt-base. NetDissect results vary a lot
+across backbones, which is most stable for ViT-B/16 and most diverse for ConvNeXt-base.
+
+                Method       ResNet50   ViT-B/16  ConvNeXt-Base
+                  CLIP-Dissect  66.9%     51.2%     53.7%
+                   NetDissect    79.2%     91.3%     27.8%
+Table 3: Comparison of top-1 concept frequency of CLIP-Dissect and NetDissect on three vision
+backbones.
+
+
+
+                Method       ResNet50   ViT-B/16  ConvNext-Base
+                  CLIP-Dissect   3.11        5.93       5.61
+                   NetDissect     2.08        1.34       6.99
+Table 4: Comparison of 90% coverage concept set size of CLIP-Dissect and NetDissect on three
+vision backbones.
+
+
+
+
+
+                                       25
+
+Figure 10: Additional results of applying BE to NetDissect and CLIP-Dissect on ResNet 50 neurons.
+
+
+
+                                       26
+
+Figure 11: Additional results of applying BE to NetDissect and CLIP-Dissect on ResNet 50 neurons.
+
+
+
+                                       27
+
+Figure 12: Additional results of applying BE to NetDissect and CLIP-Dissect on ResNet 50 neurons.
+
+
+
+                                       28
+
+Figure 13: Additional results of applying BE to NetDissect and CLIP-Dissect on ResNet 50 neurons.
+
+
+
+                                       29
+
+Figure 14: BE example on ViT-B/16, last encoder layer.
+
+
+
+
+
+ Figure 15: BE example on ConvNext-base, last layer.
+
+
+
+
+
+                     30

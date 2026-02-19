@@ -1,0 +1,1280 @@
+                      Published as a conference paper at COLM 2024
+
+
+
+              Locating and Editing Factual Associations in Mamba
+
+
+                   Arnab Sen Sharma∗, David Atkinson, and David Bau
+                    Khoury College of Computer Sciences, Northeastern University
+
+
+                                                 Abstract
+
+                    We investigate the mechanisms of factual recall in the Mamba state space model.
+                          Our work is inspired by previous findings in autoregressive transformer language
+                           models suggesting that their knowledge recall is localized to particular modules
+                                     at specific token locations; we therefore ask whether factual recall in Mamba can
+                            be similarly localized. To investigate this, we conduct four lines of experiments2024
+                           on Mamba. First, we apply causal tracing or interchange interventions to localize
+                            key components inside Mamba that are responsible for recalling facts, revealing
+                                   that specific components within middle layers show strong causal effects at theAug                              last token of the subject, while the causal effect of intervening on later layers is
+                           most pronounced at the last token of the prompt, matching previous findings on2
+                                 autoregressive transformers. Second, we show that rank-one model editing methods
+                            can successfully insert facts at specific locations, again resembling findings on
+                               transformer LMs. Third, we examine the linearity of Mamba’s representations
+                               of factual relations. Finally we adapt attention-knockout techniques to Mamba
+                                  in order to dissect information flow during factual recall. We compare Mamba
+                                    directly to a similar-sized autoregressive transformer LM and conclude that despite[cs.CL]                            significant differences in architectural approach, when it comes to factual recall,
+                                 the two architectures share many similarities.
+
+
+                1  Introduction
+
+                       Studies of autoregressive transformer language models’ (LMs) processing of factual statements such
+                       as The Eiffel Tower is located in Paris, have identified a localized pattern of internal computations
+                  when recalling facts (Meng et al., 2022a;b; Geva et al., 2023; Hernandez et al., 2023; Nanda et al.,
+                       2023), and have further found that those LMs can be edited by making single-layer rank-one changes
+                          in model parameters to alter a specific fact. Although these localized phenomena appear to generalize
+                       across autoregressive transformer LMs, the extent to which similar locality might appear in very
+                          different architectures—such as recurrent networks (RNNs)—has not yet been investigated.
+
+                       In this paper we investigate the internal mechanisms of Mamba (Gu & Dao, 2023), a recently-
+                      proposed state-space language model, a type of RNN that achieves per-parameter performance that is
+                      competitive with transformers. Specifically, we ask whether factual recall within Mamba exhibitsarXiv:2404.03646v2                          locality similar to the patterns observed in autoregressive transformer language models.
+
+                   Our paper is a case study confronting a key methodological challenge that broadly faces interpretabil-
+                            ity researchers: as state-of-the-art neural network architectures evolve, we must ask, can the detailed
+                         analytical methods and tools developed for one neural architecture, such as transformer LMs, be
+                       generalized and applied to a different neural architecture, such as Mamba? In this paper we are able
+                         to answer the question with a qualified “yes”: we find that many of the methods used to analyze
+                        transformers can also provide insights on Mamba. We also discuss mismatches—that is, interpretation
+                    methods (such as path-dependent attention patching) that do not transfer to Mamba as easily due to
+                         architectural constraints.
+
+               We begin by studying whether activation patching (Wang et al., 2022) can be successfully applied
+                         to Mamba. Known variously as causal mediation analysis (Vig et al., 2020), causal tracing (Meng
+                          et al., 2022a), and interchange interventions (Geiger et al., 2021), activation patching techniques
+                     can successfully identify specific model components in transformer LMs that play crucial roles in
+                      performing a task. We ask whether Mamba can be productively studied the same way, even though
+
+                          ∗Correspondence to sensharma.a@northeastern.edu, Code available at romba.baulab.info
+
+
+                                                           1
+
+Published as a conference paper at COLM 2024
+
+
+
+
+
+the architectural components of Mamba are very different: for example, instead of attention heads and
+MLP modules, Mamba is composed of convolutions, gates, and state-space modules. To answer, we
+adapt activation patching to Mamba, and ask if any sparsity patterns emerge which provide insights
+into the respective roles of its components.
+
+We also study whether rank-one model editing can be applied to Mamba. While studies of trans-
+formers (Meng et al., 2022a;b; Hase et al., 2024) have found that there are a range of MLP modules
+within which factual knowledge can be inserted by making a single rank-one change in parameters,
+Mamba does not have MLP modules, so we ask if there are any other modules that can be similarly
+edited to insert knowledge. As with previous studies of transformers, the key question is whether
+factual associations can be edited with both specificity (without interfering with unrelated facts) and
+generalization (while remaining robust to rewordings of the edited fact).
+
+Finally, we apply methods for understanding the overall information flows in Mamba. Inspired by the
+findings of Hernandez et al. (2023), we measure the linearity of the relations between subject and
+object embeddings. And inspired by Geva et al. (2023), we examine information flow by adapting
+attention-blocking methods to the attention-free Mamba architecture.
+
+In this work we conduct our experiments on Mamba-2.8b, the largest available LM in Mamba family,
+and for comparison we conduct the same experiments on the similarly sized Pythia-2.8b (Biderman
+et al., 2023) autoregressive transformer LM.
+
+2  Background on Mamba
+
+Mamba, introduced in Gu & Dao (2023), is a recent family of language models based on state space
+models (SSMs). SSMs are designed to model the evolution of a hidden state across time with a
+first-order differential equation (Koopman et al., 1999; Durbin & Koopman, 2012), and when they
+are used as the recurrent state of an RNN, they can enable highly efficient parallelized training (Gu
+et al., 2021). To achieve good performance in language modeling, the Mamba SSM introduces
+input-dependent parameterization or selective-SSM instead of the traditional time-invariant SSMs.
+Mamba uses a special architecture called MambaBlock1, which is stacked homogeneously, replacing
+both attention and MLP blocks used in transformer layers. Here, we focus on the different operations
+performed inside a MambaBlock.
+Formally, Mamba is an autoregressive lan-            ai-1ℓ
+guage model: M  : X →Y over a vo-  hiℓ-1                                        hℓicabulary V that maps a sequence of tokens
+x = [x1, x2, . . . , xT] ∈X ,  xi ∈V to            ℓ      ℓ                              ℓ           ℓ       ℓ
+                                                                                                                                                                                                                                       i                                                                                                                                                i   Conv + SSM   si     Wo   o                               Wa   ay ∈Y ⊂R|V| which is a probability dis-
+tribution over the next token continuations                                                                                                                                ℓ                                                           ℓ        σ       giof x. Similar to other deep LMs, in Mamba,     Wg
+a token xi is first embedded to a hidden
+            = emb(xi). Then  Figure 1: Architecture of a MambaBlock. Projection ma-state of size d as h(0)i
+                                                      trices Wℓa and Wℓg have the shape 2d × d, while Wℓo has the      is transformed sequentially by a seriesh(0)i                                           shape d × 2d. h, a, g, s, and o are intermediate states of a to-
+                                           ken representation. σ is SiLU activation and ⊗is elementwiseof MambaBlocks. The hidden state h(ℓ)i
+after the ℓth (1-indexed) MambaBlock is   multiplication. Conv + SSM operation abstracts the Conv1D
+                                         and selective-SSM operations.
+computed as follows:
+
+
+                                                                                                    (1)                                          h(ℓ)i                      = h(ℓ−1)i                           + o(ℓ)i
+
+             is the output of ℓth MambaBlock for the ith tokenwhere o(ℓ)i
+
+
+                                                                                                    (2)             o(ℓ)i                                = W(ℓ)o    s(ℓ)i  ⊗g(ℓ)i        = MambaBlock(ℓ)  h(ℓ−1)1       , h(ℓ−1)2       , . . . , h(ℓ−1)i
+
+                                                                                          is calculated as:Here, ⊗represents element-wise multiplication or Hadamard product. s(ℓ)i
+
+    1In their paper, Gu & Dao (2023) call this component Mamba—the same name as the LM family.
+
+
+                                       2
+
+Published as a conference paper at COLM 2024
+
+
+
+                                                                              Average IE of restoring hi(l) over 400 facts
+                                                                                                                                                               0.8
+               Clean Run, G                        Patched Run, G*[←hiℓ]               prefix
+      Michael                            [PAD]                                    subject_[:-2]*                                            0.6
+                                                                                                subject_2nd_last*               early site
+        Jordan                                   Pelé                                                                                             0.4
+                                                                                                           subject_last*
+ professionally                            professionally                                     further tokens                                   late site       0.2
+        played                                played                                               last token
+                                                                                                                                                               0.0
+                                   basketball                          p(ans)= ?                 0 5 10 15 20 25 30 35 40 45 50 55     IE
+                                                 (answer)                                                                     single restored layer within Mamba-2.8b
+
+                       (a) Activation patching                                                                         (b) Tracing the residual states, h(l)i
+Figure 2: (a) Activation patching. A state from the clean run G is patched into its corresponding position in the
+corrupted run G∗. This has a downstream effect of potentially changing all the states that depend on the patched
+state in G∗[←h(ℓ)i   ].                     (b) Average indirect effect of applying causal tracing on residual stream states  h(ℓ)i   in
+Figure 1  across 400 different facts from the RELATIONS dataset (see Appendix A.2).
+
+
+                                                                                                    (3)                   = W(ℓ)a  h(ℓ)i                                      a(ℓ)i
+
+                                                                                                    (4)                       c(ℓ)1   , c(ℓ)2   , . . . , c(ℓ)i                   = SiLU Conv1D  a(ℓ)1   , a(ℓ)2   , . . . , a(ℓ)i
+
+                                                                                                    (5)                                       s(ℓ)i                   = selective-SSM  c(ℓ)1   , c(ℓ)2   , . . . , c(ℓ)i
+
+We abstract the operations in Equations 4 and 5 as the Conv + SSM operation in Figure 1. At
+a high level, Conv + SSM brings information from the past token representations to the current
+token representation. The purpose is similar to the attention blocks in transformer LMs. But, unlike
+attention operation, Conv + SSM scales linearly with the context length and thereby enjoys faster
+inference speed and longer context limits. See Gu & Dao (2023) for details.
+
+                                     (that does not pass through Conv + SSM operation) is a gatingThe output of the other path g(ℓ)i
+mechanism that regulates the information flow. This gating mechanism resemble parts of LSTM
+(Hochreiter & Schmidhuber, 1997) and GRU (Cho et al., 2014) networks, where similar gates control
+selective updates of recurrent state.
+
+                                                                                                    (6)                                      g(ℓ)i                    = SiLU W(ℓ)g  h(ℓ−1)i
+In the remainder of the paper, we aim to characterize the role of the components of Mamba in factual
+recall by adapting tools that have previously been used to analyze transformers. In Section 3, we
+apply activation patching to localize factual recall as in Meng et al. (2022a), testing the roles of states
+si, gi, and oi at all layers. In Section 4, following Meng et al. (2022a); Hase et al. (2024), we test
+rank-one edits of facts across components Wa, Wg, and Wo at each layer. In Section 5, we collect
+Jacobians within Mamba to test the linearity of relational encodings as done by Hernandez et al.
+(2023). And in Section 6 we address the challenge of applying attention patching in Mamba, as used
+in Geva et al. (2023) to isolate information flow in GPT LMs.
+
+3  Locating Key States for Factual Recall
+
+We begin with activation patching, seeking to understand if there are specific hidden states which play
+important roles during factual recall. We select a fact (s, r, o) that the LM knows, where r is a relation
+that associates a subject entity s with an object entity o. To estimate each state’s contribution towards
+a correct factual prediction (s = Michael Jordan, r = professionally played, o = basketball), we
+collect model activations across three different runs:
+
+clean run  G: In the clean run, we simply run the model on a prompt specifying the fact we are
+interested in. For example, x = (s, r) = Michael Jordan professionally played. We cache all the
+                                                                                                  | i ∈[1, T], ℓ∈[1, L]  .hidden states during the clean run to be used later:  h(ℓ)i   , a(ℓ)i   , s(ℓ)i   , g(ℓ)i
+corrupted run  G∗: In the corrupted run, we swap s with a different subject s∗(Pelé) such that the
+LM gives a different answer o∗(soccer) to the modified prompt x∗= (s∗, r) (i.e., o∗̸= o).
+
+This subject-swapping approach follows the recommendation of Zhang & Nanda (2023) and has the
+advantage of using natural text perturbations to avoid introducing out-of-domain states to the model’s
+
+
+                                       3
+
+Published as a conference paper at COLM 2024
+
+
+
+        (a) Average IE of restoring oi(l) over 400 facts           (b) Average IE of restoring gi(l)               (c) Average IE of restoring si(l)
+                                                              0.5                                                0.5                                                0.5
+            prefix
+                                                              0.4                                                0.4                                                0.4
+    subject_[:-2]*
+
+subject_2nd_last*       early site                             0.3             early site                           0.3                                                0.3
+
+     subject_last*                                            0.2                                                0.2                                                0.2
+
+    further tokens                              late site           0.1                                                0.1                                  late site           0.1
+          last token
+                                                              0.0                                                0.0                                                0.0
+                0 5 10 15 20 25 30 35 40 45 50 55     IE       0 5 10 15 20 25 30 35 40 45 50 55     IE       0 5 10 15 20 25 30 35 40 45 50 55     IE
+                     center of interval of 10 patched layers                center of interval of 10 patched layers               center of interval of 10 patched layers
+
+Figure 3: Average indirect effect of different states o(ℓ)i   , g(ℓ)i   , and s(ℓ)i   over 400 facts from the RELATIONS
+dataset (see Appendix A.2). For each layer ℓ, states for a window of 10 layers around ℓare restored from the
+clean run G.
+
+computation, as may happen when corrupting s embeddings with Gaussian noise (the method used in
+Meng et al. (2022a)).
+
+                                     ]: In the patched run, we run the model on the corrupted prompt x∗, butpatched run  G∗[←h(ℓ)i
+              by replacing its value with the corresponding state cached from the clean run G. Theintervene on h(ℓ)i
+remainder of the computation is run normally, meaning that the patched state can have a downstream
+effect of potentially changing all the states that depend on it. See Figure 2a.
+
+                                 denote the probability assigned to the correct answer o in G,Let p(o), p∗(o), and p∗[←h(ℓ)i  ](o)
+                                                                        in recalling the fact (s, r, o),G∗, and G∗[←h(ℓ)i                            ] respectively. To measure the contribution of h(ℓ)i
+we define its indirect effect (IE) as:
+                                 p∗[←h(ℓ)i  ](o) −p∗(o)
+                                     IEh(ℓ)i =     p(o) −p∗(o)                                     (7)
+
+
+                                                                               across differentIn Figure 2b we plot the average indirect effect of restoring the residual states h(ℓ)i
+layer-token positions over 400 facts from the RELATIONS dataset (Hernandez et al., 2023). The high
+IE observed at the late site (later layers at the last token) position is natural, as restoring a clean
+     there will restore most of the model computation from G. However, Mamba also shows highh(ℓ)i
+causality at the early site (early-middle layers at the last subject token position). This is consistent
+with what Meng et al. (2022a) observed in the GPT family of language models.
+
+                                                                            ,In Figure 3 we plot the average IE for o(ℓ)i                                                                    , g(ℓ)i                                             G*
+                           (Figure 3a) looksand s(ℓ)i             . The plot for o(ℓ)i
+very similar to Figure 2b, confirming that the
+output from MambaBlock has strong causal ef-
+fects at both early and late sites. Interestingly,                   ℓ
+                                                                (a) hi from G             (b) Blocking siFigure 3c shows that the selective-SSM outputs
+s(ℓ)i    have high IE only at the late site, resem-  G* [←hiℓ ]
+bling the behavior of attention modules in GPT
+models (Meng et al., 2022a). However, there is
+no state that appears to do the opposite; in other
+words, there is no state with strong effects at the
+early site and not at the late site (The gate out-           hℓi           gℓi           oℓi        sℓi
+       does have stronger IE at the early site,put g(ℓ)i
+but these effects are very weak). To compare
+                                              Figure 4: To probe for path-specific effects, (a) h(ℓ)i   iswith autoregressive transformer LMs, activation
+                                                       restored from the clean run G as in Figure 2a. (b) Then,
+patching results for Pythia-2.8b is shown in Fig-
+                                                        to reveal the role of the Conv + SSM contributions, si
+ure 10 in Appendix D. This comparison reveals                                                           states from the corrupted run G∗are also patched to
+a key way how Mamba differs from transform-  block the contributions from those paths.
+ers: while transformer MLP outputs have effects
+in the early site and not the late site, in Mamba there is no similar state that specializes only at the
+early site, at which factual recall would be expected to occur. This presents the question: which
+parameters in Mamba mediate factual recall?
+
+
+                                       4
+
+Published as a conference paper at COLM 2024
+
+
+                  IE with hi(l) restored          si blocked           gi blocked             oi blocked
+       1.00
+  IE 0.75  (a) i = subj last
+
+       0.50
+        Average 0.25
+
+       0.00
+          (b) i = prompt last
+       1.00
+  IE
+       0.75
+
+       0.50        Average 0.25
+
+       0.00
+               0       5      10      15      20      25      30      35      40      45      50      55      60
+                                                         Layers
+
+Figure 5: Impact of ablating si, gi, and oi on IEh(ℓ)i  for (a) subject last and (b) prompt last token positions.
+Taken together (a) and (b) show a clear separation roles between early-mid and later layers in Mamba-2.8b.
+h(ℓ)i  up to layer 46 only show strong IE at the subject last token position and have negligible impact after that.
+                jumps to 1.0 after layer 46. (a) also shows that, at the subject last token, before layer 27 −28,Whereas IE of h(ℓ)i
+IEh(ℓ)i   is significantly reduced by blocking either oi, gi, or si paths  sorted in descending order of damaging
+IEh(ℓ)i     . (b) At the prompt last token, ablating oi or si paths can significantly reduce IEh(ℓ)i  in layers 47 −50.
+To investigate this question, we replicate an experiment from Meng et al. (2022a) to probe path-
+specific effects (Pearl, 2022) by severing a path from the causal graph and monitoring its effect.
+Here, we are interested in understanding the effect of the contributions from gi, si, and oi (i.e.
+states that are processed by Wg, Conv + SSM, and Wo respectively) while recalling a fact. First,
+in the corrupted run G∗, at token position i, we cache all the contributions from the si paths as
+                                                                                     that was cached froms∗i = {s∗(ℓ)i                | ℓ∈[1, L]}. Then in the patched run G∗[←h(ℓ)i                                                                                         ], we restore h(ℓ)i
+the clean run G into its corresponding state (as in Figure 2a), but with an additional modification:
+to understand the contribution from the si paths, we sever those paths by also patching s∗i (cached
+from the corrupted run G∗) to their corresponding locations (see Figure 4). The same experiment is
+                                                                                              will severreplicated to understand the contributions of gi and oi states. We note that severing the o(ℓ)i
+             as well (see Figure 1).s(ℓ)i    and g(ℓ)i
+In Figure 5 we plot the average results of this experiment for token positions (a) i = subject last and
+(b) i = prompt last over 400 examples randomly sampled from the RELATIONS dataset. The key
+findings can be understood by examining the gap between the purple bars and the green, red, and
+blue bars: a large gap indicates a strong mediating role for Conv + SSM, Wg, or Wo parameters,
+respectively. At the early site at the subject last token, both the Conv + SSM and Wg have a strong
+role, but Wo plays an even larger role than either. Yet the strongest mediator at the late site is also
+Wo. This experiment highlights the importance of Wo in both stages of predicting a fact. But it also
+suggests that Mamba does not separate early-site factual recall between these groups of parameters
+as cleanly as transformers. However, Figure 5 reveals a clean separation of roles between early to
+mid and later layers, analogous to the findings of Hernandez et al. (2023) in transformer LMs. We
+also note that this division of responsibilities between layers can be more sharply noticed in Mamba
+when compared to transformers LMs (compare Figure 5 with Figure 11).
+
+4  Editing Facts With ROME
+
+Having begun to characterize the locations of important states for factual recall, we now investigate
+whether factual recall behavior can be edited. In particular, we apply the ROME (Rank One Model
+Editing, Meng et al., 2022a) technique to Mamba. ROME begins with the observation that any
+linear transformation can be considered as an associative memory (Anderson, 1972; Kohonen, 1972),
+mapping a set of keys K = [k1|k2| . . . ] to their corresponding values V = [v1|v2| . . . ], and uses this
+to edit factual associations in transformer LMs. Here, we apply the technique to a particular set of
+linear transformations within Mamba, and report our editing success on each.2
+
+    2Further motivating these experiments, previous work has shown that the locations identified by activation
+patching techniques are not necessarily those which have the strongest edit performance (Hase et al., 2024).
+
+
+                                       5
+
+Published as a conference paper at COLM 2024
+
+
+
+
+                                                                                                                             (l)                 (l)                   (l)
+                   (a) ROME performance on Mamba-2.8b     Wa      Wg      Wo
+
+           Efficacy (ES)                 Generalization (PS)                Specificity (NS)                   Score (S)
+100                             100                             100                             100
+
+ 75                              75                              75                              75
+
+ 50                              50                              50                              50
+
+ 25                              25                              25                              25
+
+  0  0  5 10 15 20 25 30 35 40 45 50 55 60       0  0  5 10 15 20 25 30 35 40 45 50 55 60       0  0  5 10 15 20 25 30 35 40 45 50 55 60       0  0  5 10 15 20 25 30 35 40 45 50 55 60
+              Edit Layer                         Edit Layer                         Edit Layer                         Edit Layer
+
+                                                                                                                                                 (l)
+                              (b) ROME performance on Pythia-2.8b       Wdown
+
+           Efficacy (ES)                 Generalization (PS)                Specificity (NS)                   Score (S)
+100                             100                             100                             100
+
+ 75                              75                              75                              75
+
+ 50                              50                              50                              50
+
+ 25                              25                              25                              25
+
+  0                               0                               0                               0
+     0  3  6  9 12 15 18 21 24 27 30         0  3  6  9 12 15 18 21 24 27 30         0  3  6  9 12 15 18 21 24 27 30         0  3  6  9 12 15 18 21 24 27 30
+              Edit Layer                         Edit Layer                         Edit Layer                         Edit Layer
+
+Figure 6: ROME performance in editing facts across different layers (a) by modifying W(ℓ)a   , W(ℓ)g   ,
+                                                  in Pythia-2.8b. Results are reported on the first 2000W(ℓ)o  in Mamba-2.8b, and (b) modifying W(ℓ)down
+examples in the COUNTERFACT dataset.
+
+
+The input to ROME is a prompt x = (s, r), where s (Emmanuel Macron) is a subject entity and r
+(is the President of) is a relation. ROME also takes a counterfactual object o∗(England), meant to
+replace the correct object o (France) in the model’s output. To effect that change, ROME generates
+a rank-one update to W(ℓ)   the down-projection matrix of the MLP module for the last token of                        down,
+the subject at layer ℓ—which plays the role of the associative memory. In generating the rank-one
+update, ROME considers the input to W(ℓ)                                            as the key (k∗). Then, with gradient descent ROME                                       down
+                                                                            the model will output o∗.calculates a value (v∗) such that, when v∗is inserted as the output of W(ℓ)down,
+Importantly, while optimizing v∗, ROME attempts to minimize unrelated changes in model outputs
+(Joe Biden, for example, should still be mapped to the United States post-edit). Finally, ROME adds
+                         such that  W(ℓ)a rank-1 matrix ∆to W(ℓ)                       + ∆ k∗≈v∗. (See Meng et al. (2022a) for details.)                      down                                       down
+
+4.1  Applying ROME in Mamba
+
+We apply ROME on the three different projection matrices of Mamba: W(ℓ)a  which affects only
+the Conv + SSM path, W(ℓ)g  which affects only the gating path, and W(ℓ)o   , the final output of
+the MambaBlock, which is added to the residual state. We plot ROME performance on different
+projection matrices  W(ℓ)a   , W(ℓ)g   , and W(ℓ)o   across all the layers in Figure 6a.
+
+To evaluate editing performance, we use the COUNTERFACT dataset from Meng et al. (2022a).
+COUNTERFACT contains 20K counterfactual examples in the form (s, r, o →o∗), where o is the
+correct answer to the prompt x = (s, r), and o∗is the object which is to be inserted as the new answer
+to the prompt (See Appendix A.1 for details). We select the first 2000 examples from this dataset for
+our module-layer sweep. We use the original evaluation matrices in Meng et al. (2022a) to measure
+ROME edit performance.
+
+The final score (S) in the ROME evaluation suite is the harmonic mean of three different scores:
+
+ 1. Efficacy (ES): For an edit request (s, r, o →o∗), we say the edit is effective if, post-edit, the LM
+    assigns p(o∗) > p(o) in response to the prompt x = (s, r). Efficacy reflects the portion of the
+   examples where the edit was effective.
+
+ 2. Generalization (PS): A successful edit should be persistent across different paraphrases of (s, r).
+    For each of the request instances (s, r, o →o∗), p(o∗) > p(o) is checked post-edit with a set of
+    different rephrasings xp ∼Pr(s) of the prompt x = (s, r), where Pr denotes a set of paraphrased
+    templates for the relation r.
+
+
+                                       6
+
+Published as a conference paper at COLM 2024
+
+
+
+
+ 3. Specificity (NS): Finally, the edit should be specific to Pr(s) and should not additionally change
+    the mapping of some nearby subject sn to o∗. To evaluate the specificity of an edit we measure
+    p(on) > p(o∗) with Pr(sn) for a set of nearby factual associations {(sn, r, on) | on ̸= o∗}.
+
+Figure 6a shows that ROME can achieve high scores (S) for a range of early to middle layers by
+modifying any one of the projection matrices W(ℓ)a   , W(ℓ)g   , or W(ℓ)o   , matching observations made by
+Hase et al. (2024) regarding transformer LMs. However, we found that performance does depend on
+the location of the edit. For example, in the case of W(ℓ)g  and W(ℓ)o   , the score (S) and generalization
+(PS) drops after around layer 43.  This is consistent with our findings from the path-blocking
+experiment in Figure 5a. We also find that edits to W(ℓ)a  have poor generalization (PS) in early layers,
+whereas high PS can be achieved at early layers by modifying either W(ℓ)g  or W(ℓ)o   , consistent with
+their higher indirect effects as seen in Figure 5a.
+Where is the right place to apply ROME on Mamba? Figure 3 could suggest W(ℓ)g   , since the causal
+effect of gi states is mostly concentrated at the subject last token, similar to the behavior of MLPs
+in transformers (Meng et al., 2022a).  Consistent with this is the architectural fact that, just as
+transformers’ W(ℓ)  connects to attention modules only through the residual stream, the output of               down
+W(ℓ)g  does not flow through the Conv + SSM module—a module that other work has suggested might
+play a role similar to that played by attention heads in transformers (Grazzi et al., 2024). And, indeed,
+we find that ROME can successfully insert facts by modifying W(ℓ)g   . On the other hand Figure 6a
+reveals sudden drops in efficacy and generalization at middle layer gates, suggesting that W(ℓ)g  may
+be an unreliable mediator at some layers. Our experiments further show that the best performance for
+ROME is empirically achieved by modifying W(ℓ)o   . This is consistent with the fact that oi states show
+a stronger causal effect at the subject last token than gi states do (see Figures 3a and 5a). Additionally,
+ROME achieves better generalization (PS), competitive specificity (NS), and an overall better score
+(S) with W(ℓ)o   . We hypothesize that the strong performance of W(ℓ)o  may be due to the the separation
+of roles between early-mid and later layers observed in Figures 2b, 3a, and 5. Also see Appendix C
+where we isolate the contribution of W(ℓ)o  by subtracting   +     from          , which reveal a                                                                    IEs(ℓ)i     IEg(ℓ)i         IEo(ℓ)i
+critical role of W(ℓ)o  in early-mid layers at subject last token position while mediating a fact.
+
+We plot ROME performance for a similar sized Pythia model on Figure 6b for comparison.
+
+5  LINEARITY OF RELATION EMBEDDING (LRE)
+
+With activation patching we can identify where facts are located inside a LM. We are also interested
+in understanding how LMs extract this information given x = (s, r). Figures 2b and 5 show a clear
+separation of roles in early-mid and later layers in Mamba. We observe a similar phenomenon in
+autoregressive transformer LMs (Meng et al., 2022a;b; Geva et al., 2023). According to Geva et al.
+(2023), in transformer LMs, the subject entity representation s, at the subject last token position, goes
+through an enrichment process, mediated by the MLP in the early-mid layers, where s is populated
+with different facts/attributes relevant to the subject entity s. Then, at the last token position, attention
+modules perform a query on the enriched s to extract the answer to the prompt x = (s, r). Hernandez
+et al. (2023) approximate the query operation performed on the enriched s for a specific relation r by
+taking the first order Taylor series approximation (LRE) of the LM computation F as
+
+                                  F(s, r) ≈β Jρs + b
+                     "      #          "              #                        ∂F
+            where J = Esi,r                                                                      ,  b = Esi,r  F(s, r) −∂F s             ,               (8)
+                            ∂s  (si,r)                        ∂s     (si,r)
+                       β is a scalar , and  ρ is the rank of J
+
+Hernandez et al. (2023) show that for a range of different relations it is possible to achieve a LRE
+that is faithful to the model computation F by averaging the approximations of J and b calculated
+on just n = 5 examples. We utilize LRE to understand the complexity of decoding factual relations
+
+
+                                       7
+
+Published as a conference paper at COLM 2024
+
+
+
+                LRE faithfulness for factual relations in Mamba-2.8B
+                 1.0
+                 0.9
+                 0.8
+                 0.7
+                 0.6
+                 0.5
+                 0.4                                     Faithfulness 0.3
+                 0.2
+                 0.1
+                 0.0
+                                             city                                                 band
+                        of                               pro                                         language continent language city                                                                                            university sport                                                                                      birth company person currency country hq name         evolution father countryin mother CEO                                                                                                                                    occupation position countryin instrument year                                                                              largest                                                         capital                                    by        from company           archnemesis      person                                                                                                                                                                         person company            on               plays      singer     sport city                               native       country      person                              plays                  superhero country                                                         country              country lead person                                                                                                                                                                                                                                                                                                              constellation       pokemon                                                                                                                                                           president                                                                                                                                                                                                                          landmark                                                                                                                               product        food                                                                                     person                               person landmark                                                      person                        star superhero                                                                         person
+Figure 7: LRE faithfulness with n = 5 samples for all the factual relations. Horizontal red lines indicate random
+choice baseline (in the RELATIONS dataset).
+
+in Mamba. We find the hyperparameters β, ρ and the layer ℓ(where to extract the enriched s from)
+using grid search. For mathematical and implementation details, see Hernandez et al. (2023).
+
+We plot the faithfulness of LRE with n = 5 samples on Figure 7. The metric faithfulness represents
+the portion of facts (s, r, o) that can be correctly retrieved if the LM computation F(s, r) is replaced
+with LRE(s), a simple affine transformation.
+
+We only calculate LRE for the factual relations in the RELATIONS dataset. Figure 7 shows that
+only for 10 out of 26 factual relations can a linear LRE achieve more than 50% faithfulness. For
+comparison, in the same sized Pythia-2.8b LRE achives > 50% faithfulness for 11 factual relations
+(see Appendix E). And, in both Mamba and Pythia, LRE fails to achieve good faithfulness for the
+relations where the range (the number of unique answers) is large. These findings align with what
+Hernandez et al. (2023) observed on GPT and LLaMA models; suggesting that, similar to transformer
+LMs, factual knowledge might be heterogeneously represented for different relations in Mamba.
+
+6  Attention Knock-out in Mamba?
+
+Attention modules mediate the flow of information across different token positions in transformer
+LMs. In attention “knock-out” experiments the information that flows through a specific edge (from
+kth token to qth token) via a certain attention head is blocked to understand if critical information
+flows through that edge. This is also a form of causal mediation analysis and it has been effective in
+understanding the information flow in transformer LMs (Geva et al., 2023; Wang et al., 2022; Todd
+et al., 2023). In Mamba, information from past tokens is retained in the si states, with the Conv +
+SSM operations (see Figure 1 and Equations 3–5). We ask, can we perform experiments similar to
+attention knock-out experiments in Mamba in order to understand how it moves factual information?
+
+We find that performing similar experiments in Mamba can be difficult. The use of Conv with
+a non-linearity in conjunction with selective-SSM make it challenging to remove the information
+retained in the qth token from the kth token (see Appendix B for details). However, it is possible to
+block the propagation of information from the kth token to all the future tokens via Conv + SSM
+operation by mean-ablation. Specifically, for a layer ℓ, we set a(ℓ)                                                                           k  := E a(ℓ)  , where E a(ℓ)  is the
+mean of a(ℓ) states collected with 10,000 tokens from WikiText-103 by Merity et al. (2016). We
+recognize that this intervention may not be as surgical as cutting a specific edge. However, with some
+caveats, this experiment suggests that the factual information flow in Mamba is similar to what Geva
+et al. (2023) observed in GPT LMs.
+
+We randomly sample 700 facts across 6 factual relations from the RELATIONS dataset. For each of
+those examples we block-out information propagation of the subject, non-subject, and the prompt-last
+
+
+                                       8
+
+Published as a conference paper at COLM 2024
+
+
+
+
+token positions for a window of 10 layers around a specific layer ℓ. The effect of blocking out
+Conv + SSM information flow for certain layer-token (ℓ−k) positions is measured as the relative
+change in p(o) with  p o | a(ℓ)k :=E  a(ℓ)  −p(o) /p(o). Figure 8 shows the averaged result and it leads
+us to draw the following conclusions about how factual information flows in Mamba:
+
+
+
+                0.50
+
+               p(o)  0.25
+         in  0.00
+
+                0.25                          change
+                                   Relative  0.500.75
+
+
+                1.00
+
+                   0    5    10   15   20   25   30   35   40   45   50   55   60
+                                              Layer
+
+                              subject           subj_last           non-subject           prompt_last
+
+                                                                        to future tokens via si paths is blocked,Figure 8: Relative change in p(o) when information flow from a(ℓ)k
+with k taking the value of either subject, non-subject, or the prompt_last token positions. For each layer ℓ, si
+paths were blocked for a window of 10 layers around ℓ.
+
+
+(a) The purple lines show that blocking out non-subject information flow in early middle layers
+    can bring down p(o) by up to 50%. Non-subject tokens are used to specify the relation r. This
+    observation leads us to believe that Mamba propagates relation specific information to future
+    tokens using Conv+SSM operations in early-middle layers.
+
+(b) Interestingly, the green lines (blocking the subject information flow) shows two valleys:
+
+     1. The first valley at the early layers is not surprising as Mamba needs to collate information
+       from all the subject tokens in early layers to recognize a subject entity s consisting of multiple
+        tokens.
+     2. However, the valley at layers 43-48 suggest that Mamba uses Conv + SSM paths in those
+        layers to propagate critical information from the subject to later tokens. This aligns with
+        Figures 5b and 3c, where si states in those layers show high indirect effects, indicating their
+        crucial role while recalling a fact.
+
+(c) The blue dashed lines indicate the effect of blocking the information of only the subject last
+    token. If the ablation is performed in very early layers, later layers can start to compensate for
+     that. However, the valley around layers 20-21 suggests that Mamba expects to recognize the full
+    subject entity by then in order to recall relevant associations (enrichment). Notably, activation
+    patching results for oi and si—states that we hypothesize take crucial part in the enrichment
+    process—also show strong indirect effect around that region (Figures 3a, 3b, and 5a). The blue
+     line follows the green line after layer 30. The weaker effect observed might be because ablating
+    subject last token is not always enough to remove all the subject information. For example, in
+     Eiffel Tower, Eiffel (tokenized as E, iff, el) is more informative than the last token Tower.
+
+
+These findings align with how factual information flows through attention modules in autoregressive
+transformer LMs, as observed by Geva et al. (2023) in GPT. However, unlike Geva et al. (2023), we
+cannot make strong claims about the unique role of the final token position (prompt-last) with this
+experiment. As we block out information flow to all future tokens, the intermediate states in between
+the ablated kth token and the last token are affected as well.
+
+
+                                        9
+
+Published as a conference paper at COLM 2024
+
+
+
+
+7  Related Works
+
+Mamba.  Mamba is a recent family of language models that are based on state space models
+(SSMs). Neural SSM-based models have achieved good performance across different modalities,
+including vision (Nguyen et al., 2022), audio (Goel et al., 2022), and genomic sequences (Nguyen
+et al., 2023). Only recently, however, with Mamba, have they become competitive with the language
+modeling performance of transformers (Gu & Dao, 2023). Like transformers, Mamba contains factual
+knowledge about real world entities (Grazzi et al., 2024). However, knowledge representation in
+Mamba (and other LMs based on SSMs) has up to now remained unexplored.
+
+There are few works focused on interpreting Mamba. Ali et al. (2024) identify implicit attention-like
+matrices formed by Mamba’s selective state space layers. Grazzi et al. (2024), while not strictly
+focused on interpreting Mamba’s internals, apply linear probes to Mamba’s (decoded) intermediate
+states during in-context regression tasks. Like us, they find substantial similarities between Mamba
+and transformer models: both architectures pursue “iterative” strategies, with the task loss falling
+more or less monotonically as the layer index increases.
+
+Locating Factual Knowledge in Language Models. To make factually correct statements about the
+world, a LM has to store factual knowledge about real world entities somewhere in its parameters.
+Understanding how and where a neural network stores knowledge is a core problem for interpretability
+and it has thus been studied from several perspectives (Ji et al., 2021; Wang et al., 2014). One line of
+work trains classifiers to probe for properties encoded in model representations (Ettinger et al., 2016;
+Shi et al., 2016; Hupkes et al., 2018; Conneau et al., 2018; Belinkov et al., 2017; Belinkov & Glass,
+2019). However, the flexibility of these classifiers can lead to overestimating model knowledge and
+capabilites (Belinkov, 2022). Causal mediation analysis methods (Pearl, 2022) attempt to measure the
+causal contribution of intermediate states to task performance. Meng et al. (2022a;b) use activation
+patching to identify key MLP modules for factual recall, highlighting the middle layers at particular
+token positions as being especially important. Similarly, Geva et al. (2023) apply causal mediation
+analysis to attention modules, seeking to understand the mechanism of cross-token factual information
+flow inside transformer LMs.
+
+8  Discussion
+
+In this paper we have set out to understand whether the analytical methods and tools developed for
+transformer LMs can also be applied on the Mamba recurrent state-space architecture. Although
+our experiments have been limited to Mamba-2.8b, the largest available LM of that family, and
+comparisons to the similarly-sized transformer Pythia-2.8b, the methods we have introduced are
+general, and can be used to analyze to any state-space model.
+
+Our overall comparisons of Mamba and transformers are positive: with activation patching we have
+found that, similar to autoregressive transformer LMs, Mamba shows signs of localization at the
+last subject token and at specific layer ranges while recalling a fact. Although, unlike transformers,
+Mamba has no MLP modules, we find that their Wo weights can receive rank-one model editing
+(ROME) edits with good generalization and specificity at a range of layers, similar to Wdown in Pythia
+and GPT family of LMs. We have studied the linearity of the embeddings of factual relations in
+Mamba and have found that many can be well approximated by LRE, again resembling autoregressive
+transformer LMs. We have also been able to partially adapt the tools of attention knock-out in Mamba
+by blocking outgoing information from a token, revealing information flows similar to transformer
+LMs during factual recall.
+
+The similarity that we have observed between factual recall mechanisms in transformers and Mamba
+leads us to speculate that the autoregressive language modeling task itself induces a pattern of
+localized factual recall that is independent of modeling architecture. When constraining a model to
+process text from beginning to end, the ordering creates a specific bottleneck in the information flows:
+the end of a subject becomes a singular moment at which recognition of the subject is both possible
+and useful, and we find that both transformers and Mamba arrange their computations to localize
+factual recall at that moment. We hypothesize that other future autoregressive LMs architectures
+should expect to see similar locality in factual recall as well.
+
+In summary, we find that many of the tools used to interpret and edit large transformers can be
+adapted to work with Mamba, and we are optimistic that those tools will continue to be useful as
+architectures continute to evolve.
+
+
+                                       10
+
+Published as a conference paper at COLM 2024
+
+
+
+
+Ethics
+
+By exploring the factual recall mechanism in Mamba, we potentially improve its transparency,
+enabling oversight and control. However, the ability to modify facts directly in the model brings with
+it the potential for abuse, such as adding malicious misinformation or bias.
+
+Reproducibility
+
+We ran all experiments on workstations with either 80GB NVIDIA A100 GPUs or 48GB A6000
+GPUs, using the HuggingFace Transformers library (Wolf et al., 2019) and PyTorch (Paszke et al.,
+2019). We make use of publicly available datasets COUNTERFACT and RELATIONS in this work.
+
+Acknowledgements
+
+This research has been supported by a grant from Open Philanthropy (DB, AS), and an NSF Computer
+and Information Science and Engineering Graduate Fellowship Fellowship (DA). We are also grateful
+to the Center for AI Safety (CAIS) for sharing their compute resources, which supported many of our
+experiments. Some of our initial analyses were conducted with a beta version of NNsight (Fiotto-
+Kaufman et al., 2024) on an implementation of Mamba instrumented for research by Jaden Fiotto-
+Kaufmann.
+
+References
+
+Ameen Ali, Itamar Zimerman, and Lior Wolf. The hidden attention of mamba models. arXiv preprint
+  arXiv:2403.01590, 2024.
+
+James A Anderson. A simple neural network generating an interactive memory. Mathematical
+   biosciences, 14(3-4):197–220, 1972.
+
+Yonatan Belinkov. Probing classifiers: Promises, shortcomings, and advances. Computational
+   Linguistics, 48(1):207–219, 2022.
+
+Yonatan Belinkov and James Glass. Analysis methods in neural language processing: A survey.
+  Transactions of the Association for Computational Linguistics, 7:49–72, 2019.
+
+Yonatan Belinkov, Nadir Durrani, Fahim Dalvi, Hassan Sajjad, and James Glass. What do neural
+  machine translation models learn about morphology? arXiv preprint arXiv:1704.03471, 2017.
+
+Stella Biderman, Hailey Schoelkopf, Quentin Gregory Anthony, Herbie Bradley, Kyle O’Brien, Eric
+  Hallahan, Mohammad Aflah Khan, Shivanshu Purohit, USVSN Sai Prashanth, Edward Raff, et al.
+   Pythia: A suite for analyzing large language models across training and scaling. In International
+  Conference on Machine Learning, pp. 2397–2430. PMLR, 2023.
+
+Kyunghyun Cho, Bart Van Merriënboer, Dzmitry Bahdanau, and Yoshua Bengio. On the properties of
+   neural machine translation: Encoder-decoder approaches. arXiv preprint arXiv:1409.1259, 2014.
+
+Alexis Conneau, German Kruszewski, Guillaume Lample, Loïc Barrault, and Marco Baroni. What
+  you can cram into a single vector: Probing sentence embeddings for linguistic properties. arXiv
+   preprint arXiv:1805.01070, 2018.
+
+James Durbin and Siem Jan Koopman. Time series analysis by state space methods, volume 38. OUP
+  Oxford, 2012.
+
+Yanai Elazar, Nora Kassner, Shauli Ravfogel, Abhilasha Ravichander, Eduard Hovy, Hinrich Schütze,
+  and Yoav Goldberg. Measuring and improving consistency in pretrained language models. Trans-
+   actions of the Association for Computational Linguistics, 9:1012–1031, 2021.
+
+Allyson Ettinger, Ahmed Elgohary, and Philip Resnik. Probing for semantic evidence of composition
+  by means of simple classification tasks. In Proceedings of the 1st workshop on evaluating vector-
+  space representations for nlp, pp. 134–139, 2016.
+
+
+                                       11
+
+Published as a conference paper at COLM 2024
+
+
+
+
+
+Jaden Fiotto-Kaufman, Alexander R Loftus, Eric Todd, Jannik Brinkmann, Caden Juang, Koyena
+   Pal, Can Rager, Aaron Mueller, Samuel Marks, Arnab Sen Sharma, et al. Nnsight and ndif:
+  Democratizing access to foundation model internals. arXiv preprint arXiv:2407.14561, 2024.
+
+Atticus Geiger, Zhengxuan Wu, Hanson Lu, Josh Rozner, Elisa Kreiss, Thomas Icard, Noah D.
+  Goodman, and Christopher Potts. Inducing causal structure for interpretable neural networks.
+  CoRR, abs/2112.00826, 2021. URL https://arxiv.org/abs/2112.00826.
+
+Mor Geva, Jasmijn Bastings, Katja Filippova, and Amir Globerson. Dissecting recall of factual
+  associations in auto-regressive language models. arXiv preprint arXiv:2304.14767, 2023.
+
+Karan Goel, Albert Gu, Chris Donahue, and Christopher Re. It’s raw! Audio generation with state-
+  space models. In Kamalika Chaudhuri, Stefanie Jegelka, Le Song, Csaba Szepesvari, Gang Niu,
+  and Sivan Sabato (eds.), Proceedings of the 39th International Conference on Machine Learning,
+  volume 162 of Proceedings of Machine Learning Research, pp. 7616–7633. PMLR, 17–23 Jul
+  2022. URL https://proceedings.mlr.press/v162/goel22a.html.
+
+Riccardo Grazzi, Julien Siems, Simon Schrodi, Thomas Brox, and Frank Hutter. Is Mamba Capable
+  of In-Context Learning?, 2024. URL http://arxiv.org/abs/2402.03170.
+
+Albert Gu and Tri Dao. Mamba: Linear-time sequence modeling with selective state spaces. arXiv
+  preprint arXiv:2312.00752, 2023.
+
+Albert Gu, Karan Goel, and Christopher Ré. Efficiently modeling long sequences with structured
+   state spaces. arXiv preprint arXiv:2111.00396, 2021.
+
+Peter Hase, Mohit Bansal, Been Kim, and Asma Ghandeharioun. Does localization inform editing?
+  surprising differences in causality-based localization vs. knowledge editing in language models.
+  Advances in Neural Information Processing Systems, 36, 2024.
+
+Evan Hernandez, Arnab Sen Sharma, Tal Haklay, Kevin Meng, Martin Wattenberg, Jacob Andreas,
+  Yonatan Belinkov, and David Bau. Linearity of relation decoding in transformer language models.
+  arXiv preprint arXiv:2308.09124, 2023.
+
+Sepp Hochreiter and Jürgen Schmidhuber. Long short-term memory. Neural computation, 9(8):
+  1735–1780, 1997.
+
+Dieuwke Hupkes, Sara Veldhoen, and Willem Zuidema. Visualisation and’diagnostic classifiers’
+  reveal how recurrent and recursive neural networks process hierarchical structure. Journal of
+   Artificial Intelligence Research, 61:907–926, 2018.
+
+Shaoxiong Ji, Shirui Pan, Erik Cambria, Pekka Marttinen, and S Yu Philip. A survey on knowledge
+  graphs: Representation, acquisition, and applications. IEEE Transactions on Neural Networks and
+  Learning Systems, 33(2):494–514, 2021.
+
+Teuvo Kohonen. Correlation matrix memories. IEEE transactions on computers, 100(4):353–359,
+  1972.
+
+Siem Jan Koopman, Neil Shephard, and Jurgen A Doornik. Statistical algorithms for models in state
+  space using ssfpack 2.2. The Econometrics Journal, 2(1):107–160, 1999.
+
+Kevin Meng, David Bau, Alex Andonian, and Yonatan Belinkov.  Locating and editing factual
+   associations in gpt. Advances in Neural Information Processing Systems, 35:17359–17372, 2022a.
+
+Kevin Meng, Arnab Sen Sharma, Alex Andonian, Yonatan Belinkov, and David Bau. Mass-editing
+  memory in a transformer. arXiv preprint arXiv:2210.07229, 2022b.
+
+Stephen Merity, Caiming Xiong, James Bradbury, and Richard Socher. Pointer sentinel mixture
+  models. arXiv preprint arXiv:1609.07843, 2016.
+
+Neel  Nanda,  Senthooran  Rajamanoharan,  János  Kramár,  and  Rohin  Shah.      Fact
+   finding:    Attempting   to   reverse-engineer   factual   recall  on   the  neuron   level,
+  2023.     URL  https://www.lesswrong.com/posts/iGuwZTHWb6DFY3sKB/
+  fact-finding-attempting-to-reverse-engineer-factual-recall.
+
+
+                                       12
+
+Published as a conference paper at COLM 2024
+
+
+
+
+
+Eric Nguyen, Karan Goel, Albert Gu, Gordon Downs, Preey Shah, Tri Dao, Stephen Baccus, and
+  Christopher Ré.  S4nd: Modeling images and videos as multidimensional signals with state
+  spaces. In S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, and A. Oh (eds.), Ad-
+  vances in Neural Information Processing Systems, volume 35, pp. 2846–2861. Curran Asso-
+   ciates, Inc., 2022. URL https://proceedings.neurips.cc/paper_files/paper/
+  2022/file/13388efc819c09564c66ab2dc8463809-Paper-Conference.pdf.
+
+Eric Nguyen, Michael Poli, Marjan Faizi, Armin Thomas, Callum Birch-Sykes, Michael Wornow,
+  Aman Patel, Clayton Rabideau, Stefano Massaroli, Yoshua Bengio, Stefano Ermon, Stephen A.
+  Baccus, and Chris Ré. Hyenadna: Long-range genomic sequence modeling at single nucleotide
+   resolution, 2023.
+
+Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor
+  Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, et al.  Pytorch: An imperative style,
+  high-performance deep learning library. Advances in neural information processing systems, 32,
+  2019.
+
+Judea Pearl. Direct and indirect effects. In Probabilistic and causal inference: the works of Judea
+  Pearl, pp. 373–392. 2022.
+
+Xing Shi, Inkit Padhi, and Kevin Knight. Does string-based neural mt learn source syntax?  In
+  Proceedings of the 2016 conference on empirical methods in natural language processing, pp.
+  1526–1534, 2016.
+
+Eric Todd, Millicent L Li, Arnab Sen Sharma, Aaron Mueller, Byron C Wallace, and David Bau.
+  Function vectors in large language models. arXiv preprint arXiv:2310.15213, 2023.
+
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz
+   Kaiser, and Illia Polosukhin. Attention is all you need. Advances in neural information processing
+  systems, 30, 2017.
+
+Jesse Vig, Sebastian Gehrmann, Yonatan Belinkov, Sharon Qian, Daniel Nevo, Yaron Singer,
+  and Stuart Shieber.   Investigating gender bias in language models using causal mediation
+   analysis.  In H. Larochelle, M. Ranzato, R. Hadsell, M.F. Balcan, and H. Lin (eds.), Ad-
+  vances in Neural Information Processing Systems, volume 33, pp. 12388–12401. Curran Asso-
+   ciates, Inc., 2020. URL https://proceedings.neurips.cc/paper_files/paper/
+  2020/file/92650b2e92217715fe312e6fa7b90d82-Paper.pdf.
+
+Kevin Wang, Alexandre Variengien, Arthur Conmy, Buck Shlegeris, and Jacob Steinhardt. Inter-
+   pretability in the wild: a circuit for indirect object identification in gpt-2 small. arXiv preprint
+  arXiv:2211.00593, 2022.
+
+Zhen Wang, Jianwen Zhang, Jianlin Feng, and Zheng Chen. Knowledge graph embedding by
+   translating on hyperplanes.  In Proceedings of the AAAI conference on artificial intelligence,
+  volume 28, 2014.
+
+Thomas Wolf, Lysandre Debut, Victor Sanh, Julien Chaumond, Clement Delangue, Anthony Moi,
+   Pierric Cistac, Tim Rault, Rémi Louf, Morgan Funtowicz, et al. Huggingface’s transformers:
+   State-of-the-art natural language processing. arXiv preprint arXiv:1910.03771, 2019.
+
+Fred Zhang and Neel Nanda. Towards best practices of activation patching in language models:
+  Metrics and methods. arXiv preprint arXiv:2309.16042, 2023.
+
+
+
+
+
+                                       13
+
+Published as a conference paper at COLM 2024
+
+
+
+
+A  Datasets
+
+We use two datasets; COUNTERFACT by Meng et al. (2022a) and RELATIONS by Hernandez et al.
+(2023) in this work.
+
+A.1  COUNTERFACT
+
+Meng et al. (2022a) developed the COUNTERFACT dataset for evaluating the efficacy of counterfactual
+edits in language models. It was prepared by adapting PARAREL (Elazar et al. (2021)) and scraping
+Wikidata3. The dataset contains 21, 919 requests {s, r, o, o∗, π∗} where o is the correct answer to
+the prompt x = (s, r), o∗is the counterfactual edit request, and π∗∼P(s, r) is a paraphrase
+of the prompt x = (s, r) to test for generalizability (PS). Each of the records also contain some
+neighborhood prompts πN to test for specificity (NS) and some generation prompts πG to test if LM
+generation post-edit is fluent and consistent with the edit. Please refer to Meng et al. (2022a) for
+details on the curation of this dataset.
+
+We evaluate ROME performance in Mamba-2.8b (Figure 6a) and Pythia-2.8b (Figure 6b) on the first
+2000 records from COUNTERFACT.
+
+A.2  RELATIONS
+
+The RELATIONS dataset introduced in Hernandez et al. (2023) consists of 47 relations of 4 types:
+factual, linguistic, bias, and commonsense. A relation r is an association between two entities. For
+example, the relation, r = professionally played the sport connects the subject s = Michael Jordan
+with the object o = basketball. The dataset contains a set of (s, o) for each relation r.
+
+In the scope of this paper, we only utilize the 26 factual relations from this dataset. We evaluate
+LRE in Mamba and Pythia for all the 26 factual relations. We also use this dataset for locating key
+fact-mediating states in Section 3 and Appendix D. We randomly sample 400 examples (s, r, o)
+across 6 different factual relations - place in city, country capital city, person occupation, plays pro
+sport, company hq, and product by company. For each of these examples we randomly select another
+example within the same relation (s∗, r, o∗) such that s ̸= s∗and o ̸= o∗. The average indirect effect
+(IE) of applying activation patching over these 400 examples is depicted on Figures 2b, 3, 5 for
+Mamba-2.8b) and on Figure 10 (for Pythia-2.8b). We use the same set of 6 relations in Section 6
+where we adapt attention knock-out to Mamba.
+
+B  Challenges in Performing Attention Knock-out in Mamba
+
+Attention heads in autoregressive transformer LMs and Conv + SSM operations in Mamba play a
+similar role: bringing/retaining information from the past tokens. Attention “knock-out” is a type of
+causal mediation analysis that tries to understand information flow in transformer LMs by cutting off
+information propagation from kth token to qth token position. In transformers, each of the attention
+heads in an attention module attn(ℓ) calculates an attention matrix L, where Lq,k quantifies how
+much attention is being paid to the kth token by the qth token with this specific attention head (see
+Vaswani et al. (2017) for details on the attention operation). We can block the information flow from
+kth token to qth token via a specific attention head by simply setting Lq,k := −∞in the forward pass.
+
+For Mamba, Ali et al. (2024) show that the amount of information retained in the qth token state
+                                         (where k < q), after the selective-SSM operations(ℓ)q   , from the convolved state at kth token c(ℓ)k
+(see Equations 4 and 5) can be visualized as an attention matrix per channel. Since the selective-
+                                                          can be calculated accurately asSSM operation is linear, the information retained in s(ℓ)q  from c(ℓ)k
+                                                                                       , and C(ℓ)i   are input-dependent parameters for                                                          , where A(ℓ)i   , B(ℓ)i˜α(ℓ)q,k  = C(ℓ)q  ∏ i=k+1q     A(ℓ)i    B(ℓ)k  c(ℓ)k
+the ith token. See Gu & Dao (2023) and Ali et al. (2024) for details on selective-SSM operation. We
+ask: can we block the information flow from the kth token to the qth token in Mamba by subtracting
+       from s(ℓ)q  ? If so, attention knockout experiments in Mamba become feasible.out ˜α(ℓ)q,k
+
+   3www.wikidata.org/wiki/Wikidata:Main_Page
+
+
+                                       14
+
+Published as a conference paper at COLM 2024
+
+
+
+
+
+We find that blocking information flow via Conv + SSM operation through this specific edge from the
+kth token to the qth token can be challenging in Mamba. Note that, since c(ℓ) is a convolved state with                                                                                      k
+a receptive field of size 4 in Mamba-2.8b, the states c(ℓ)   c(ℓ)  and c(ℓ)  also retain information from                                                  k+1,  k+2,     k+3
+a(ℓ)                                        from s(ℓ)q   , these states can “leak” information about  k      . Which means that even if we subtract ˜α(ℓ)q,k
+a(ℓ)     to s(ℓ)q   . To stop this leakage, we would want to subtract from s(ℓ)q   all the information retained  k
+from a(ℓ) via c(ℓ)   c(ℓ)  and c(ℓ)  states as well. However, accurately calculating this is challenging        k       k+1,  k+2,     k+3
+because of the SiLU non-linearity after Conv1D (see Equation (4)).
+                                               from s(ℓ)q   . But we found that Mamba-2.8bIn our initial experiments we tested subtracting only ˜α(ℓ)q,k
+could often refer to the kth token from the qth token in copy and factual recall tasks.
+
+C  Isolating The Contribution of W(ℓ)o
+
+                                                                                  are restored asRecall from Figure 1 and Equation (2) that when o(ℓ)i                                                                 is restored, the s(ℓ)i                                                              and g(ℓ)i
+well. To isolate the contribution of only W(ℓ)o  we subtract out   +      from      and plot the                                                                        IEs(ℓ)i     IEg(ℓ)i         IEo(ℓ)i
+results on Figure 9. Notice that subtracting IEs(ℓ)i  cancels out the high indirect effect at the late site
+shown by later layers at the last token position. But, together IEs(ℓ)i + IEg(ℓ)i  cannot cancel out high
+IEo(ℓ)i  observed at the early site, that is early-mid layers at the last subject token. This reconfirms the
+mediating role of W(ℓ)o   at the early site while recalling a fact.
+
+
+       (a) Average IE of restoring oi(l) over 400 facts
+                                                              0.5                                                                             (b) Average IE of restoring gi(l)     0.5                (c) Average IE of restoring si(l)    0.5                     IEo(l)i  - ( IEg(l)i + IE s(l)i  )        0.5
+             prefix                                                                                                                                                                                                          prefix
+    subject_[:-2]*                                             0.4                                                             0.4                                                        0.4                  subj_[:-2]*                                            0.4
+subject_2nd_last*                                             0.3                                                             0.3                                                        0.3                  subj_[-2]*       early site                             0.3     subject_last*                                             0.2                                                             0.2 +                                             0.2 =   sub_last*                                            0.2
+     further tokens                                             0.1                                                             0.1                                                        0.1                other tokens                                            0.1
+          last token                                                                                                                                                                                                                                      last token
+                                                              0.0                                                                                                                              0.0                                                                                                                                                                                         0.0                                                                                                                                                                                                                                                                    0.0
+                                                    IE                                                                                                            IE                                                                                                                                                                  IE                0                  5 10                      15                         20 25 30                                35                                   40                                     45 50 55                                                                      0                                                                        5 10 15                                                                               20                                                                                25 30                                                                                     35                                                                                         40                                                                                          45 50 55                                                                                                                       0                                                                                                                         5 10 15                                                                                                                                20                                                                                                                                  25 30                                                                                                                                        35                                                                                                                                          40                                                                                                                                             45 50 55                                                                                                                                                                                                                                   IE        -(               )               0 5 10 15 20 25 30 35 40 45 50 55                                                                                        center                                                                                           of                                                                                                       interval                                                                                                       of                                                                                        10                                                                                                      patched                                                                                                                          layers                                                                                                                                                    center                                                                                                                                                      of                                                                                                                                                                        interval                                                                                                                                                                  of                                                                                                                                         10                                                                                                                                                             patched                                                                                                                                                                                        layers                     center                           of                                interval                                     of                                 10                                        patched                                                     layers
+
+Figure 9: Isolating the contribution of W(ℓ)o   .    +       subtracted from          . Notice that                                                         IEs(ℓ)i      IEg(ℓ)i                       IEo(ℓ)i
+IEo(ℓ)i −  IEs(ℓ)i + IEg(ℓ)i     still shows higher causal effect at the early site more pronounced than
+IEg(ℓ)i   while the high causal effect at the late site cancels out.
+
+D  Locating Key Modules in Pythia-2.8b
+
+
+     (a) Average IE of restoring hi(l) over 400 prompts         (b) Average IE of restoring MLP           (b) Average IE of restoring ATTN
+                                                              0.8                                                0.8                                                0.8
+            prefix
+
+    subject_[:-2]*                                             0.6                                                0.6                                                0.6
+
+subject_2nd_last*         early site                                           early site
+                                                              0.4                                                0.4                                                0.4
+     subject_last*
+
+    further tokens                                late site          0.2                                                0.2                              late site                0.2
+
+          last token
+                                                              0.0                                                0.0                                                0.0
+                0    5   10   15   20   25        IE       0    5   10   15   20   25        IE        0    5   10   15   20   25        IE
+                   single restored layer within Pythia-2.8b                center of interval of 10 patched layers                center of interval of 10 patched layers
+
+Figure 10: Average indirect effect of residual state, MLP, and attention outputs in Pythia-2.8b over
+400 facts. For MLP and attention outputs a window of 10 layers around ℓis restored, as restoring just
+one layer barely shows visible patterns.
+
+
+
+
+
+                                       15
+
+Published as a conference paper at COLM 2024
+
+
+
+
+
+                                                                                        (l)
+                        IE with hi restored     ATTNi blocked    MLPi blocked
+       0.75
+  IE     (a) i = subj last
+       0.50
+
+       0.25        Average
+       0.00
+          (b) i = prompt last
+       1.00
+  IE
+       0.75
+
+       0.50        Average 0.25
+
+       0.00
+                0               5              10              15              20              25              30
+                                                         Layers
+
+Figure 11: Impact of ablating ATTNi or MLPi on IEh(ℓ)i  for (a) subject last and (b) prompt last token positions
+on Pythia-2.8b
+
+E  LRE in Pythia-2.8b
+
+
+               LRE faithfulness for factual relations in Mamba-3B
+       1.0
+
+       0.9
+
+       0.8
+
+       0.7
+
+       0.6
+
+       0.5
+
+       0.4             Faithfulness
+       0.3
+
+       0.2
+
+       0.1
+
+       0.0
+
+               LRE faithfulness for factual relations in Pythia-3B
+       1.0
+
+       0.9
+
+       0.8
+
+       0.7
+
+       0.6
+
+       0.5
+
+       0.4            Faithfulness
+       0.3
+
+       0.2
+
+       0.1
+
+       0.0
+                                                      city                                                            band
+                              of                                   pro                               language     continent     language  city                                                                                                      university   sport                                                                                                                  birth    company    person     currency    country hq  name                   evolution    father    countryin    mother  CEO                                                                                                                                                                      occupation     position    countryin      instrument  year                                                                                              largest                                                             capital                                                                                                                                                                                                                        company                        archnemesis             person                                                 by               from                                                                                                                                                                                                                                                  person    company           on                           plays             singer           sport  city                       native               country             person                                                  plays                                  superhero    country                                                             country                          country  lead   person                                                                                                                                                                                                                                                                                                                                                                                                                                     constellation               pokemon                                                                                                                                                                                                              president                                                                                                                                                                                                                                                                                                                      landmark                                                                                                                                                                           product               food                                                                                                             person                       person     landmark                                                                                         person                                        star     superhero                                                                                          person
+
+Figure 12: Relation-wise LRE faithfulness to the LM decoding function F. Horizontal red lines per
+relation indicate random-choice baseline. We only present results for the factual relations in the
+RELATIONS dataset.
+
+
+
+
+                                       16
+
+Published as a conference paper at COLM 2024
+
+
+
+
+F  LRE Performance Across Different Relations
+
+Besides faithfulness Hernandez et al. (2023) introduced another metric causality to measure the
+performance of LRE. Since LRE is a linear function, it is invertible. Assume that for a fact (s, r, o)
+LRE can faithfully replace LM computation F(s, r). Then given the representation o∗of another
+object o, J−1(o∗−o) should give us a ∆s, such that when added to s,  ˜s := s + ∆s, the model
+computation F(˜s, r) should generate o∗. See Hernandez et al. (2023) for details on this.
+
+                               Mamba-2.8b
+        country capital city          landmark in country             plays pro sport              person occupation
+   1.0                                       1.0                                       1.0                                       1.0
+
+   0.8                                       0.8                                       0.8                                       0.8
+Score 0.60.4                                       0.60.4                                       0.60.4                                       0.60.4
+
+   0.2                                       0.2                                       0.2                                       0.2
+
+   0.0   6 12 18 24 30 36 42 48   0.0   6 12 18 24 30 36 42 48  0.0   6 12 18 24 30 36 42 48  0.0   6 12 18 24 30 36 42 48         emb                                                 emb                                                  emb                                                  emb
+
+      person plays instrument          company CEO              star constellation name            person mother
+   1.0                                       1.0                                       1.0                                       1.0
+
+   0.8                                       0.8                                       0.8                                       0.8
+Score 0.60.4                                       0.60.4                                       0.60.4                                       0.60.4
+
+   0.2                                       0.2                                       0.2                                       0.2
+
+   0.0   6 12 18 24 30 36 42 48   0.0   6 12 18 24 30 36 42 48  0.0   6 12 18 24 30 36 42 48  0.0   6 12 18 24 30 36 42 48         emb                                                 emb                                                 emb                                                  emb
+
+                                     Pythia-2.8b
+         country capital city          landmark in country             plays pro sport              person occupation
+   1.0                                       1.0                                       1.0                                       1.0
+
+   0.8                                       0.8                                       0.8                                       0.8
+Score 0.60.4                                       0.60.4                                       0.60.4                                       0.60.4
+
+   0.2                                       0.2                                       0.2                                       0.2
+
+   0.0  3 6 9 12 15 18 21 24 27 30   0.0  3 6 9 12 15 18 21 24 27 30   0.0  3 6 9 12 15 18 21 24 27 30   0.0  3 6 9 12 15 18 21 24 27 30         emb                                                  emb                                                  emb                                                  emb
+
+      person plays instrument          company CEO              star constellation name            person mother
+   1.0                                       1.0                                       1.0                                       1.0
+
+   0.8                                       0.8                                       0.8                                       0.8
+Score 0.60.4                                       0.60.4                                       0.60.4                                       0.60.4
+
+   0.2                                       0.2                                       0.2                                       0.2
+
+   0.0  3 6 9 12 15 18 21 24 27 30   0.0  3 6 9 12 15 18 21 24 27 30   0.0  3 6 9 12 15 18 21 24 27 30   0.0  3 6 9 12 15 18 21 24 27 30         emb                                                  emb                                                  emb                                                  emb
+
+                                             Faithfulness         Causality
+
+Figure 13: For Mamba, we only perform sweep till layer 48, as Figure 5 suggests negligible activity
+for later layers at the subject last token
+
+
+
+
+
+                                       17
+
+                Published as a conference paper at COLM 2024
+
+
+
+
+       G  Activation Patching results on Mamba-2.8b
+
+
+                     restoring hi(l) of a single layer                  restoring oi(l) of 10 layers around l            restoring gi(l) of 10 layers around l            restoring s (l)i of 10 layers around l
+
+                                                                 0.5                                                  0.5                                                 0.5                                                  0.5
+            [PAD]
+
+         Michael/ Pe                                            0.4                                                  0.4                                                 0.4                                                  0.4
+
+             Jordan/le
+        professionally                                            0.3                                                  0.3                                                 0.3                                                  0.3
+              played                                            0.2                                                  0.2                                                 0.2                                                  0.2
+                   the
+                 sport                                            0.1                                                  0.1                                                 0.1                                                  0.1
+
+                   of
+                                                                 0.0                                                  0.0                                                 0.0                                                  0.0
+                   0 5 10 15 20 25 30 35 40 45 50 55     IE         0 5 10 15 20 25 30 35 40 45 50 55     IE         0 5 10 15 20 25 30 35 40 45 50 55     IE         0 5 10 15 20 25 30 35 40 45 50 55     IE
+
+
+                                                                  0.5                                                 0.5                                                 0.5                                                  0.5
+            [PAD]
+     Harvard/ Oxford                                             0.4                                                 0.4                                                 0.4                                                  0.4
+University/ University
+                         is                                             0.3                                                 0.3                                                 0.3                                                  0.3
+               located
+                     in                                             0.2                                                 0.2                                                 0.2                                                  0.2
+
+                   the
+                    city                                             0.1                                                 0.1                                                 0.1                                                  0.1
+
+                    of                                                                                                                                                                                                                                0.0                                                                                                                                                                         0.0                                                                                                                       0.0                                                                  0.0
+                                                                                                                                                      0 5 10 15 20 25 30 35 40 45 50 55     IE                                                                                                          0 5 10 15 20 25 30 35 40 45 50 55     IE                                                               0 5 10 15 20 25 30 35 40 45 50 55     IE                   0 5 10 15 20 25 30 35 40 45 50 55     IE
+
+
+
+                                                                  0.5                                                 0.5                                                 0.5                                                  0.5
+            [PAD]
+
+             By                                             0.4                                                 0.4                                                 0.4                                                  0.4
+
+           profession
+                                                                  0.3                                                 0.3                                                 0.3                                                  0.3
+       Bruce/ Harper
+                                                                  0.2                                                 0.2                                                 0.2                                                  0.2
+            Lee/ Lee
+
+              was                                             0.1                                                 0.1                                                 0.1                                                  0.1
+
+                   a
+                                                                  0.0                                                 0.0                                                 0.0                                                  0.0
+                   0 5 10 15 20 25 30 35 40 45 50 55     IE         0 5 10 15 20 25 30 35 40 45 50 55     IE        0 5 10 15 20 25 30 35 40 45 50 55     IE         0 5 10 15 20 25 30 35 40 45 50 55     IE
+
+
+                                                                  0.5                                                0.5                                                  0.5                                                  0.5
+            [PAD]
+              The                                             0.4                                                0.4                                                  0.4                                                  0.4
+                capital
+                   of                                             0.3                                                0.3                                                  0.3                                                  0.3
+      Canada/ Japan
+                        is                                             0.2                                                0.2                                                  0.2                                                  0.2
+
+                  the
+                   city                                             0.1                                                0.1                                                  0.1                                                  0.1
+
+                   of
+                                                                  0.0                                                0.0                                                  0.0                                                  0.0
+                   0 5 10 15 20 25 30 35 40 45 50 55     IE        0 5 10 15 20 25 30 35 40 45 50 55     IE         0 5 10 15 20 25 30 35 40 45 50 55     IE         0 5 10 15 20 25 30 35 40 45 50 55     IE
+
+
+                                                                  0.5                                                0.5                                                  0.5                                                 0.5
+            [PAD]
+              The                                             0.4                                                0.4                                                  0.4                                                 0.4
+               head
+               quarter                                             0.3                                                0.3                                                  0.3                                                 0.3
+                   of
+   Microsoft/ Google                                             0.2                                                0.2                                                  0.2                                                 0.2
+
+                         is
+              located                                             0.1                                                0.1                                                  0.1                                                 0.1
+
+                     in
+                                                                  0.0                                                0.0                                                  0.0                                                 0.0
+                   0 5 10 15 20 25 30 35 40 45 50 55     IE        0 5 10 15 20 25 30 35 40 45 50 55     IE         0 5 10 15 20 25 30 35 40 45 50 55     IE         0 5 10 15 20 25 30 35 40 45 50 55     IE
+
+
+
+
+
+                                                    18

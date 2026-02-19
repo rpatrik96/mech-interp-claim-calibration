@@ -1,0 +1,2 @@
+paper_id,claim_id,claim_text,claim_location,claim_prominence,method_used,method_rung,claim_rung,gap_score,confidence,notes,replication_status,replication_evidence
+,,,"(abstract/intro/body/conclusion)",(3=abstract/title; 2=intro/conclusion; 1=body),"(probing/patching/SAE/steering/etc.)",(1=observational; 2=interventional; 3=counterfactual),(1=correlational; 2=causal; 3=mechanistic),(max(0, claim_rung - method_rung)),(1-5 scale),,(0=replicated; 0.5=partial; 1=failed; NA=unknown),

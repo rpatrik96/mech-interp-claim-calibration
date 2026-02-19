@@ -1,0 +1,22 @@
+\begin{table}[t]
+\centering
+\caption{Per-model annotation tendencies across all rated claims.
+$\bar{R}_{m}$/$\bar{R}_{c}$: mean method/claim rung;
+$\bar{g}$: mean gap score;
+OC: overclaim rate (gap $> 0$).}
+\label{tab:iaa-bias}
+\begin{tabular}{lcccccc}
+\toprule
+Model & $N$ & $\bar{R}_{m}$ & $\bar{R}_{c}$ & $\bar{g}$ & OC\,\% & $\bar{conf}$ \\
+\midrule
+    \textbf{Claude} & 186 & 1.69 & 2.22 & 0.54 & 41.9\% & 4.28 \\
+    \textbf{GPT-5} & 186 & 1.62 & 2.12 & 0.63 & 50.5\% & 4.19 \\
+    \textbf{DS-R1} & 166 & 1.73 & 2.16 & 0.51 & 43.4\% & 4.28 \\
+    \textbf{DS-V3} & 186 & 1.75 & 2.17 & 0.42 & 34.4\% & 4.09 \\
+    \textbf{Gemini} & 186 & 1.78 & 2.54 & 0.79 & 63.4\% & 4.99 \\
+    \textbf{Mistral} & 186 & 1.77 & 2.56 & 0.82 & 65.6\% & 4.55 \\
+    \textbf{Qwen} & 186 & 1.73 & 2.40 & 0.69 & 58.6\% & 4.90 \\
+    \textbf{Sonnet} & 186 & 1.67 & 2.22 & 0.59 & 44.6\% & 4.12 \\
+\bottomrule
+\end{tabular}
+\end{table}

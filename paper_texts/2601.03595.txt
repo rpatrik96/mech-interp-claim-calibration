@@ -1,0 +1,828 @@
+            Controllable LLM Reasoning via Sparse Autoencoder-Based Steering
+
+
+       Yi Fang1,2*, Wenjie Wang1, Mingfeng Xue3, Boyi Deng1*, Fengli Xu2,4, Dayiheng Liu3, Fuli Feng1
+                                  1University of Science and Technology of China,
+                      2Zhongguancun Academy, 3Alibaba Group, 4Tsinghua University
+
+
+
+
+
+                          Abstract                                                                                    Next Reasoning Steps
+                Large Reasoning Models (LRMs)  exhibit               Problem: In triangle 𝐴𝐵𝐶, 𝐴𝐷     No controlling     Wait,the calculationlet’s checkiswhetherright …
+                 human-like cognitive reasoning strategies (e.g.,                      isFindthe thealtitudelengthfromof 𝐴𝐵𝐷to and𝐵𝐶 …      + Problem        Wait, the problem asks for
+                   backtracking, cross-verification) during reason-               area of triangle 𝐴𝐵𝐶.             Understanding     both area and lengths …
+                  ing process, which improves their performance                    Reasoning Process           + Procedural      Wait, to check the answer,2026                                                                                                                                                               First, let’s use the                  Planning              I next need to …               on complex tasks. Currently, reasoning strate-                     Heron’s formula to find
+                    gies are autonomously selected by LRMs them-                       theAreaarea= ……                 + Multi-Perspective   Wait, let’s go back to the
+                    selves. However, such autonomous selection                     == 84.sqrt(7056)                      Verification       last steps …Jan                                                                                                                                Therefore, the answer
+                   often produces inefficient or even erroneous rea-                 may be 84.                  + Backtracking     Wait, let’s solve it in
+7                                                                                                                                    Wait, …                                          another way …
+                  soning paths. To make reasoning more reliable
+                and flexible, it is important to develop methods                      Error: requirement.Missed the 'length'        + ReasoningHypothesis      Wait,… thesupposeanswer wouldwe have…
+                   for controlling reasoning strategies. Existing
+                methods struggle to control fine-grained rea-
+                 soning strategies due to conceptual entangle-       Figure 1: An illustration of reasoning strategy control.[cs.AI]          ment in LRMs’ hidden states. To address this,      By deliberately controlling the LRM’s strategy selection,
+             we leverage Sparse Autoencoders (SAEs) to de-      we can flexibly intervene and correct its reasoning path
+                compose strategy-entangled hidden states into a      when a flaw emerges.
+                   disentangled feature space. To identify the few
+                    strategy-specific features from the vast pool of
+             SAE features, we propose SAE-Steering, an ef-                                                          2025; Marjanovi´c et al., 2025; Pan et al., 2025).
+                      ficient two-stage feature identification pipeline.
+                                                       Such reasoning strategies improve the accuracy and
+                 SAE-Steering first recalls features that amplify
+                                                               robustness of LRMs on challenging tasks (Snell                   the logits of strategy-specific keywords, filter-
+                  ing out over 99% of features, and then ranks        et al., 2025; Zaremba et al., 2025). These LRMs
+                   the remaining features by their control effec-      autonomously select reasoning strategies during
+                    tiveness. Using the identified strategy-specific       reasoning. However, such autonomous reasoning
+                   features as control vectors, SAE-Steering out-       often produces inefficient or even erroneous rea-
+                 performs existing methods by over 15% in con-                                                              soning paths (Chen et al., 2025; Wang et al., 2025).
+                       trol effectiveness. Furthermore, controlling rea-
+                                                     To improve the reliability and flexibility of reason-arXiv:2601.03595v1           soning strategies can redirect LRMs from er-
+                                                                      ing, external guidance is promising. For example,                 roneous paths to correct ones, achieving a 7%
+                   absolute accuracy improvement.                    as illustrated in Figure 1, if an LRM misinterprets
+                                                                   the problem but pursues a flawed verification path,
+          1  Introduction                                   external guidance can redirect it to re-examine the
+                                                         problem statement, correcting the error. Therefore,            Large Reasoning Models (LRMs), such as GPT-
+                                                               developing methods for deliberate control over rea-           o1 (OpenAI, 2025) and DeepSeek-R1 (Guo et al.,
+                                                             soning strategies is crucial.             2025), employ a “think-then-answer” paradigm,
+              explicitly generating intermediate reasoning pro-      Existing control methods fall into two categories:
+             cesses before deriving final answers.   Within   prompt-based and activation-based. Prompt-based
+             these reasoning processes, LRMs exhibit human-   methods control the LRM’s reasoning by incor-
+              like cognitive reasoning strategies such as self-   porating instructions either in the  initial user
+             correction and cross-verification (Gandhi et al.,   prompt (Zhou et al., 2024) or during intermedi-
+                                                                      ate reasoning stages (Wu et al., 2025; Zhang et al.,                *Work done when Yi Fang and Boyi Deng were interns at
+               Alibaba Group.                                       2025). However, these methods lack direct control
+
+over the LRM’s internal generative process, which    ing candidates on a small validation set, selecting
+results in frequent instruction-following failures, es-   the most effective features for final application. Ex-
+pecially when reasoning context is long or instruc-    tensive evaluations demonstrate that SAE-Steering
+tions conflict with pre-trained behaviors (Qi et al.,    consistently outperforms baselines by over 15% in
+2025). Activation-based methods offer more direct    control effectiveness across various reasoning tasks
+control by deriving a control vector to modify the   and LRM architectures. Moreover, SAE-Steering
+LRM’s hidden states during generation (Venhoff   can correct erroneous reasoning paths in LRMs,
+et al., 2025). This control vector is typically com-   improving absolute accuracy by 7%, highlighting
+puted as activation differences between contrastive    the potential of strategic control. In summary, the
+pairs exhibiting or lacking a target behavior (Tang    contributions of this work are threefold:
+et al., 2025). However, curating contrastive pairs                                                              • We leverage SAEs to disentangle and identify
+that cleanly isolate a single strategy is difficult. As                                                         strategy-specific features, overcoming the con-
+a result, the derived control vectors are prone to                                                     cept entanglement problem inherent in control-
+concept entanglement (Elhage et al., 2022; Yang                                                          ling reasoning strategies.
+et al., 2025b), inadvertently capturing features of                                                              • We   propose   SAE-Steering   to   identify
+multiple strategies and hindering precise control.                                                         strategy-specific   features,   addressing   the
+  To overcome this limitation, we propose lever-                                                    challenge  of  efficient and  effective  feature
+aging Sparse Autoencoders (SAEs) (Huben et al.,                                                         selection from the massive set of SAE features.
+2024) to decompose the LRM’s hidden states into                                                              • Extensive experiments validate SAE-Steering’s
+a sparse set of interpretable and monosemantic fea-                                                       effectiveness and robustness in controlling rea-
+tures (Bricken et al., 2023). Specifically, a well-                                                 soning strategies and demonstrate its potential
+trained SAE projects the low-dimensional, strategy-                                                  use in correcting erroneous reasoning paths.
+entangled hidden states of an LRM into a high-
+dimensional, disentangled feature space. This pro-
+                                       2  Preliminary
+jection aims to isolate strategy-specific features in
+the high-dimensional space, thereby providing dis-   Strategy Selection.  LRMs employ a diverse
+entangled control vectors for reasoning strategy                                                 range of cognitive reasoning strategies during their
+control. However, the high-dimensional feature                                                   reasoning processes, making a comprehensive eval-
+space introduces a new challenge: identifying the                                                    uation of control over each one impractical. There-
+few strategy-specific features from tens of thou-                                                         fore, we focus on five representative reasoning
+sands of learned SAE features. Existing selection                                                        strategies that are frequent, effective, and widely
+methods (Galichin et al., 2025), which rely on dif-                                                    studied in prior work (Gandhi et al., 2025; Zhong
+ferential activation strength across contrastive pairs,    et al., 2024). As illustrated in Figure 1, the five
+face the same difficulty in constructing clean con-                                                         strategies we selected are:
+trastive pairs. Furthermore, high activation does
+                                                              • Problem Understanding: rephrasing the prob-
+not guarantee effective control, leading to the se-
+                                            lem statement, clarifying its constraints and in-
+lection of many spurious or ineffective features.
+                                                          terpreting the given information.
+  To address this, we propose identifying effec-
+                                                              • Procedural Planning: defining a sub-task or
+tive features by directly assessing their capacity
+                                                        outlining a plan for the subsequent reasoning.
+to steer target strategy generation.  Considering
+                                                              • Backtracking: identifying a mistake in previousexhaustively evaluating all features is computa-
+                                                     reasoning and attempting to correct it or revert totionally infeasible, we introduce SAE-Steering,
+                                                  a prior step.a two-stage pipeline for efficiently identifying and
+                                                              • Multi-Perspective Verification: verifying a con-selecting effective strategy control features, bal-
+                                                      clusion by applying a different method or exam-ancing cost and precision. As shown in Figure 2,
+                                                      ining specific cases.SAE-Steering first employs a low-cost, high-recall
+                                                              • Hypothesis Reasoning: making an assumptioncriterion to rapidly filter out over 99% of irrelevant
+                                                     or posing a "what if" scenario to explore possi-features by identifying those that amplify the logits
+                                                                  bilities or test certain conditions.of strategy-specific keywords—a strong indicator
+of control potential.  It then applies a more com-      Importantly, this selection is purely for evalua-
+putationally intensive evaluation to quantitatively    tion convenience; our method is general and appli-
+assess and rank the control effectiveness of remain-   cable to control other reasoning strategies as well.
+
+                (a) Architecture of SAE                       (b) Feature Identification Pipeline of SAE-Steering
+
+
+                                                                                Multi-Perspective Verification
+                                                                            Corpus
+                                                                                                                            Strategy Keywords
+                                                                                           1. Another idea …                  Extraction
+        Layer 𝒍+1                                                                        2. Let’s try different approach …
+                                 …
+                                                                Encoder …    Decoder                                 Stage1                     Stage2
+         Layer 𝒍    𝒙                            #𝒙                                Amplify the logit of                Controlling reasoning
+                       …      strategy keywords?                 strategy effectively?
+                                Strategy-specific Feature
+                                                                           (30k →<100)   …       (<100 →top k)
+                          SAE
+
+                                                                        All SAE Features                 Recalled Features                  Strategy-specific
+                                                                                                                                 Features
+
+Figure 2: (a) Overview of the SAE architecture. (b) Feature identification pipeline of SAE-Steering. Numbers below
+the arrows indicate the approximate count of features retained.
+
+
+Task Formulation. We next formalize the task    in Figure 2a, an SAE is an encoder–decoder archi-
+of controlling reasoning strategies. In a standard    tecture trained to represent an input activation as a
+autoregressive setting, an LRM generates the next    sparse linear combination of learned feature direc-
+token yt based on the prefix Y<t = {y1, . . . , yt−1}.    tions. Given a residual stream activation x ∈RN,
+The LRM processes Y<t through its L transformer      it encodes x into a sparse feature activation vector
+layers, producing a sequence of residual stream   z ∈RM (M ≫N) and reconstructs it as ˆx:
+activations {x1t , x2t , . . . , xLt }. In vanilla decoding,
+                                                 z = σ (Wenc(x −bdec) + benc) ,     (2)these activations remain unmodified. Strategy con-
+                                                                                  ˆx = Wdecz + bdec,                    (3)trol departs from this by injecting a control vector
+∆xℓat a specific layer ℓ:                                           where Wenc ∈RM×N, benc ∈RM, Wdec ∈
+                      ℓ                       RN×M, bdec ∈RN, and σ is an activation func-               x′t = xℓt + α · ∆xℓ,            (1)
+                                                            tion.
+where α ∈R is a coefficient controlling the steer-     The SAE is trained to satisfy a dual objective: (1)
+ing strength.  The activation x′t ℓ then replaces   minimizing the reconstruction error ∥x −ˆx∥22 and
+xtℓ and is propagated through the remaining lay-   (2) enforcing a sparsity restriction, which dictates
+ers, influencing the final generation. By repeat-    that the reconstruction must be constructed from
+ing this intervention for T consecutive tokens,   only a few active latent directions1. This training
+the LRM produces a steered trajectory Y ′ =    process enables the SAE to approximate x as a
+{y′t, y′t+1, . . . , y′t+T−1}. Given a pre-specified rea-   sparse linear combination of the decoder columns:
+soning strategy s, the goal of reasoning strategy                M
+control is to construct ∆xℓsuch that the steered           x ≈bdec + X zi(x)fi           (4)
+trajectory Y ′ exhibits the desired strategy s.                                  i=1
+
+                                             where each column fi of Wdec corresponds to a dis-3  Method
+                                                  entangled and interpretable latent direction, which
+This section details our method in two parts. First,  we refer to as a feature throughout the paper. The
+we describe how we control reasoning strategies by    scalar zi(x) is the i-th component of the activation
+manipulating strategy-specific features identified    vector z, indicating the activation strength of each
+in the SAE (Section 3.1). Second, we introduce    feature for the input x.
+SAE-Steering, a two-stage pipeline developed to   A key benefit of this decomposition is that
+effectively identify these features from the vast    the sparsity objective encourages monosemantic-
+SAE feature pool (Section 3.2).                           ity (Bricken et al., 2023): each learned feature tends
+                                                         to capture a single concept, significantly mitigating
+3.1  Strategy Control with SAE Features
+                                                     the concept entanglement (Huben et al., 2024).
+We  train SAEs  to  disentangle  and  identify
+                                                  1We enforce sparsity via a Top-K activation function,
+strategy-specific features, which then serve as the                                                       which only retains the K largest activation values and sets the
+control vectors for strategy control. As illustrated     rest to zero, following (Gao et al., 2025).
+
+  We then identify the strategy-specific feature fs    a strategy-specific corpus by manually identifying
+(one of the learned fi directions) that is associated    reasoning segments in the LRM’s responses. We
+with the target reasoning strategy s (see identifica-   then extract the most frequent words from each cor-
+tion methods in Section 3.2). By using fs as the   pus to serve as strategy keywords (see Appendix B
+control vector ∆x in Eq. 1, we steer the LRM’s    for the keywords list and identification details).
+reasoning strategy by repeatedly injecting fs into      Next, we estimate all SAE features’ potential
+the residual stream activations at the SAE-trained    logit contribution to strategy keywords using logit
+layer ℓfor the next T tokens generation:              lens (nostalgebraist, 2020). Logit lens is a method
+                                        commonly used to estimate the logit contribution
+  x′t+kℓ = xℓt+k + α · fs,  k = 0, 1, . . . , T −1      of hidden state activations to each token in the
+                                                 (5)    vocabulary. We adapt it to SAE features as follows:
+                                                    Formally, let U ∈RN×V be the LRM’s unem-
+where α is the steering strength. The selection of α
+                                              bedding matrix (i.e., the weight matrix of the LM
+is a trade-off: excessively large values cause repet-
+                                                    head), mapping hidden activations to logits over a
+itive outputs (Fu et al., 2021), while excessively
+                                                vocabulary of size V . Let Wdec ∈RN×M be the
+small values fail to control effectively. For each
+                                  SAE decoder matrix. As described in Section 3.1,
+feature, we determine α by searching downwards
+                                              each column of Wdec corresponds to a disentan-
+from an empirically chosen high value, iteratively
+                                                 gled feature direction fi ∈RN. We compute the
+decreasing it until repetitive generation is elimi-                                                          logit contribution matrix L ∈RM×V for all fea-
+nated (see Appendix A for details).
+                                                        tures via:
+3.2  Identification of Strategy-specific Features
+                                          L = W⊤decU,                (6)
+To efficiently identify the few critical, strategy-
+specific features from tens of thousands of learned   where the i-th row Li,: gives the logit contributions
+SAE features, we introduce SAE-Steering, a two-   of feature fi across the vocabulary. This compu-
+stage pipeline designed for both efficiency and pre-    tation requires only a single matrix multiplication,
+cision. The first stage employs a low-cost, high-   making it low-cost and efficient.
+recall criterion to rapidly construct a compact can-    We aim to recall features that specifically and
+didate set, while the second stage applies a more    significantly amplify strategy keywords, while
+computationally intensive, high-fidelity evaluation    avoiding those that amplify irrelevant tokens more
+to select the most effective features. As shown in    strongly than the keywords. To achieve this, we
+Figure 2b, SAE-Steering first recalls features that    extract the top-10 tokens with the highest logit con-
+amplify the logits of strategy-specific keywords.    tribution for each feature and recall features sat-
+This stage is low-cost and highly-efficient, filtering    isfying: (i) at least n of these tokens are strategy
+out 99% irrelevant features. Subsequently, SAE-   keywords, and (ii) each such keyword’s logit con-
+Steering evaluates and ranks the control effective-    tribution exceeds a threshold τ. This recall step
+ness of remaining candidates on a small validation     is highly selective, narrowing the candidate pool
+set, selecting top-ranked feature for application.     from tens of thousands of features to several tens.
+
+Stage 1: Recall based on logit estimation.  In   Stage 2: Rank based on Control Effectiveness.
+the first stage, we efficiently distill a small set of    In the second stage, we evaluate and rank the can-
+promising candidates from tens of thousands of    didate features from Stage 1 to identify those with
+SAE features by selecting those that positively in-   the highest control effectiveness. This ranking is
+fluence the logits of strategy keywords. The guid-   based on their empirical performance on a small
+ing hypothesis is that features which substantially    validation set P.
+increase these keyword logits are more likely to      Formally, for each problem p ∈P with a given
+steer the LRM toward the corresponding reasoning   response prefix Y<t, we generate two distinct T-
+strategy.                                        token continuations2: (i) a baseline trajectory Y0,
+   Specifically, we first extract strategy keywords    generated via standard decoding, and (ii) a steered
+following the approach of Galichin et al. (2025).    trajectory Y (j), generated using the candidate fea-
+These keywords serve as a computationally effi-    ture fj as the control vector. An LLM judge then
+cient proxy to identify features potentially corre-                                                  2We set the sampling temperature to 0 to eliminate ran-
+lated with the target strategy. Briefly, we first create    domness as a confounding factor in our evaluation.
+
+assesses whether Y (j) more explicitly demonstrates   ◦Vector Steering (Venhoff et al., 2025), which
+the target strategy s than Y0 3, yielding binary judg-      uses an LLM to annotate reasoning strategies for
+ment Jp,j ∈{0, 1}. The control effectiveness of a      constructing contrastive datasets, then extracts
+feature fj is then calculated as the control success      control vectors via contrast pairs.
+rate over the validation set:
+                                               Evaluation Protocol.  We evaluate control effec-
+                        1                       tiveness following the procedure described in Stage
+        Effectiveness(fj) = X Jp,j.      (7)
+                          |P|                 2 of Section 3.2.  Importantly, for feature selec-
+                           p∈P
+                                                        tion in Stage 2 of SAE-Steering, we use only GPT-
+                                            4o (OpenAI, 2024) as the judge. For test evaluation,This empirical ranking allows us to select the top-
+                                     we employ three LLM judges—GPT-4o (OpenAI,ranked feature as fs for the target strategy s.
+                                                 2024), Gemini-2.5-flash (Comanici et al., 2025),
+4  Experiments                             and Deepseek-V3.2 (Liu et al., 2024)—to vote as
+                                                    judges. This majority voting mitigates individual
+In this section, we conduct experiments to address                                                judge biases and ensures more reliable evaluation.
+the following research question:                                We also test the agreement between LLM judges
+• RQ1: Can our SAE-based steering method, lever-   and human annotators, which achieves a high agree-
+  aging the identified features, reliably control   ment rate of 0.82 (see Appendix C for details), con-
+ LRMs’ reasoning strategies?                      firming the reliability of LLM judges.
+• RQ2:  How  effective  is SAE-Steering  for
+                                           Implementation   Details. We   train  TopK-
+  strategy-specific feature identification?
+                                     SAEs (Gao et al., 2025) (with K = 50) on the
+• RQ3: Can we correct an LRM’s erroneous rea-
+                                                              last layer of DeepSeek-R1-Distill-Llama-8B (Guo
+  soning path by deliberately controlling its reason-
+                                                             et al., 2025) (hereafter referred to as R1-Llama-8B)
+  ing strategies?
+                                             and Qwen3-8B (Team, 2025b). For SAE-Steering
+                                                 hyperparameters, we set n = 2 and τ = 0.1 in4.1  Experiment Setup
+                                                 Stage 1, and continuation length T = 512 in Stage
+Datasets. We   train  our  SAEs  on   acti-                                                           2. For sampling, we set the temperature to 0 during
+vations  from  a  mixed  corpus  combining                                                    control  effectiveness  evaluations  to  eliminate
+LMSYS-CHAT-1M  (Zheng   et    al.,  2024)                                              confounding effects from sampling stochasticity.
+and OPENTHOUGHTS-114K  (Team,  2025a),                                              For error correction experiments, we adopt the
+following prior work (Galichin et al., 2025). For                                                             officially recommended temperature of 0.6 and set
+the evaluation of reasoning strategy control, we                                                     the maximum token length to 32,768.
+first randomly sample 50 responses from past
+AIME competitions (1983–2023) (AIME, 2025)    4.2  Control Effectiveness of SAE-Based
+as the validation set. We then evaluate control         Steering (RQ1)
+effectiveness on 200 randomly sampled responses                                          SAE-based steering outperforms baselines.  We
+from AIME’24 and 25 (AIME, 2025) and 200                                                       report the control effectiveness of different methods
+responses from GPQA (Rein et al., 2023). GPQA                                                      in Table 1, from which we make the following
+is a science reasoning dataset spanning biology,                                                     observations:
+physics, and chemistry, which we use to assess
+the out-of-domain generalization capability of our    (1) Activation-based methods (Vector Steering
+strategy-specific features.                          and SAE-Steering) consistently outperform
+                                                    prompt-based methods (Think Intervention) ex-
+Baselines.  We compare SAE-Steering with three                                                        cept in some cases within Hypothesis Reason-
+representative control methods:                                                            ing, which demonstrates the superiority of di-
+◦Logit Boosting, which directly boosts the logits        rectly intervening in hidden states.
+  of strategy-specific keywords;                                                        (2) SAE-Steering significantly outperforms Vector
+◦Think Intervention (Wu et al., 2025), which in-                                                            Steering, with an average improvement of 15%.
+   serts human-crafted instructions into the middle                                    We attribute this to the disentangling properties
+  of the reasoning process;                                                       of SAEs, which mitigate the conceptual en-
+                                                    tanglement present in control vectors, thereby   3We provide the prompt and validate the reliability of LLM
+Judges in Appendix C.                                     enabling more precise strategy control.
+
+                                  R1-Llama-8B                 Qwen3-8B
+ Dataset  Method                                                                        Average
+                     PU   PP  BK  MV  HR  PU   PP  BK  MV  HR
+
+           Logit Boosting      0.21   0.49   0.30   0.27   0.32   0.44   0.61   0.39   0.49   0.56    0.41
+          Think Intervention   0.56   0.49   0.21   0.21   0.39   0.62   0.81   0.12   0.23   0.61    0.43
+ AIME
+           Vector Steering      0.69   0.82   0.67   0.48   0.34   0.74   0.85   0.55   0.51   0.52    0.62
+          SAE-Steering       0.88   0.86   0.69   0.76   0.41   0.92   0.92   0.78   0.70   0.65    0.76
+
+           Logit Boosting      0.28   0.68   0.29   0.39   0.56   0.43   0.79   0.40   0.47   0.63    0.49
+          Think Intervention   0.66   0.69   0.35   0.23   0.57   0.68   0.83   0.17   0.16   0.77    0.51
+ GPQA
+           Vector Steering      0.77   0.90   0.61   0.52   0.51   0.89   0.89   0.80   0.55   0.72    0.72
+          SAE-Steering       0.94   0.90   0.78   0.93   0.70   0.94   0.95   0.81   0.82   0.89    0.87
+
+Table 1: Control effectiveness evaluation across five reasoning strategies: Problem Understanding (PU), Procedural
+Planning (PP), Backtracking (BK), Multi-Perspective Verification (MV), and Hypothesis Reasoning (HR).
+
+
+(3) SAE features identified in the math domain    No steering:
+    demonstrate comparable effectiveness on sci-     Wait, m=132 is the first one with four primes. But let me check
+     entific reasoning tasks (GPQA), indicating the    m=132 again. Is there a smaller m?
+    generalizability of SAE features across differ-     Wait, m=105: 10931=17×643. Two primes.
+    ent reasoning domains.              …
+                                                           Logit Boosting:
+(4) All methods achieve better control effective-                                                                       Wait, m=132 is the first one with four primes. But let me check
+    ness on GPQA than on AIME. This may be-    m=another value. For example, m=another number where the
+                                                                  expression could be composite with more factors.
+    cause the reasoning length of GPQA is much                                …
+    shorter than AIME (7k vs. 15k tokens), which
+                                                       SAE-Steering:
+   makes control easier.                                       Alternatively, maybe I can think of another approach. Maybe
+                                                                     the original problem is similar to the Euler's prime-generating
+SAE features function beyond keyword amplifi-     polynomial but with a different constant term                                …
+cation.  Importantly, although our SAE features
+are recalled by identifying features that amplify                                                       Figure 3: Case study: SAE-Steering changes reasoning
+the logits of strategy-specific keywords, they en-    behavior while Logit Boosting only boosts keywords.
+code deeper strategy concepts beyond keyword
+promotion.  This is evidenced by SAE-Steering
+achieving over 35% better control effectiveness    tion strength on keywords compared to other tokens
+than Logit Boosting (Table 1). To illustrate this    in the reasoning context. We use ReasonScore to
+more explicitly, we present a case study in Figure 3.    recall the same number of features as our Stage
+In this case, boosting the logits of strategy key-   1 (143 for R1-Llama-8B and 357 for Qwen3-8B)
+words like “another” does not genuinely change   and evaluate the precision of recalled features, i.e.,
+the reasoning strategy. The LRM generates “an-   the proportion of recalled features that successfully
+other” but still continues to verify its answer by    control reasoning strategies. As shown in Table 2,
+testing different values of m. In contrast, SAE-   SAE-Steering outperforms ReasonScore by 28%
+Steering successfully guides the LRM to adopt the    in precision, demonstrating the superiority of logit-
+Multi-Perspective Verification strategy. Additional   based over activation-based feature identification.
+steering examples are available in Figure 6.          Logits directly measure causal effects on outputs,
+                                                         better reflecting features’ actual control capability
+4.3  Effectiveness of SAE-Steering for Feature    than activation strength.
+      Identification (RQ2)
+
+Logit-based  recall   is  more  precise  than
+                                                           R1-Llama-8B  Qwen3-8B
+activation-based.  We compare the effectiveness
+of identifying strategy-specific features of SAE-     ReasonScore        0.33          0.27
+Steering with existing activation-based methods,     SAE-Steering       0.61          0.52
+specifically ReasonScore (Galichin et al., 2025).
+ReasonScore recalls features based on their activa-           Table 2: Precision of recalled features.
+
+    120      Problem Understanding
+             Procedural Planning                                                             0.9
+    100       Backtracking
+              Multi-Perspective Verification
+     80       Hypothesis Reasoning                                                          0.8Features
+of 60                                                                                                                                                                                                                                                                                   Effectiveness0.7
+     40                                                                                                     Problem Understanding
+                                                                                                                    Procedural Planning
+                                                                                                     0.6                                   Backtracking     20Number                                                                                                                                             Control                                       Multi-Perspective Verification
+                                                                                                                 Hypothesis Reasoning      0                                                                                             0.5
+          0        5       10       15       20       25       30       35                  0        5       10       15       20       25       30       35
+                         Layer                                                 Layer
+
+      Figure 4: Recalled features across layers.               Figure 5: Control effectiveness across layers.
+
+
+Layer-wise analysis of feature identification.    sert a “wait” token at the end of the initial, flawed
+In the main experiments, we train SAEs on the last    reasoning to induce further thinking. During this
+layer of LRMs. Here we further investigate how   extended reasoning phase, we apply SAE-Steering
+the identification of strategy-specific features varies    to control the LRM’s subsequent reasoning strat-
+across layers. Due to computational constraints, we    egy. To select the most appropriate strategy for
+limit this analysis to Qwen3-8B. We first examine    different problems, we train a strategy router (Ap-
+the presence of strategy-specific features across lay-   pendix E). We compare our approach with two
+ers by measuring the number of features recalled   common self-correction baselines: (1) Budget Forc-
+by Stage 1 of SAE-Steering. As shown in Figure 4,   ing (Muennighoff et al., 2025), which only extends
+strategy-specific features are rare in shallow layers    reasoning without strategic guidance; and (2) Self-
+(0, 3, 7, 11) but prevalent in deeper layers (23, 27,   Reflection (Shinn et al., 2023), which prompts the
+31, 35), which is consistent with prior findings that  LRM to reflect on its previous answer and generate
+abstract reasoning concepts are primarily encoded    a new response.
+in the deeper layers of LRMs (Yun et al., 2021; Shi
+                                                  Results.  The error correction results are shown
+et al., 2025).
+                                                      in Table 3, from which we make the following
+  We next investigate the control effectiveness of                                                     observations:
+these features across layers by reporting the aver-
+age control effectiveness of the top-3 features. As    (1) The highest correction rate is only 33%, with
+shown in Figure 5, shallow layers exhibit poor con-     MATH500 achieving the highest rate and
+trol effectiveness, while layers beyond 20 demon-     AIME the lowest. This demonstrates the diffi-
+strate strong and relatively stable control effective-       culty of error correction, and harder tasks are
+ness. This suggests that reasoning strategy control        also more difficult to correct.
+should be applied to middle-to-late layers for opti-                                                        (2) Budget Forcing outperforms Self-Reflection
+mal results.                                              on all datasets except GPQA on Qwen3-8B,
+                                                      demonstrating the advantage of continuous rea-
+4.4  Correcting Erroneous Reasoning Paths
+                                                       soning. By continuing from the current state
+     via Strategy Control (RQ3)
+                                                           rather than reprocessing the entire reasoning
+Setup.  To demonstrate the practical value of strat-        process, Budget Forcing maintains better focus
+egy control, we test whether controlling reason-      on error correction.
+ing strategies can correct errors even after the
+LRM has already generated a wrong answer—     Model        Method       MATH500  AIME25  GPQA
+a more challenging setting than simple genera-                       Self-Reflection     0.1394     0.0123   0.0262
+tion. Specifically, we sample incorrect LRM re-     R1-Llama-8B  Budget Forcing    0.2121     0.0123   0.0626
+sponses on the MATH500 (Lightman et al., 2023),                   SAE-Steering     0.3313     0.0552   0.1196
+AIME25 (AIME, 2025), and GPQA (Rein et al.,                       Self-Reflection     0.0993     0.0411   0.0749
+                                                        Qwen3-8B     Budget Forcing    0.1773     0.0685   0.0484
+2023), and attempt to correct them during an ex-                   SAE-Steering     0.2411     0.1370   0.1154
+tended reasoning process (See Appendix D for
+sample details and dataset statistics). Following    Table 3:  Error correction rates across methods and
+Budget Forcing (Muennighoff et al., 2025), we in-    datasets.
+
+(3) SAE-Steering consistently outperforms Budget    to learn monosemantic features in an unsupervised
+    Forcing across all LRMs and datasets, with an   way, eliminating annotation requirements while
+    average absolute accuracy improvement of 7%.    better disentangling conceptually-entangled hidden
+    This suggests that deliberately controlling rea-    states.
+    soning strategies enables more effective error
+    correction.                                 Sparse Autoencoders.  Mechanistic interpretabil-
+                                                            ity seeks to understand the internal workings of
+5  Related Work                     LRMs by analyzing the structure and function of
+                                                          their learned representations (Singh et al., 2024;
+Reasoning Strategies in LRMs.  Early studies
+                                                     Gantla, 2025). A primary tool in this field is SAEs,
+attempt to improve LLM performance on com-
+                                           which decompose high-dimensional LRM activa-
+plex tasks by designing prompts to guide reasoning
+                                                      tions into a sparse set of latent features (Bricken
+processes (Shinn et al., 2023; Zhou et al., 2024).
+                                                             et al., 2023; Huben et al., 2024). These features of-
+Recent research demonstrates that LLMs trained
+                                                      ten correspond to human-interpretable concepts, en-
+with rule-based reinforcement learning can unsu-
+                                                     abling researchers to probe and manipulate specific
+pervisedly develop human-like cognitive reason-
+                                                     aspects of LRM behavior (Deng et al., 2025; Yang
+ing strategies such as self-reflection and backtrack-
+                                                            et al., 2025b). For example, (Galichin et al., 2025)
+ing (Liu et al., 2024). These advancements have
+                                                    leveraged SAEs to identify features associated with
+led to the emergence of current LRMs. During in-
+                                                    reasoning. In their method, reasoning features are
+ference, LRMs produce long Chains-of-Thoughts
+                                                     selected as those that activate more strongly on
+(CoTs) that explore diverse reasoning paths while
+                                                    reasoning-related keywords (e.g., ‘wait’, ‘alterna-
+continuously verifying previous steps (Marjanovi´c
+                                                          tively’) than on other tokens. However, high acti-
+et al., 2025). In this process, LRMs employ di-
+                                                   vation strength does not necessarily indicate con-
+verse human-like cognitive reasoning strategies
+                                                               trol capacity, causing such methods to recall many
+such as backtracking and multi-perspective veri-
+                                                       features that show superficial correlations with rea-
+fication. The use of these reasoning strategies im-
+                                                soning behaviors but lack the ability to effectively
+proves their accuracy and robustness in solving
+                                                    control fine-grained reasoning strategies. Instead,
+complex problems (Gandhi et al., 2025; Snell et al.,
+                                     we recall features through their direct logit contri-
+2025; Muennighoff et al., 2025).
+                                                   butions to strategy-specific tokens, enabling more
+Controllable LLM Reasoning.  Many works at-   precise recall of features with genuine control ef-
+tempt to control LRM reasoning behavior. These    fectiveness.
+methods can be categorized into prompt-based and
+activation-based. Prompt-based methods (Wu et al.,   6  Conclusion
+2025; Yang et al., 2025a; Zhang et al., 2025) insert
+human-scripted instructions into intermediate rea-   In this work, we leverage strategy-specific features
+soning steps, mimicking the LRM’s style to seam-   of SAEs to achieve fine-grained control over LRMs’
+lessly steer its reasoning trajectory.  Activation-   reasoning strategies. SAEs decompose strategy-
+based methods directly modify hidden states using    entangled hidden states into disentangled strategy-
+control vectors derived from contrastive activation    specific features. To identify these strategy-specific
+analysis. For example, many works (Sheng et al.,    features from the vast pool of SAE features, we
+2025; Tang et al., 2025; Lin et al., 2025) obtain    propose SAE-Steering, a two-stage feature identifi-
+control vectors by contrasting activations between    cation pipeline that balances efficiency and preci-
+short and long CoT responses. However, such pairs    sion. SAE-Steering first employs a logit estimation
+fail to isolate individual strategies, causing control   method to rapidly recall candidate features that
+vectors to suffer from concept entanglement and    amplify strategy-specific keywords, then ranks the
+only enable coarse-grained control (e.g., reason-    control effectiveness of remaining features through
+ing length) rather than fine-grained strategy control.    intervention experiments on a validation set. Exten-
+Venhoff et al. (2025) address this by using LLM    sive experiments demonstrate the effectiveness and
+judges to annotate each reasoning step with fine-   robustness of our identified features in controlling
+grained strategy labels, then contrasting activations    reasoning strategies. Furthermore, we demonstrate
+across labels. However, accurate step-level annota-    that controlling reasoning strategies can redirect
+tion is challenging. Conversely, we leverage SAEs  LRMs from erroneous paths to correct ones.
+
+Limitations                                     Zac Hatfield-Dodds, Robert Lasenby, Dawn Drain,
+                                                       Carol Chen, Roger B. Grosse, Sam McCandlish,
+While SAE-Steering demonstrates promising re-      Jared Kaplan, Dario Amodei, Martin Wattenberg,
+sults, several limitations remain to be addressed      and Christopher Olah. 2022. Toy models of superpo-
+                                                                      sition. arXiv preprint arXiv:2209.10652.in future work.  First, due to computational con-
+straints, we only evaluated five representative strate-                                                  Zihao Fu, Wai Lam, Anthony Man-Cho So, and Bei
+gies to demonstrate our method’s effectiveness. Fu-      Shi. 2021. A theoretical analysis of the repetition
+ture work could investigate controlling other rea-      problem in text generation. In AAAI.
+soning strategies. Second, we only demonstrate
+                                               Andrey V. Galichin, Alexey Dontsov, Polina Druzhin-the application of controlling reasoning strategies
+                                                                  ina, Anton Razzhigaev, Oleg Y. Rogov, Elena Tu-
+in error correction scenarios. Future work could                                                                 tubalina, and Ivan V. Oseledets. 2025. I have covered
+explore applying such control to a wider range of        all the bases here: Interpreting reasoning features
+applications. Third, we only attempted to correct       in large language models via sparse autoencoders.
+erroneous reasoning paths by enforcing LRMs to      arXiv preprint arXiv:2503.18878.
+continue reasoning and controlling subsequent rea-
+                                                 Kanishk Gandhi, Ayush Chakravarthy, Anikait Singh,
+soning strategies. Future work could explore guid-                                                  Nathan Lile, and Noah D. Goodman. 2025. Cogni-
+ing the LRM at earlier stages—either at the begin-       tive behaviors that enable self-improving reasoners,
+ning or during intermediate steps—to dynamically        or, four habits of highly effective stars. Second Con-
+                                                            ference on Language Modeling.adjust the reasoning trajectory.
+
+                                                Sandeep Reddy Gantla. 2025. Exploring mechanistic
+                                                                    interpretability in large language models: Challenges,
+References                                                          approaches, and insights. In 2025 International Con-
+                                                           ference on Data Science, Agents & Artificial Intelli-AIME. 2025. Aime problems and solutions.
+                                                     gence (ICDSAAI).
+Trenton Bricken, Adly Templeton, Joshua Batson,
+   Brian Chen, Adam Jermyn, Tom Conerly, Nick   Leo Gao, Tom Dupré la Tour, Henk Tillman, Gabriel
+   Turner, Cem Anil, Carson Denison, Amanda Askell,     Goh, Rajan Troll, Alec Radford, Ilya Sutskever, Jan
+   Robert Lasenby, Yifan Wu, Shauna Kravec, Nicholas       Leike, and Jeffrey Wu. 2025. Scaling and evaluating
+   Schiefer, Tim Maxwell,  Nicholas Joseph, Zac       sparse autoencoders. In ICLR.
+   Hatfield-Dodds, Alex Tamkin, Karina Nguyen, and
+  6 others. 2023. Towards monosemanticity: Decom-   Daya Guo, Dejian Yang, Haowei Zhang, Junxiao
+   posing language models with dictionary learning.      Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shi-
+  Transformer Circuits Thread.  Https://transformer-      rong Ma, Peiyi Wang, Xiao Bi, and 1 others. 2025.
+   circuits.pub/2023/monosemantic-                      Deepseek-r1: Incentivizing reasoning capability in
+   features/index.html.                                    llms via reinforcement learning.  arXiv preprint
+                                                        arXiv:2501.12948.
+Xingyu Chen, Jiahao Xu, Tian Liang, Zhiwei He,
+   Jianhui Pang, Dian Yu, Linfeng Song, Qiuzhi                                                     Robert Huben, Hoagy Cunningham, Logan Riggs Smith,
+   Liu, Mengfei Zhou, Zhuosheng Zhang, Rui Wang,                                                   Aidan Ewart, and Lee Sharkey. 2024. Sparse autoen-
+  Zhaopeng Tu, Haitao Mi, and Dong Yu. 2025. Do                                                         coders find highly interpretable features in language
+  NOT think that much for 2+3=? on the overthink-                                                       models. In ICLR.
+   ing of long reasoning models. In ICML. OpenRe-
+   view.net.                                                     Vladimir Karpukhin, Barlas Oguz, Sewon Min, Patrick
+                                                        Lewis, Ledell Wu, Sergey Edunov, Danqi Chen, and
+Gheorghe Comanici, Eric Bieber, Mike Schaekermann,
+                                                     Wen-tau Yih. 2020. Dense passage retrieval for open-
+   Ice Pasupat, Noveen Sachdeva, Inderjit Dhillon, Mar-
+                                                   domain question answering. In EMNLP (1). Associa-
+   cel Blistein, Ori Ram, Dan Zhang, Evan Rosen, and
+                                                                tion for Computational Linguistics.
+  1 others. 2025. Gemini 2.5: Pushing the frontier with
+  advanced reasoning, multimodality, long context, and
+                                                               Jia LI, Edward Beeching, Lewis Tunstall, Ben Lipkin,   next generation agentic capabilities. arXiv preprint
+                                           Roman Soletskyi, Shengyi Costa Huang, Kashif Ra-   arXiv:2507.06261.
+                                                                      sul, Longhui Yu, Albert Jiang, Ziju Shen, Zihan Qin,
+Boyi Deng, Yu Wan, Baosong Yang, Yidan Zhang, and      Bin Dong, Li Zhou, Yann Fleureau, Guillaume Lam-
+   Fuli Feng. 2025. Unveiling language-specific fea-       ple, and Stanislas Polu. 2024. Numinamath.
+   tures in large language models via sparse autoen-
+   coders. In ACL (1), pages 4563–4608. Association    Hunter Lightman, Vineet Kosaraju, Yura Burda, Harri
+   for Computational Linguistics.                        Edwards, Bowen Baker, Teddy Lee, Jan Leike,
+                                                   John Schulman, Ilya Sutskever, and Karl Cobbe.
+Nelson Elhage,  Tristan Hume,  Catherine Olsson,      2023.  Let’s verify step by step.  arXiv preprint
+   Nicholas Schiefer, Tom Henighan, Shauna Kravec,      arXiv:2305.20050.
+
+Zhengkai Lin, Zhihang Fu, Ze Chen, Chao Chen, Liang   Noah Shinn, Federico Cassano, Ashwin Gopinath,
+  Xie, Wenxiao Wang, Deng Cai, Zheng Wang, and      Karthik Narasimhan, and Shunyu Yao. 2023. Re-
+   Jieping Ye. 2025. Controlling thinking speed in rea-       flexion: language agents with verbal reinforcement
+  soning models. NeurIPS.                                  learning. In NeurIPS.
+
+Aixin Liu, Bei Feng, Bing Xue, Bingxuan Wang,   Chandan Singh, Jeevana Priya Inala, Michel Galley,
+  Bochao Wu, Chengda Lu, Chenggang Zhao, Chengqi      Rich Caruana, and Jianfeng Gao. 2024. Rethinking
+  Deng, Chenyu Zhang, Chong Ruan, and 1 others.       interpretability in the era of large language models.
+  2024. Deepseek-v3 technical report. arXiv preprint      arXiv preprint arXiv:2402.01761.
+  arXiv:2412.19437.
+                                                        Charlie Victor Snell, Jaehoon Lee, Kelvin Xu, and Avi-
+Sara Vera Marjanovi´c, Arkil Patel, Vaibhav Adlakha,       ral Kumar. 2025. Scaling LLM test-time compute
+  Milad Aghajohari, Parishad BehnamGhader, Mehar       optimally can be more effective than scaling parame-
+   Bhatia, Aditi Khandelwal, Austin Kraft, Benno Kro-       ters for reasoning. In ICLR. OpenReview.net.
+   jer, Xing Han Lù, Nicholas Meade, Dongchan Shin,
+  Amirhossein Kazemnejad, Gaurav Kamath, Marius   Xinyu Tang, Xiaolei Wang, Zhihao Lv, Yingqian Min,
+  Mosbach, Karolina Sta´nczak, and Siva Reddy. 2025.     Xin Zhao, Binbin Hu, Ziqi Liu, and Zhiqiang Zhang.
+  Deepseek-r1 thoughtology: Let’s think about llm rea-      2025. Unlocking general long chain-of-thought rea-
+   soning. arXiv preprint arXiv:2504.07128.               soning capabilities of large language models via rep-
+                                                             resentation engineering.  In ACL (1), pages 6832–
+Niklas Muennighoff, Zitong Yang, Weijia Shi, Xi-      6849. Association for Computational Linguistics.
+  ang Lisa Li, Li Fei-Fei, Hannaneh Hajishirzi, Luke
+   Zettlemoyer, Percy Liang, Emmanuel J. Candès, and    Openthoughts Team. 2025a.   Openthoughts:  Data
+   Tatsunori Hashimoto. 2025.  s1: Simple test-time       recipes for reasoning models.
+   scaling. arXiv preprint arXiv:2501.19393.
+                                        Qwen Team. 2025b. Qwen3 technical report.
+nostalgebraist. 2020. Interpreting gpt: The logit lens.
+                                                Aäron van den Oord, Yazhe Li, and Oriol Vinyals. 2018.  Less-Wrong (blog).
+                                                         Representation learning with contrastive predictive
+                                                          coding. arXiv preprint arXiv:1807.03748.OpenAI. 2024.   Gpt-4o system card.    Preprint,
+  arXiv:2410.21276.
+                                                        Constantin Venhoff, Iván Arcuschin, Philip Torr, Arthur
+                                              Conmy, and Neel Nanda. 2025. Understanding rea-
+OpenAI. 2025.  Openai o1 system card.  Accessed:
+                                                        soning in thinking language models via steering vec-
+  2025-02-21.                                                                       tors. CoRR, abs/2506.18167.
+
+Qianjun Pan, Wenkai Ji, Yuyang Ding, Junsong Li, Shil-                                              Yue Wang, Qiuzhi Liu, Jiahao Xu, Tian Liang, Xingyu
+   ian Chen, Junyi Wang, Jie Zhou, Qin Chen, Min                                                     Chen, Zhiwei He, Linfeng Song, Dian Yu, Juntao Li,
+  Zhang, Yulan Wu, and Liang He. 2025. A survey                                                  Zhuosheng Zhang, Rui Wang, Zhaopeng Tu, Haitao
+   of slow thinking-based reasoning llms using rein-                                                   Mi, and Dong Yu. 2025. Thoughts are all over the
+   forced learning and inference-time scaling law. arXiv                                                             place: On the underthinking of o1-like llms. arXiv
+   preprint arXiv:2505.02665.                                                             preprint arXiv:2501.18585.
+
+Yunjia Qi, Hao Peng, Xiaozhi Wang, Amy Xin, Youfeng   Tong Wu, Chong Xiang, Jiachen T. Wang, and Pra-
+   Liu, Bin Xu, Lei Hou, and Juanzi Li. 2025. AGEN-      teek Mittal. 2025. Effectively controlling reasoning
+  TIF: benchmarking instruction following of large      models through thinking intervention. arXiv preprint
+  language models in agentic scenarios.   CoRR,      arXiv:2503.24370.
+  abs/2505.16944.
+                                              Chenxu Yang, Qingyi Si, Mz Dai, Dingyu Yao, Mingyu
+David Rein, Betty Li Hou, Asa Cooper Stickland,      Zheng, Minghui Chen, Zheng Lin, and Weiping
+  Jackson Petty, Richard Yuanzhe Pang, Julien Di-     Wang. 2025a. Test-time prompt intervention.
+   rani, Julian Michael, and Samuel R. Bowman. 2023.
+  GPQA: A graduate-level google-proof q&a bench-   Jingyuan Yang, Rongjun Li, Weixuan Wang, Ziyu Zhou,
+  mark. CoRR, abs/2311.12022.                       Zhiyong Feng, and Wei Peng. 2025b. Lf-steering:
+                                                         Latent feature activation steering for enhancing se-
+Leheng Sheng, An Zhang, Zijian Wu, Weixiang Zhao,      mantic consistency in large language models. arXiv
+  Changshuo Shen, Yi Zhang, Xiang Wang, and Tat-       preprint arXiv:2501.11036.
+  Seng Chua. 2025. On reasoning strength planning in
+   large reasoning models. NeurIPS.                 Zeyu Yun, Yubei Chen, Bruno A. Olshausen, and
+                                               Yann LeCun. 2021. Transformer visualization via
+Wei Shi, Sihang Li, Tao Liang, Mingyang Wan, Gojun       dictionary learning: contextualized embedding as
+  Ma, Xiang Wang, and Xiangnan He. 2025. Route      a linear superposition of transformer factors.  In
+   sparse autoencoder to interpret large language mod-     DeeLIO@NAACL-HLT, pages 1–10. Association for
+   els. CoRR, abs/2503.08200.                           Computational Linguistics.
+
+Wojciech Zaremba, Evgenia Nitishinskaya, Boaz Barak,   then extract the top-20 most frequent words and
+   Stephanie Lin, Sam Toyer, Yaodong Yu, Rachel    then perform a manual curation to select the key-
+   Dias, Eric Wallace, Kai Xiao, Johannes Heidecke,                                           words we identified as most representative of the
+  and 1 others. 2025.  Trading inference-time com-
+   pute for adversarial robustness.   arXiv preprint    target reasoning strategy. The final keywords lists
+   arXiv:2501.18841.                                  are shown in Table 4.
+
+Xingsheng Zhang, Luxi Xing, Chen Zhang, Yanbing
+                                                                      Reasoning Strategy               High-Frequency Keywords
+   Liu, Yifan Deng, Yunpeng Li, Yue Hu, and Chenxu
+   Niu. 2025. Can we steer reasoning direction by think-       Problem Understanding        problem, question, statement, reads, says
+   ing intervention? In Findings of EMNLP 2025.              Procedural Planning                    let, need, planning, decomposition
+                                                                              Backtracking                              earlier, previous, initial, back
+Lianmin Zheng, Wei-Lin Chiang, Ying Sheng, Tianle        Multi-Perspective Verification       another, example, case, approach
+   Li, Siyuan Zhuang, Zhanghao Wu, Yonghao Zhuang,       Hypothesis Reasoning           maybe, perhaps, assume, suppose, if
+  Zhuohan Li, Zi Lin, Eric P. Xing, Joseph E. Gonzalez,
+   Ion Stoica, and Hao Zhang. 2024. Lmsys-chat-1m:   Table 4: High-frequency keywords corresponding to
+ A large-scale real-world LLM conversation dataset.   each reasoning strategy.
+   In ICLR. OpenReview.net.
+
+Qihuang Zhong, Kang Wang, Ziyang Xu, Juhua Liu,
+  Liang Ding, and Bo Du. 2024. Achieving> 97% on
+                           C  Reliability of LLM Judges  gsm8k: Deeply understanding the problems makes
+   llms better solvers for math word problems. Frontiers
+   of Computer Science.                        To validate LLM judge reliability, we conducted
+                                                a human annotation study.  Specifically, we ran-
+Pei Zhou, Jay Pujara, Xiang Ren, Xinyun Chen,
+                                         domly sampled 200 steered outputs (40 per strat-  Heng-Tze Cheng, Quoc V. Le, Ed H. Chi, Denny
+  Zhou, Swaroop Mishra, and Huaixiu Steven Zheng.   egy) alongside their unsteered baselines. We then
+  2024. SELF-DISCOVER: large language models   asked three human annotators (Krippendorff’s al-
+   self-compose reasoning structures. In NeurIPS.                                             pha = 0.78) to evaluate whether the steered output
+                                         more explicitly demonstrates the target strategy
+A  Selection of Steering Strength
+                                                 than the baseline.  Taking human judgments as
+The hyper-parameter α determines the steering   ground truth, we evaluate the accuracy of LLM
+strength during strategy control. An overly large α    judges. As shown in Table 5, LLM judges achieve
+can cause the LRM to generate repetitive outputs,   0.82 agreement with human annotations, indicating
+while an α that is too small may yield negligible    reliable performance.
+controlling effects. We thus select an α value that
+is as large as possible without inducing repetitive                                              Reasoning Strategy         Agreement
+outputs. Specifically, we use the validation set to
+                                               Problem Understanding            0.85determine α for each feature. For each validation
+                                                    Procedural Planning               0.75sample, we first steer the feature with α = 15 and
+                                                   Backtracking                     0.83check for repetitive outputs. If repetition occurs,
+                                                      Multi-Perspective Verification      0.85we decrease α by one and re-steer. We repeat this
+                                                  Hypothesis Reasoning              0.8process until no repetition is detected. We then
+use the average α across validation samples as the     Average                          0.82
+steering strength for the test set. The starting value
+of 15 was chosen empirically, as we found that    Table 5: Agreement between human annotators and
+higher values frequently lead to repetitive outputs  LLM judges.
+for most features.
+
+B  Extraction of Strategy Keywords
+                           D  Curation of Error Correction Dataset
+To extract strategy keywords for each reasoning
+strategy, we first construct a corpus for each reason-   To  sample  incorrect LRM  responses  from
+ing strategy by sampling the responses of the LRM   MATH500, AIME25, and GPQA, we sample eight
+to a diverse set of problems and manually identify-   responses for each problem in these datasets and
+ing the segments corresponding to each reasoning    retain only the incorrect ones. The final dataset
+strategy. From each strategy-specific corpus, we     statistics are shown in Table 6.
+
+ Model      MATH500  AIME25  GPQA    E.2  Implementation Details
+ R1-Llama-8B     495       163      878      For each reasoning strategy, we select the top three
+ Qwen3-8B        141        73      641       strategy-specific features with the best control ef-
+                                                     fectiveness on the validation set, yielding a total
+    Table 6: Statistics of Error Correction Dataset.       of fifteen features for the strategy router to choose
+                                                from. We include three rather than one feature
+                                                  per strategy because different features may be ef-
+E  Strategy Router                                                       fective in different contexts, providing the router
+                                                  with more flexibility to adapt to different reasoning
+E.1  Methods
+                                                      scenarios.
+To steer LRMs’ reasoning strategies from erro-     For the training of our strategy router, we use a
+neous paths to correct ones, we need to select ap-    training set composed of 919 problems from past
+propriate strategies based on the current reasoning  AIME competitions (1983–2023) (AIME, 2025)
+context. Reasoning strategies can be controlled ei-   and 4,000 problems from the ‘aops_forum’ source
+ther manually or by an automatic strategy router.   of the NUMINAMATH-1.5 dataset (LI et al., 2024).
+Here we train a lightweight router via contrastive   For each problem, we sample eight initial re-
+learning (van den Oord et al., 2018) to automati-   sponses. To empirically evaluate the effectiveness
+cally select effective strategies based on the current    of a feature fj on an incorrect response yi, we ap-
+reasoning context, thereby eliminating the need for    ply reasoning steering with fj to generate eight
+manual intervention.                               responses and measure the proportion of them that
+   Specifically, we instantiate the strategy router as    successfully correct the initial error. This training
+a bi-encoder architecture (Karpukhin et al., 2020).   data is strictly separated from our test sets in Sec-
+A context encoder, Ec(·), embeds the current rea-    tion 4.4, ensuring no data leakage. Notably, GPQA
+soning state (represented by the final token of the    represents an out-of-domain scenario, demonstrat-
+response prefix Y<t), and a feature encoder, Ef(·),   ing our method’s generalization capability.
+projects each strategy-specific feature fs into the
+same representation space. The effective scores be-
+tween the context and a feature are then computed
+as the dot product of their respective embeddings:
+
+      score(Y<t, fs) = ⟨Ec(Y<t), Ef(fs)⟩    (8)
+
+
+The  router   is  trained  using  the  InfoNCE
+loss (van den Oord et al., 2018), which encourages
+higher effective scores for positive context–feature
+pairs and lower effective scores for negative ones:
+
+L(Y<t, f+s , f−s,1, . . . , f−s,M)
+                        escore(Y<t,f s+ )
+= −log                                                                   ,                +                −
+           escore(Y<t,f s ) + PMk=1 escore(Y<t,f s,k)
+                                                 (9)
+
+  where (Y<t, f+s ) is labeled as a positive pair if
+steering with feature f+s  leads to a correct final an-
+swer. All other pairings for that context are treated
+as negative pairs. At inference time, for a given
+context Y<t, we compute score(Y<t, fs) for all can-
+didate features fs and select the feature with the
+highest effective score as the selected feature to
+steer the LRM.
+
+    Problem:
+     In triangle 𝐴𝐵𝐶, 𝐴𝐵= 10, 𝐵𝐶= 14, and 𝐶𝐴= 16. Let 𝐷be a point in the interior of 𝐵𝐶.‾  Let points 𝐼! and 𝐼" denote the
+     incenters of triangles 𝐴𝐵𝐷and 𝐴𝐶𝐷, respectively. The circumcircles of triangles 𝐵𝐼!𝐷and 𝐶𝐼"𝐷meet at distinct
+     points 𝑃and 𝐷. The maximum possible area of △𝐵𝑃𝐶can be expressed in the form 𝑎−𝑏𝑐, where 𝑎, 𝑏, and 𝑐are
+     positive integers and 𝑐is not divisible by the square of any prime. Find 𝑎+ 𝑏+ 𝑐.
+
+   No steering extended:
+     Let me recall that the area of triangle ABC is 40√3. If the maximum area of BPC is 40√3 - 14√3 = 26√3, then a =
+     40, b = 14, c = 3, giving 40 + 14 + 3 = 57. But why would the area of BPC be 26√3?
+  …
+
+   + Problem Understanding:
+     Let me think again. The problem says "the maximum possible area of triangle BPC can be expressed in the
+    form a - b√c". Let me consider that the area might be related to the area of ABC minus some value.
+  …
+
+   + Procedural Planning:
+    Let me check one more thing. The area of triangle BPC when P is at (7, 7√3) is 49√3, but the area of triangle
+   ABC is 40√3. Since P is outside, it's possible …
+    Let me try to calculate the area of BPC when P is the incenter of ABC, which is at (4, 2√3). The area is 14√3, as
+     calculated earlier. This is 14√3, which is 14√3 - 0, but again b must be positive …
+    Let me recall that in triangle BPC, with ∠BPC = π/3, and BC = 14 …
+
+   + Backtracking:
+     Actually, let me recall that in the initial calculation, the area of triangle ABC is 40√3. If the maximum area of
+   BPC is 40√3, it would be equal to the area of ABC, but this is not possible since P is a point outside or inside.
+  …
+
+   + Multi-perspective Verification:
+    Let me think about another approach.
+
+     Let me use the fact that the area of BPC is (1/2)*BP*CP*sin(∠BPC), and from the earlier relation, if ∠BPC is
+     2π/3, then the maximum BP*CP is 392/5, so the area is (392/5)*(√3/2) = 196√3/5. But 196/5 is 39.2, so 39.2√3 is
+     not in the form a - b√c.
+
+     Alternatively, if the maximum area is when P is the incenter of ABC, the area is 14√3, but this is also not in the
+     required form.
+
+    Another idea: maybe the maximum area is the area of ABC, which is 40√3, but the problem says "maximum
+     possible", so it might be larger.
+  …
+
+   + Hypothesis Reasoning:
+     Let me think again. If the area is 49√3, and if the problem says it can be expressed as a - b√c, perhaps there is
+    a different expression. Let me recall that 49√3 is equal to 49√3 + 0, but if there is a different expression, like if
+     the area is 49√3 - something, but I need to think.
+
+
+Figure 6: A case study of SAE-based steering. By steering with different strategy-specific features as control vectors,
+we steer the subsequent reasoning trajectory to follow different reasoning strategies.
+
+You are a top-tier AI recognition reasoning behavior analysis expert. Your task is to precisely evaluate the success of a
+thought intervention experiment. An intervention is successful if the intervened thinking more explicitly and significantly
+demonstrates the "target cognitive reasoning strategy". If the baseline thinking lacks this strategy, it must be added; if the
+baseline already exhibits it, it must be strengthened.
+
+You can first count the number of times the "target cognitive reasoning strategy" appears in both the baseline thinking
+and the intervened thinking, and then determine whether the frequency increases after intervention. Your output MUST
+be a single valid JSON object. Provide the following:
+- "before": integer, the count of occurrences in the Before Intervention text.
+- "after": integer, the count of occurrences in the After Intervention text.
+- "more_frequent": boolean, true if the count after > before, else false.
+
+### Target Cognitive Reasoning Strategy ###
+{reasoning_strategy_description}
+
+Examples:
+
+{few_shot}
+
+### FINAL TASK ###
+
+Reasoning Texts to Analyze:
+
+Before Intervention:
+{before_text}
+
+After Intervention:
+{after_text}
+
+Your Answer:
+
+
+                    Figure 7: The prompt used to evaluate the control effectiveness.

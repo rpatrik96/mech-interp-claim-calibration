@@ -1,0 +1,1183 @@
+             HOW CAUSAL ABSTRACTION UNDERPINS
+                   COMPUTATIONAL EXPLANATION
+
+
+                       ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+                 Abstract. Explanations of cognitive behavior often appeal to computations over represen-
+                       tations. What does it take for a system to implement a given computation over suitable
+                       representational vehicles within that system? We argue that the language of causality—and
+                         specifically the theory of causal abstraction—provides a fruitful lens on this topic. Drawing
+                  on current discussions in deep learning with artificial neural networks, we illustrate how
+                         classical themes in the philosophy of computation and cognition resurface in contemporary2025              machine learning. We offer an account of computational implementation grounded in causal
+                       abstraction, and examine the role for representation in the resulting picture. We argue that
+                      these issues are most profitably explored in connection with generalization and prediction.Aug
+15                                                1. Introduction
+
+             Imagine how the sciences of the mind would look if we had free, unconstrained observational
+          and experimental access to brains. Suppose we could record neural activity at arbitrarily
+             fine levels of fidelity, while an organism is performing any given task, and even intervene on
+           that activity with limitless precision. Impressive technical advances notwithstanding, such a[cs.LG]            scenario would of course be far from our present predicament. It is nonetheless worth asking:
+                  if we enjoyed such access, what work would remain before we could explain or understand
+           thought and behavior? Many authors over the decades have forcefully argued that even in
+           such a privileged epistemic position we would still likely be very far from good explanations
+          and deep understanding of human cognition (see Putnam 1975; Fodor 1975; Cummins 1977;
+          Marr 1982; Pylyshyn 1984; Jonas and Kording 2017, among many others).
+         An animating contention spurring the development of cognitive science over the past 70
+           years is that productive explanation of cognition—and especially of intelligent behavior in
+         humans—is often best targeted at higher levels of abstraction. Such explanations posit
+           computations over internal representations. While it is common across the sciences to model
+          phenomena computationally, e.g., simulating aspects of natural phenomena on computers, the
+           assumption here is that cognition can be usefully construed as itself a kind of computationalarXiv:2508.11214v1      or algorithmic process. This raises a distinctive question for the cognitive sciences: what
+          would it take for a physical system (such as a brain) to implement an algorithm? And what
+           does it take to identify the requisite representational vehicles in the system?
+             Early answers to this question ventured that there should be some mapping from states
+             of the physical system to states of a suitable computational model, such that transitions
+            in the model are “emulated” by transitions in the system (e.g., Putnam 1967). A series
+             of “triviality” arguments convinced many that stricter criteria were needed (see Sprevak
+           2018 for an overview). One compelling response, from Chalmers (1996, 2011a), characterizes
+           computational systems in terms of a formal object called a combinatorial state automaton
+          (CSA), essentially an automaton with vector-valued states. Implementation then requires
+            that the physical system be broken down into suitable parts, and that the causal relationships
+         among these parts be “isomorphic” to the transition structure of the corresponding CSA.
+                                                                1
+
+ 2               ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+  While Chalmers’ appeal to CSAs is highly suggestive, our aim here is to explore what
+happens when details of the causal mapping are interrogated more closely, employing our
+ best tools for reasoning about causality. We propose understanding the “isomorphism” or
+“emulation” relation by appeal to a precise notion of causal abstraction. Our first task is to
+ articulate what this concept is and how it helps clarify the implementation relation.
+   Delving into these details raises pointed questions about which (causally and counterfactu-
+ ally faithful) mappings between the physical system and the computational model should
+be admissible. Our second task is to help clarify these questions. As we shall see, questions
+about admissible mappings are intertwined with questions about the place of representation
+ in computational explanation. We often want to think of internal vehicles taking on repre-
+ sentational content when they occupy an appropriate causal role within a working system,
+ including upstream causes of (tokenings of) the relevant representational vehicle, as well
+ as downstream effects of it (e.g., Cummins 1975; Block 1986; Dretske 1988; Neander 2017;
+Shea 2018). Representational content of a mental structure thus depends on what (if any)
+ algorithmic procedures it implements, as the algorithmic (causally abstract) description helps
+ carve the agent into causally relevant variables in the first place. Laxer mapping constraints
+ for implementation may thereby admit an excess of representational claims. We shall explore
+ this issue in some detail, drawing on current discussions in deep learning.
+  We intend our discussion to be general, applying to human cognition as well as to other
+ intelligent agents and artifacts. However, much of our focus will be on deep neural network
+ models, drawing upon and contributing to the emerging field of mechanistic1 interpretability.
+A significant strand of work has been grounded in theories of causal mediation and abstraction
+(Vig et al. 2020; Geiger et al. 2020, 2021, 2024; Finlayson et al. 2021; Chan et al. 2022; Meng
+ et al. 2022; Wang et al. 2023; Geva et al. 2023; Hanna et al. 2023; Wu et al. 2023; see Mueller
+ et al. 2024; Geiger et al. 2025 for overviews). A remarkable fact about artificial systems is that
+we often do occupy the auspicious epistemic position with respect to these systems imagined
+ in the opening paragraph: our observational and experimental access to them is limited only
+by the computational tractability of the tools we use to study them. For this reason, they
+ provide a unique test bed for exploration of ideas about computational implementation and
+ explanation (and indeed much else in cognitive science; cf. Frank and Goodman 2025), which
+we believe will ultimately be portable to the study of humans and other animals.
+
+                                2. Computation and Causation
+
+  We follow a line of work in philosophy that understands computational explanation as a
+ species of causal explanation.2 Meanwhile, we adopt a broadly interventionist approach to
+ causal explanation, whereby explaining why A is a matter of identifying causal difference-
+makers for A, answering “what-if-things-were-different” questions about A, and facilitating
+some degree of (at least in-principle) manipulation and control of A (Woodward, 2003).
+The distinctive feature of computational explanation is that the relevant causal structure is
+ identified by a computational model. Computations, meanwhile, are commonly described
+ at varying levels of detail (Marr, 1982). To take a popular example (e.g., Sprevak 2018),
+stochastic gradient descent is the name of a learning algorithm that can be implemented in any
+
+   1See Saphra and Wiegreffe (2024), who argue the term ‘mechanistic interpretability’ is polysemous,
+ admitting multiple cultural and technical definitions.
+    2See, e.g., Putnam (1967); Chalmers (1996, 2011a); Scheutz (2001), among others. Not everyone endorses
+ this assumption; e.g., Piccinini (2015); Rusanen and Lappi (2016) explicitly deny it.
+
+       HOW CAUSAL ABSTRACTION UNDERPINS COMPUTATIONAL EXPLANATION           3
+
+number of ways. The Adam algorithm commits to a particular parameter update schedule,
+while a specific implementation of Adam in Python will need to commit to even more details,
+e.g., a specific learning rate. And so on. This pervasive feature of computation suggests that
+our framework should accommodate descriptions at different levels of abstraction.
+  Another stance we adopt—not defended here—is that “computational model” should be
+understood as a prototype concept, without sharp boundaries or defining conditions. We
+have lots of paradigmatic examples: automata, Turing machines, neural networks, Python
+programs, pseudocode, and many more. There have been attempts to delineate precisely what
+an algorithm is (e.g., Moschovakis 2001; Thompson 2023); we leave the notion open-ended,
+allowing anything that has a computational or algorithmic “flavor.” We do, however, insist
+that a computational model can be construed in causal terms. What exactly does this mean?
+  Most computational models already commit to some intuitive causal construal. Computer
+program analysis (debugging, etc.) regularly invokes cause-effect relationships among variables
+in programs (e.g., Zeller 2002). Turing’s (1936) landmark analysis of computability was
+compelling partly because he provided a mechanical picture of how computation works, viz.
+transitions caused by states of a system, reading and writing symbols on a tape, etc. A close
+formal correspondence between (e.g., Turing machine) programs and causal models can in
+fact be demonstrated (see Icard 2017; Ibeling and Icard 2019).
+  For our purposes3 a causal model M “ pV, Fq is a pair given by a set V of variables with
+sets of possible values ValpXq for each variable X P V, and a set of functional mechanisms
+FX : ValpYq Ñ ValpXq, one for each X P V, which produces a value for X as a function of
+values of some other set of “parent” variables Y Ď V.
+  As an elementary example of a computational model construed as a causal model, imagine
+a binary circuit with four binary “input” variables A1, A2, A3, A4. Let the circuit include two
+XNOR (“biconditional”) gates, one for A1 and A2, and another for A3 and A4, the mechanisms
+of variables B1 and B2, respectively. Finally, another XNOR gate, the mechanism of C, takes
+B1 and B2 as input. Let FØ denote the binary function that returns 1 on inputs p0, 0q and
+p1, 1q, and 0 otherwise.4 Then we have said that FB1 “ FB2 “ FC “ FØ. Meanwhile, let FAi
+for i P t1, 2, 3, 4u be the (0-ary) constant function to value 0. This model looks as follows:
+
+
+
+                           C
+
+                          FØ
+                                B1       B2
+                    FØ           FØ
+
+
+                          A1     A2     A3     A4
+
+     Figure 1. A simple circuit construed as a causal model M. The arrows
+      denote functional dependence. For instance, there is an arrow from A4 to B2
+      because a change to A4 can (in some context) bring about a change to B2.
+
+  3The reader may consult Geiger et al. (2025) for many more details on the following. See also Pearl (2009);
+Peters et al. (2017) for more general treatments of causal models, especially as they feature in causal inference.
+For simplicity, we omit any discussion of probability here, though much of the following generalizes.
+  4To simulate other inputs to the circuit, intervene on the parentless variables and fix them to a new value.
+
+ 4               ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+  Assuming—as we shall—that this dependence relation is acyclic, we can determine a
+“solution” to a model by reading off values of parentless variables and then iteratively
+ determining values for subsequent variables along the dependence relation. When speaking
+ of computational models, this is essentially a matter of “running the computation forward.”
+ Let RunpMq be this (unique) solution of M. Note that RunpMq P ValpVq.
+  We can “intervene” on a model to simulate the effect of a manipulation to the system
+(Spirtes et al., 2000; Pearl, 2009). For instance, we might hold B2 fixed at 1. This involves
+ overriding the mechanism FB2 with the constant function that always takes on value 1, in
+ effect severing any dependence B2 had on other variables (in this case, A3 and A4):
+
+
+                            C
+
+                           FØ
+                                B1       B2
+                    FØ
+
+
+                           A1     A2     A3     A4
+
+
+ Call an operation that replaces some mechanisms with constant functions a hard intervention.5
+  We could imagine other operations on models, e.g., overriding FB2 to make B2 now function
+ as an AND gate instead of an XNOR gate. We could also make it depend on a different
+ set of variables than it did initially; e.g., we might make B2 now depend on all four input
+ variables, now computing a quaternary boolean function. More generally, if MV is the set
+ of all causal models over these variables V, we will say an interventional is any function
+ i : MV Ñ MV. Let Mi denote the manipulated model. As it is simply another model in MV,
+we can “run” this manipulated model to obtain a solution RunpMiq just as before. Given a
+ set I of interventionals, we will say that it forms an intervention algebra if it satisfies the
+same algebraic laws as hard interventions. Roughly speaking, this means that interventionals
+ in I are nicely modular: e.g., we can perform one intervention without perturbing others.6
+  On this characterization of causality, it should be clear that many familiar examples of
+ computational models can be assimilated to causal models:  all we need is some way to
+ carve the model into natural causal variables, together with a suitable notion of intervention
+on the model. For Turing machines the variables can be taken as time-indexed tape cells,
+while interventions hold tape cells fixed to specified values, blocking rewrites to those cells.
+ Chalmers’ CSAs also easily fit this mold, where state components play the role of variables.
+
+
+
+   5An important class of hard interventions are known as interchange interventions: those that fix variables to
+ the value they would take if a different input were provided (Geiger et al., 2020; Vig et al., 2020). Interchange
+ interventions are constrained to the space of values achieved for actual inputs, and recursive interchange
+ interventions fix variables to the value they would take if a (recursive) interchange intervention had been
+ performed (Geiger et al., 2025). Interchange interventions on neural networks sometimes go under the name
+ activation patching (Wang et al., 2023; Zhang and Nanda, 2024) or resampling ablations (Chan et al., 2022).
+They appear in causal mediation analysis to compute natural (in)direct effects (Pearl, 2001; Vig et al., 2020).
+   6See Geiger et al. (2025) for more precise definitions and motivation for the notion of intervention algebra,
+ including a representation theorem with respect to composition of hard interventions.
+
+       HOW CAUSAL ABSTRACTION UNDERPINS COMPUTATIONAL EXPLANATION           5
+
+We maintain that, when discussing computational explanation, we must always (if only
+implicitly) commit to some causal construal of the computational model.7
+
+             3. Computational Implementation as Causal Abstraction
+
+  Suppose we have a candidate (“high-level”) computational model H, construed as a causal
+model. What does it take for a “low-level” system L to implement this computation? Here
+we draw on a body of work exploring notions of causal abstraction (e.g., Chalupka et al. 2017;
+Rubenstein et al. 2017; Beckers and Halpern 2019; Zennaro 2022). While this literature has
+not explicitly dealt with the problem of computational implementation, we believe it provides
+the right framework for theorizing about the topic (cf. Geiger et al. 2021, 2025).
+   Often, L and H will involve different sets of variables, say, VL and VH. Let IL and IH be
+distinguished sets of interventionals on L and H that each form an intervention algebra. Then
+an exact transformation is a pair pτ, ωq of partial, surjective maps τ : ValpVLq Ñ ValpVHq
+and ω : IL Ñ IH such that:8
+
+                             τpRunpLiqq “  RunpHωpiqq,
+for all low-level interventionals i P IL. In other words, up to the translation (τ, ω) from
+low-level to high-level, the effects of interventionals in IL and IH are the same. They validate
+not only all the same factual statements, but also all the same hypothetical statements (“were
+such and such to happen, this would be the result”). Exact transformation is one of the most
+general definitions of abstraction that has been offered in the literature.
+
+3.1. Constructive Abstraction. A special case of exact transformation is motivated by
+the idea that abstractions often arise by ignoring distinctions at the low-level (e.g., Simon
+and Ando 1961; Chalupka et al. 2017). Imagine that for each high-level variable X P VH
+there is a set ΠX Ď VL of low-level variables that correspond to it, together with a partial,
+surjective map πX from values of the variables in ΠX to values of X. Where IH is the set of
+all high-level hard interventions, and IL is the set of all low-level hard interventions targeting
+(sets of) partition cells, the maps πX induce (unique) partial functions ωπ : IL Ñ IH and
+τπ : ValpVLq Ñ ValpVHq.
+
+      Constructive Abstraction: A constructive abstraction9 of a model M is any
+      model that can be obtained by a partition of the variables in M together with
+       a family π of component maps, such that pτπ, ωπq is an exact transformation.
+
+Intuitively, a constructive abstraction of M is a model that ignores some distinctions made
+in M, in a way that is causally consistent (by virtue of being an exact transformation).10
+
+   7More abstract frameworks like recursive functions should not be understood as computational models in
+the relevant sense, but rather as a mathematical means of extensionally capturing the computable functions.
+  8The notion of exact transformation is originally due to Rubenstein et al. (2017); the version here,
+generalized to interventionals, appears in Geiger et al. (2025). A further condition, elided here for ease of
+exposition, is that ω be monotone with respect to a natural ordering on interventionals.
+   9This formulation is inspired by Beckers and Halpern (2019); Beckers et al. (2019); cf. Geiger et al. (2025).
+   10Note the technical point that the intervention map ωπ is logically guaranteed to include all (recursive)
+interchange interventions in its domain.  Simply observe that (1) the domain of ωπ contains all input
+interventions because each map πX of an input variable X is surjective, and so (2) πX maps are defined under
+all values realized under input interventions, and so (3) the domain of ωπ contains interchange interventions.
+A similar argument holds for recursive interchange interventions. While exact transformation allows for
+
+6               ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+  Consider the following example, a simplified instance of one given in (Geiger et al., 2025,
+§2.6). Suppose we have thirteen real-valued variables, functionally arranged as follows:
+
+
+                                    Y
+
+
+                   H21         H22         H23         H24
+
+
+
+                   H11         H12         H13         H14
+
+
+
+                    X1          X2          X3          X4
+
+
+FXi are all constantly 0 (i “ 1, 2, 3, 4), while FHi,j and FY are defined by a particular functional
+form involving matrix multiplication and a non-linear function ReLUpnq “ maxp0, nq:
+                                               `       ˘
+                         FH1i pxq “ ReLU rxW1si                                               `        ˘
+                        FH2i ph1q “ ReLU rh1W2si                                               `      ˘
+                        FY ph2q “ ReLU h2W3  ,
+
+ where the relevant matrices are given as follows:
+         »                    fi      »                fi      »     fi
+                1  ´1  0   0              1  ´1  1  0              1
+            ´1  1   0   0              1  ´1  1  0              1     W1 “ ——–                                                                                ffiffifl  W2 “ ——–                                                                ffiffifl  W3 “ ——–                   ffiffifl                0   0   1  ´1          ´1  1  0  1              0.99
+                0   0  ´1  1          ´1  1  0  1              0.99
+
+Note that in the picture “negative” influences on a variable are drawn with a dotted arrow.
+  These functions fully define a causal model over the thirteen variables; call the model N.
+N has the general form of a simple, feedforward neural network. It turns out that M (the
+XNOR circuit in Fig. 1) is a constructive abstraction of N.
+  To see this, let each Ai correspond to Xi for i “ 1, 2, 3, 4, Y corresponds to C, and let
+high-level variable B1 correspond to tH11, H12u and B2 to tH13, H14u; that is, ΠAi “ tXiu,
+ΠBj “ tH12j´1, H12ju, and ΠC “ tY u. There is no high-level variable corresponding to H2i
+for i “ 1, 2, 3, 4 (the third “row” of N). The maps for Ai are all identity; the map for B1
+and B2 check if the relevant hidden units are equal; the map for C checks if the output is
+less than or equal to 0. In other words, πAipxiq “ xi for i “ 1, 2, 3, 4; for j “ 1, 2 we have
+πBjph2j´1, h2jq “ rh2j´1 “ h2js; finally, πCpyq “ ry ď 0s.11
+
+3.2. Translations. Another example of an exact transformation stems from a different
+intuition: we can carve the same system up into different sets of variables, depending on
+what set of primitive operations (interventionals) we admit (cf. Janzing and Mejia 2022). A
+
+off-distribution interventions, constructive abstraction requires interventions that are constrained by what
+actually happens in the model on the input space.
+   11Note that we are using notation rSs for the indicator function: equal to 1 if S holds, 0 otherwise.
+
+       HOW CAUSAL ABSTRACTION UNDERPINS COMPUTATIONAL EXPLANATION           7
+
+“recarving” of the variable space for a model M can understood as a bijective (one-to-one,
+ onto) function τ to a new variable space. Such a function determines a canonical model
+τpMq in the second variable space and a canonical map ωτ from some set of interventionals
+I to the set of all hard interventions on τpMq (see Geiger et al. 2025 for details).
+
+       Translation is an Exact Transformation: Relative to some bijective τ,
+        the translation τpMq is an exact transformation of M under pτ, ωτq.12
+
+As an example of translation, consider another casual model M˚, pictured as follows:
+
+
+                            C   id
+
+
+                              D1       D2
+                    FØ           Fô
+
+
+                           A1     A2     A3     A4
+
+
+ Here, id is the identity function, FØ is as above in §2 (the XNOR function), and Fô is the
+ quaternary function composed of XNORs: Fôpa1, a2, a3, a4q “ FØpFØpa1, a2q, FØpa3, a4qq.
+   It turns out M˚ can be translated into the model M from §2. Define the map τ from
+ variable settings of M˚ to those of M in the following way:
+
+                   pa1, a2, a3, a4, d1, d2, cq   τÞÑ  pa1, a2, a3, a4, d1, FØpd1, d2q, cq.
+
+ It is easy to verify that this is a bijective function. The model τpM˚q is simply M. Now
+which interventionals on M˚ simulate hard interventions on M? These can look relatively
+ complex. For example, what corresponds to the hard intervention on M setting variable B1
+ to value 0? This involves several different function replacements in M˚. First, we replace
+FD1 (which was FØ) with the constant function to value 1; second, we replace FD2 (which
+was Fô) with FØ, now depending only on input variables A3 and A4:
+
+
+                            C   id
+
+
+                              D1       D2
+                                 FØ
+
+
+                           A1     A2     A3     A4
+
+
+
+
+   12See (Geiger et al., 2025, Theorem 30). Under these conditions, it follows that ω then becomes an
+ isomorphism of intervention algebras under the operation of composition.
+
+ 8               ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+As the example shows, though the variable space is slightly different, hard interventions on M
+ can be emulated by suitable operations on M˚.13 This is a general feature of translations: hard
+ interventions on the translation can always be “pulled back” to corresponding interventionals
+on the model undergoing translation. Call this set of interventionals Iτ.
+  Equipped with this notion of translation, we can formulate a useful notion of abstraction-
+under-translation, which captures a natural class of model transformations:
+
+      Abstraction-Under-Translation: We shall say that H is an abstraction-
+        under-translation of L if there is a translation τpLq of L such that H is a
+        constructive abstraction of τpLq.
+
+ Informally, abstraction-under-translation is the composition of a translation and a constructive
+ abstraction: we first allow carving up the low-level variable space in a different, but causally
+ equivalent, way (the translation) and then we group the variables into “macrovariables” (the
+ constructive abstraction). With this much we can formulate what we take to be a necessary
+ condition on any claim of computational implementation:
+
+     “No Computation without Abstraction” Principle: Given a computa-
+        tional model H, another system L implements H only if H is an abstraction-
+        under-translation of L.
+
+ In other words, we claim that to implement a computation, the (causal construal of that)
+computation must be a constructive abstraction of a translation of the system in question.
+This, we believe, captures the spirit of claims in the literature that implementing is a matter
+ of mirroring causal structure (Chalmers, 1996, 2011a; Scheutz, 2001; Godfrey-Smith, 2009).
+   Importantly, this principle states only a necessary condition. If one likes, it can be taken as
+ a characterization of “syntactic” implementation, leaving open that there are other important
+“semantic” notions (cf. Chalmers 2011b; Sprevak 2018). For example, some have forcefully
+argued that proper implementation demands representational equivalence: computational
+ explanations fundamentally cite representational properties of a system—“no computation
+without representation” (Fodor, 1975)—at least across many important cases in the cognitive
+ sciences (Rescorla, 2013). We return to questions about the role of representation in §5.
+  A second important way in which the principle commits only to a necessary condition
+ concerns the translation and the classes of low-level manipulations that we ought to allow.
+Without any further constraints, we allow any bijective function from the original variable
+ space whatsoever. This can result in arbitrarily complex sets Iτ of interventionals at the
+ low-level.14 Would we want to say, for instance, that M˚ implements the XNOR algorithm
+M depicted in Fig. 1? To develop the line of concern further, we delve more deeply into
+some concrete scientific applications of these ideas.
+
+
+   13In fact, even the example here underdescribes the relevant interventionals. For instance, if we had first
+ intervened upon B2 this would result in a model where D2 no longer depends on A3 and A4. For this set of
+(already intervened upon) functions, the result would have D2 simply set to a constant value. These nuances
+ matter for ensuring what the resulting set of interventionals forms an intervention algebra. It is important,
+ for example, that one be able to perform these two interventionals in succession, in either order.
+   14As emphasized several times, abstraction-under-translation guarantees that the set Iτ of interventionals
+ on the implementing system form an intervention algebra. We return to this important point below in §6.
+
+       HOW CAUSAL ABSTRACTION UNDERPINS COMPUTATIONAL EXPLANATION           9
+
+                       4. Neural Networks and Language Models
+
+  A typical example of a cognitive task that has long interested psychologists is to determine
+whether two objects are “the same” in some relevant respect, such that this ability generalizes
+beyond a specific set of previously seen objects (Wasserman and Young, 2010). This has
+been suggested to sit at the root of humans’ capacity for abstract, relational, and symbolic
+thought.15 A notable instance of this task was introduced by Premack (1983). Imagine being
+presented, not with just a pair of objects, but with two pairs of objects. For example:
+
+                       ♦ ♦
+
+The task is to determine whether the relation (same vs. different) exhibited by the first pair
+is the same as that exhibited by the second. In this example, the answer would be positive.
+Similarly, the answer would be positive for the following, since both pairs exhibit difference:
+
+                      ♦                     l
+
+The response should then be negative for instances like this:
+
+                      ♦                     l
+
+Because the task involves recognizing a relation between relations, it has been used as a
+litmus test for abstract abilities in human infants and in non-human animals.16 Empirically,
+humans and chimpanzees succeed at the task, while other primates and some other species
+(pigeons, etc.) have not shown success (Thompson et al., 2001). Infants as young as 2 years
+old succeed at the task, but only—similar to chimpanzees—if they are provided with some
+explicit symbolic scaffolding (Christie and Gentner, 2014).
+ A key question for the cognitive scientist is, what representations and operations over
+them—that is, what computations—might underpin performance on this and related tasks
+for those agents who succeed? Some have argued that tasks like these require a symbolic
+architecture (Thompson et al., 2001), and specifically that neural network models would be
+incapable of generalizing in the right ways (e.g., Marcus 2001; see Alhama and Zuidema 2019
+for an overview). Instead, one might imagine a computation something like that depicted in
+Fig. 1 (the XNOR circuit): determine whether the first two are the same, determine whether
+the second two are the same, and check that the relation exhibited by each pair is the same.
+  Geiger et al. (2023) recently showed that neural networks can in fact demonstrate the
+requisite generalization behaviors on such tasks, using standard backpropagation learning,
+provided inputs are associated with distributed representations. The natural follow-up
+question, inspired by earlier discussions of connectionism (see especially Smolensky 1986), is
+whether such trained models have essentially induced the symbolic algorithm hypothesized
+by psychologists. Geiger et al. (2024) show that, indeed, the model in Fig. 1 is a causal
+
+   15As Wasserman and Young (2010) point out, Williams James asserted that, “sense of sameness is the
+very keel and backbone of our thinking” (James, 1890, p. 459). Karl Lashley later wrote, “The use of symbols
+depends upon the recognition of similarity, and not the reverse” (Lashley, 1948).
+   16The version of the task most commonly used in experimental work has the participant choose either a
+matching pair or a non-matching pair; e.g., choose two smiley faces rather than the pair of a smiley face and
+a frowney face (when presented with two diamonds). This task is usually called relational match-to-sample
+(e.g., Premack 1983; Christie and Gentner 2014).
+
+10               ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+abstraction—and specifically an abstraction-under-translation—of the neural network shown
+to exhibit generalization on the hierarchical equality task.
+  For the neural network to implement this algorithm it is crucial that we allow translation
+before clustering. We should not expect to find the network taking on a shape like the hand-
+crafted example in §3.1. This is one of the key lessons of connectionist research in the 1980s:
+neural networks trained by gradient descent tend to result in shared, distributed, overlapping
+encodings of information within intermediate layers (Hinton et al., 1986; Smolensky, 1986).17
+Reflecting this, Geiger et al. (2024) were unable to find a direct constructive abstraction of
+the network (that is, treating sets of intermediate nodes as causal variables). However, only a
+modest translation is necessary: simply rotating the vector space spanned by a set of neurons
+in a given hidden layer is enough to reveal the causal structure. In other words, applying
+linear functions to (the values of) sets of low-level variables suffices.
+  Smolensky (1986) explicated the idea that concepts are realized as linear structures in
+neural networks, and much more recent work has explored this insight under the name of
+the linear representation hypothesis (Mikolov et al., 2013; Elhage et al., 2022; Park et al.,
+2023). A growing body of mechanistic interpretability research—largely on language models—
+assumes the linear representation hypothesis when identifying abstract causal variables in a
+range of high-level tasks: arithmetic (Wu et al., 2023; Mueller et al., 2025), abstract reasoning
+(Geiger et al., 2024; Todd et al., 2024; Rodriguez et al., 2025), sentiment analysis (Tigges
+et al., 2024), entity binding (Feng and Steinhardt, 2024; Dai et al., 2024; Prakash et al.,
+2025), factual recall (Huang et al., 2024), game playing (Nanda et al., 2023b), truthfulness
+evaluation (Marks and Tegmark, 2024), and syntactic processing (Guerner et al., 2023; Arora
+et al., 2024). All of this work tacitly assumes that the relevant causal structure—if it is
+present at all—can be identified via linear transformations.
+   Relatedly, the neuroscience community has commonly targeted linear mappings from neural
+structures to features of predictive computational models. Researchers will typically find a
+suitable mapping from brain to model by linear regression over neural data. In this context,
+too, the assumption has an air of plausibility:  if some information is linearly decodable,
+that seems a decent heuristic for when that information can be easily “read out” by some
+downstream system (see, e.g., Kriegeskorte 2011).
+  In both contexts—neuroscience and deep learning—the linearity assumption has been
+called into question. In neuroscience, some have suggested that arbitrary linear mappings
+may be too permissive (e.g., Thobani et al. 2025), or perhaps unnecessarily restrictive (e.g.,
+Ivanova et al. 2022). In machine learning, Csord´as et al. (2024) train small recurrent neural
+networks to repeat sequences of symbols and uncover “onion” representations that are patently
+non-linear.18 Li et al. (2023) demonstrate that a GPT model trained on Othello games has a
+non-linear representation of the board state (though see Nanda et al. 2023b). To date, there
+is no known example of a causal variable being realized by a non-linear representation in a
+pretrained large language model, although Engels et al. (2025) show that pretrained language
+models have irreducibly multi-dimensional linear features.
+
+
+
+   17More recently, this phenomenon has been rediscovered and given the name “polysemanticity” (Olah
+et al., 2020; Scherlis et al., 2022).
+   18Specifically, the patterns decompose into a sum of vectors where the direction stores the symbol identity,
+while the order of magnitude stores position. When the same symbol appears at multiple positions, a single
+line stores the value of both symbols. See Csord´as et al. (2024) for details.
+
+       HOW CAUSAL ABSTRACTION UNDERPINS COMPUTATIONAL EXPLANATION          11
+
+  These discussions make salient the question of which translations we should allow in our
+ account of implementation. When taking account of causality, this is bound up with the
+ question of which operations on the low-level system we allow to witness a causal abstraction
+(i.e., which sets Iτ of interventionals can bare witness to a causal claim of implementation).
+Because implementation plays into an account of computational explanation, our answer
+ to these questions should be informed by what we want from a theory of computational
+ explanation in cognitive science and in machine learning. As often emphasized, computational
+ explanations often invoke representations; indeed, claims of implementation are often thought
+ to be tightly bound up with representational claims. It will therefore be helpful to clarify
+what we take the role of representation in computational explanations to be.
+
+                               5. The Role of Representation
+
+  Computational models, in addition to realizing an abstract (causal) structure, are often
+assumed to be semantically laden: computation happens over some representational objects,
+which in turn allows us to speak of functions being computed over some values, and the like
+(Rescorla, 2015). For instance, a string of 1’s on the input or output tape of a Turing machine
+ is standardly taken to represent a number in unary.
+  When the explanation of a system’s behavior cites implementation of a computation, we
+ often seem to commit to representational states mirroring those in the computational model.
+ If a 3-year-old succeeds at the hierarchical equality task, and we explain this in part by saying
+ that she is performing the computation captured by M (Fig. 1), we are suggesting that there
+ is some cognitive structure—e.g., corresponding to the abstract computational variable B2 in
+ Fig. 1—whose content is something like, “those two faces have the same expression.” By
+ virtue of what would it have this content? We can ask this question both about the abstract
+ computational model and about the physical system implementing it.
+   In both cases, to simplify the discussion, let us assume that the relevant “inputs” and
+“outputs” are already associated with semantic content. For the computational model, these
+ are the input nodes A1, A2, A3, A4—which we might stipulate represent, say, shapes and
+ facial expressions—and the output node—which might represent affirmative/negative. For
+ the 3-year-old human, we assume that stimuli are processed in a way that produces internal
+ registration of the relevant objects (black diamond, smiley face, and so on), which become
+ the inputs to further processing.  Meanwhile, the “output” might be an internal state
+ encoding the recognition that (say) the two relations are the same, which in turn causes
+ the corresponding behavioral response. Putting aside thorny questions about how these
+(“peripheral”) structures acquire their contents, a question remains about how structures
+ mediating between the periphery—e.g., B1 and B2—come to mean something.
+  A common thread in the philosophy of representation is that internal vehicles will often
+have meaning by virtue of the (causal) role they play in a larger system (Cummins, 1975;
+ Block, 1986; Dretske, 1988; Neander, 2017; Shea, 2018).19 Following (informational) criteria
+summarized in Harding (2023), to say that a representational vehicle R represents some
+ property P in the context of a given task, the following three criteria should be satisfied:
+
+    (1) Information: R bears information about P.
+
+
+   19Conceptual role semantics suggests that this role (within, say, a brain or a network) may even exhaust
+ representational content (Block, 1986; Piantadosi and Hill, 2022); we need not commit to any such claim here.
+
+12               ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+    (2) Use: The information R bears about P is used by the system to perform the task.
+
+    (3) Misrepresentation: It should be possible for R to misrepresent P.
+
+In our running example, where the task is hierarchical equality, P might be the (relational)
+property of “showing the same facial expressions.” In the computational model captured by
+M (Fig. 1), the variable B2 clearly bears information about P: again assuming that A3 and
+A4 represent the faces in question, under “normal” running of the system, the value of B2
+correlates perfectly with P. The system also uses this information to produce the correct
+output value for C: for the system to function appropriately this value must be correct.
+Finally, it is possible for B2 to misrepresent P: for example, if both faces are smiling, and
+thus A3 and A4 are both equal to 1, but we intervene to set B2 equal to 0, then B2 assumes
+the “incorrect” value, a fact that will be reflected in an incorrect output at Y (assuming that
+B1 is not misrepresenting the relation between shapes).
+  As the example indicates, at least in some cases, the content of an internal representational
+vehicle is nicely captured by its causal role, understood essentially as being a variable in a
+suitable (abstract, computational) causal model. The place of B2 in the model M (together
+with our assumptions about the contents of the inputs and outputs to the model) is what
+allows us to say that B2 represents “sameness” of the second two inputs.
+  What about a physical system implementing this computation, such as a neural network
+or, potentially, a child’s brain? A natural (“functionalist”) suggestion is that representational
+content will be inherited by the low-level vehicle abstracted by the high-level causal variable:
+all that is needed is for the low-level structure to stand in the right causal relations and this
+is precisely what is captured cleanly by the high-level model.20 To take the example in §3.1,
+this means that the variables H13 and H14 together represent sameness of facial expression
+(again, assuming content can already be assigned to X3, X4, and Y ).
+  As highlighted in the previous section (§4), neural models trained to perform tasks will often
+be abstracted by high-level algorithms, but only if we allow translation (e.g., rotation) first.
+This means that the interventionals corresponding to the high-level content will generally
+be less direct: not simply changing the activations of some neurons, but instead wholesale
+function replacement. As emphasized by Shea (2007), this makes the representational vehicles
+potentially quite abstract. They are not generally individual neurons or even sets of neurons in
+the network. Shea suggests that they could be something like sets of points in the underlying
+state space for some group of neurons. This makes sense in the setting of linear transformations,
+for instance, where we might think of high-level variables encoded as linearly separable subsets
+of state space. But as the example above in §3.2 shows, abstraction-under-translation will
+generally produce even less concrete representational vehicles.
+  When would we want to say that variable B1 implicitly “takes on” value 1 in circuit
+M˚? What representational vehicle in M˚ can have content “the two shapes are the same”?
+It cannot be simply a set of points in state space. Instead, we are compelled to think of
+vehicles in terms of the corresponding operations (viz. interventionals) on the system that
+essentially put it into the state of representing that content. There is then a sense in which
+the circuit—when processing inputs A1 “ 1 and A2 “ 1—does represent the relation of
+sameness, insofar as performing the operation does not change the circuits behavior. Setting
+B1 to 0 in this case, by contrast, overrides the effect of inputs A1 and A2, producing the
+
+   20As Dennett (1978) articulated the idea, “The content of a particular vehicle of information, a particular
+information-bearing event or state, is and must be a function of its function in the system” (p. 213).
+
+       HOW CAUSAL ABSTRACTION UNDERPINS COMPUTATIONAL EXPLANATION          13
+
+expected change in output as a function of A3 and A4. The relevant interventional induces
+the desired representational state in an indirect, but causally meaningful, way. Indeed, all
+three conditions above (Information, Use, Misrepresentation) are patently satisfied.
+
+                                    6. Triviality Revisited
+
+  Putnam (1988) and Searle (1992) famously introduced “triviality” arguments for naive
+theories of computational implementation.21 Those arguments assumed models of computation
+with monolithic sequences of states (e.g., finite state automata) and minimal requirements on
+mappings between models and physical systems. It has been presumed that placing more
+demanding constraints on implementation—causal, counterfactual, etc.—would circumvent
+triviality arguments. For instance, Chalmers’ (1996; 2011a) combinatorial state automata
+decompose the monolithic computational states such that each component must be realized
+in the low-level system. Does this work, or could stronger triviality arguments arise? And
+what bearing, if any, would triviality have on the claims above about representation?
+  Drawing on Geiger et al. (2024, 2025) and related work, Sutter et al. (2025) consider the
+present notion of abstraction-under-translation (they call it “input-restricted distributed
+abstraction”). Although they do not explicitly relate their work to the earlier philosophical
+discussion, the paper essentially presents an even stronger triviality argument to the effect
+that, for any algorithm, and any network satisfying some minimal assumptions,22 there is
+some translation and constructive abstraction that render the algorithm an abstraction-
+under-translation of the network (see their Theorem 1). In other words, given our analysis
+of implementation (and plausibly all causal analysis suggested earlier in the philosophical
+literature), under minimal conditions, every neural network implements every algorithm.
+  As one might expect, the translations needed to witness this existence claim look rather
+gerrymandered. However, when it comes to the notion of implementation on offer here,
+nothing rules them out. What are we to make of this continued specter of triviality? Should
+we add further conditions to our set of necessary conditions on computational implementation?
+For instance, maybe further restrictions on allowable vehicles would help rule out some of
+these gerrymandered cases (see, e.g., Godfrey-Smith 2009)? Or perhaps an independently
+motivated account of representational content—going beyond (and possibly even coming
+apart from) the causal role of intermediate variables—could help narrow down the space of
+possible implementations (Shagrir, 2001; Sprevak, 2010; Rescorla, 2013)?
+   Triviality results like these have a strikingly similar flavor to a series of results on “internal
+model principles” (see, e.g., Conant and Ashby 1970; Richens and Everitt 2024; Piantadosi
+and Gallistel 2024 for three examples). Each formulated somewhat differently, these results
+are all offered in a positive light: as long as an agent demonstrates a particular sort of
+behavior, we know without any further ado that there must be some corresponding internal
+structure within the agent that facilitates the behavior. In a sense, they articulate how
+successful task performance can itself narrow down the space of possible agent types that we
+need to consider in our attempt to understand how a class of agents works.
+  We might interpret results like those of Sutter et al. (2025) in a similar manner. The proof
+of their result gives a recipe for furnishing the relevant manipulations to the neural network
+
+  21An even earlier version of the argument can be traced to Ian Hinckfuss; see Sprevak (2018).
+   22As a rough gloss, those assumptions say the network should solve the task—that is, display the right
+input/output mapping—it should be large enough so that in principle the algorithm could “fit” in it, and the
+functional relationships between layers is (roughly) bijective.
+
+14               ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+which carry out the respective high-level (algorithmic) interventions. In other words, the
+result articulates precisely how the high-level model can guide a certain kind of manipulation
+and control of the low-level system. Moreover, this manipulation and control will typically
+be at the level of intuitive notions and concepts (“same shape” etc.), at least in as far as the
+algorithmic description itself is. The fact that the low-level manipulations (interventionals) are
+guaranteed to form an intervention algebra means that the type of manipulation and control
+involved will be suitably modular; e.g., we can intervene on one variable while leaving others
+as they were. According to a compelling interventionist account of causal explanation (e.g.,
+Woodward 2003), this variety of manipulation and control is the hallmark of good explanation.
+The fact that it is always possible—whenever a network performs a task described by a
+suitable algorithm—could be taken as a positive finding.
+  In some explanatory contexts, the low-level interventionals might be so complex that they
+take us beyond what we could actually implement, either for practical reasons or because it
+is too hard to compute what they should be. In their experimental investigation of these
+phenomena, Sutter et al. (2025) found it strikingly difficult to identify the relevant space of
+interventionals (even though they knew from first principles of their existence). For instance,
+they could not even be extracted from multi-layered neural networks. This might make
+one more reluctant to accept that the proof furnishes good causal explanations of network
+behavior,23 even if, in principle, we can identify the relevant levers for controlling the network.
+
+                            7. Explanation and Generalization
+
+  Because abstraction-under-implementation facilitates manipulation and control in the ways
+computational (qua causal) explanations are supposed to, we are inclined to accept abstraction-
+under-implementation not only as a necessary condition for computational implementation,
+but also as a sufficient one. At the same time, there is a widely held intuition that, for some
+algorithms and some neural networks, the network does not really implement the algorithm.
+Indeed, one might feel strongly that the system M˚ is not an implementation of the algorithm
+described by M, even though the latter can be obtained from the former relative to a suitable
+class of (rather complex) interventionals on M˚. If an agent came to solve the hierarchical
+equality task with method M˚, we might not want to say that the solution they found
+coincides with the algorithm M, and we might not want to explain the agent’s success by
+claiming that they represent (e.g.) whether the two faces exhibit the same expression. More
+needs to be said about what might ground this kind of skeptical intuition.
+  As we have already emphasized, verdicts like this will not be reached by appeal to simplis-
+tic interventionist causal explanation: by construction, abstraction-under-implementation
+produces answers to relevant “what-if-things-had-been-different” questions, identifying levers
+for manipulation and control (Woodward, 2003; Ylikoski and Kuorikoski, 2010). To the
+extent that we are truly only interested in explaining one well-circumscribed behavior—say,
+one specific, precisely delineated input-output mapping—it is hard to imagine how we could
+demand more than this relatively flexible method of algorithmic decomposition.
+  However, when studying complex agents, we are rarely in this situation. Even in the study
+of language models where we have in-principle perfect (observational and interventional)
+access to their internal structure, at least two further challenges present themselves:
+
+  23One is reminded of yet another slogan: “no causation without manipulation” (Holland, 1986), where
+manipulation is to be understood in an in-practice sense, not merely conceivable. This is in contrast to
+Woodward (2003) and others, where manipulation is understood as in-principle manipulation.
+
+       HOW CAUSAL ABSTRACTION UNDERPINS COMPUTATIONAL EXPLANATION          15
+
+    (1) As a practical matter, we only ever observe a small sample of agent behavior. Often
+      what we want to understand—and what we want to compress into succinct, manageable
+       descriptions—is what the agent would do in settings beyond those observed.
+    (2) A “task” typically implies a relatively open-ended behavioral profile, going far beyond
+       the instances we will have explicitly enumerated or studied. Furthermore, we often
+       have only a vague, partial characterization of what constitutes it.
+Each of these lays bear the familiar point that good explanations are appropriately tailored
+to the goals, interests, limitations, and background information of their consumers (see
+Ylikoski and Kuorikoski 2010; Potochnik 2017; Harding et al. 2025, among many others).
+Good explanations of cognitively interesting behavior, in particular, should compactly and
+effectively describe the nature of the agent’s competence. This will be most helpful when it
+facilitates accurate prediction of what the agent will do in new circumstances.24
+  To return again to the hierarchical equality task discussed in §4, suppose a child succeeds
+at the task as presented, involving shapes and faces. We might then hypothesize that they
+internalized the algorithm M in Fig. 1, which involves combining two different relational
+judgments and recognizing a relation between those. Importantly, this algorithm is intended
+to be a general one, suitable for any instance of the hierarchical equality task. Suppose, for
+example, that the child is also able to distinguish “up” ò from “down” ó. Then, on the basis
+of our hypothesis, we would expect the same algorithm M to engender appropriate behavior
+on a new version of the task, involving shapes and arrows, e.g.:
+
+                       ♦ ♦                                    ò  ó
+
+All the child has to do is assimilate the “up” and “down” to values of A3 and A4—so that
+they can represent sameness of direction just as they did sameness of facial expression, via
+variable B2—and the rest is as before. This is what it means for that algorithm to describe
+the child’s competence; and were they to fail at one of these “generalization” tasks, we would
+conclude that the original test failed to probe the relevant competence. We would likewise
+conclude that the intermediate internal vehicle (B2) does not represent “sameness” in general,
+but (at best) sameness within some limited domain.
+ A closely analogous situation confronts researchers in machine learning.  Similarly to
+behavioral psychological experiments with people, benchmarks are designed to test model
+abilities on tasks like text summarization, pronoun resolution, toxicity detection, part-
+of-speech tagging, and the like. No one, however, believes that any existing benchmark
+comprehensively circumscribes the intended tasks, or even that the tasks are all perfectly
+well-defined (see Hupkes et al. 2023; Harding and Sharadin 2025 for further discussion of this
+point). It is notoriously easy to find “adversarial” examples that show benchmark success
+does not imply the intended competence (e.g., Jia and Liang 2017), and some have therefore
+called for a move toward more dynamic benchmarking methods (e.g., Kiela et al. 2021).
+  In mechanistic interpretability, we face an analogous problem when using supervised
+machine learning, e.g., distributed alignment search (Geiger et al., 2024) or desiderata-based
+masking (Davies et al., 2023), to localize causal variables within a neural network. What if
+the causal variable is only realized on the narrow distribution of inputs used for localization?
+This question of whether a causal analysis generalizes to “out-of-distribution” inputs becomes
+
+  24The tight connection between prediction and explanation was a central theme in early philosophical
+work on explanation (Hempel and Oppenheim, 1948), and it has been stressed by philosophers of science
+more recently as well (see, e.g., Longino 2002 and especially Douglas 2009).
+
+16               ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+more important as supervised localization tools become more powerful and therefore more
+capable of overfitting (Wu et al., 2023; Huang et al., 2024; Sutter et al., 2025).
+   In cases where we can show that a model has internalized a concrete algorithm for solving
+a task (or performing well on a benchmark), this might lend some confidence that the model
+will generalize to instances of the task beyond what we have observed. Employing only linear
+translations, Huang et al. (2025) show that localization of causally meaningful variables helps
+predict model behavior on variants of a task that could flummox other prediction methods.25
+Roughly, models get it right in cases where they have correctly matched the new input to an
+existing algorithmic template, just as in the hierarchical equality case imagined above.
+  For this connection between implementation and prediction to be robust, it does matter
+how the putative algorithm is implemented. In particular, the system must implement the
+algorithm in a way that enables it to assimilate an open-ended range of inputs to the same
+algorithmic template. Concretely, when presented with ò and ó (or $ and ₤, and so on),
+the pair must be mapped appropriately to the correct label (“same” or “different”), so that
+the right vehicle (what corresponds to B2) takes on the right value. If the representational
+vehicles witnessing an implementation are sufficiently foreign to the way the system itself
+works, there will be little hope of this. If, by contrast, the algorithm is encoded via vehicles
+native to how the system works, we will likely have tapped into a productive guide to behavior
+over unobserved inputs. In the spirit of the linear representation hypothesis (discussed in §4),
+a focus on linear mappings can perhaps be motivated in this way.
+  Some have argued that we are justified in making representational claims (and presumably
+also claims of computational implementation) only when the putative representations play
+a pivotal role in a model’s generalization behavior (e.g., Shea 2007).  This seems like a
+sensible restriction, at least when our explanatory interests center around prediction of unseen
+instances on a wide-ranging (and possibly even vaguely defined) task.
+  Computational explanation, in particular, enjoys a privileged place in this effort. When
+we hypothesize specific algorithms that a model or agent might be using to solve a problem,
+we tend to focus on simple, compact, and general algorithms that solve the task efficiently.
+This is not incidental: the same principles we use to describe a task succinctly may well
+be similar to the ones an effective learning system will employ to solve a hard induction
+(i.e., generalization) task. Humans and artificial neural networks alike have been shown to
+learn and generalize in a way consistent with “minimum description length” or “compression”
+principles (e.g., Feldman 2016; Deletang et al. 2024; Mingard et al. 2025); and compression is
+tightly related to presence of algorithmically meaningful causal variables (Wendong et al.,
+2025). There is even suggestive evidence that emergence of generalization abilities coincides
+with (and is plausibly due to) the emergence of algorithmic structure in the hidden layers of
+neural networks, whereby particularized (“memorized”) solutions to problems are gradually
+replaced with algorithmic methods that generalize in the right ways (Nanda et al., 2023a).
+  In this setting, it becomes essential to understand more of how the system in question
+works, and specifically how the system learns. Computational implementation—as captured
+by abstraction-under-translation—is not enough. Following others in the literature (e.g.,
+Chalmers 2011a,b), we maintain that it is still theoretically fruitful to have a notion of
+implementation that does not depend on which learning method a system uses. But when we
+
+   25For example, if asking whether a price is between two numbers (Wu et al., 2023), the price could be
+presented in Canadian dollars or in Turkish lira (Huang et al., 2025). This is very obviously incidental to our
+understanding of the intended number comparison task.
+
+       HOW CAUSAL ABSTRACTION UNDERPINS COMPUTATIONAL EXPLANATION          17
+
+want our explanation to shine light on unobserved behavior, including further adaptation
+and learning in new contexts,26 not just any mapping from system to algorithm will do.
+Furthermore, it may well turn out that the appropriate mapping restrictions (e.g., linear),
+across different classes of agents (e.g., biological versus artificial), will differ markedly.
+
+                                          8. Conclusion
+
+  Cognitive science and mechanistic interpretability research in machine learning face some
+of the same fundamental challenges. Chief among those is carving the target system into
+meaningful parts, such that the most interesting behaviors can be understood in terms of
+the (causal) interactions among those parts. A founding doctrine of cognitive science is
+the idea that a helpful decomposition will be guided by computational and representational
+motifs. Similar ideas are currently under exploration in mechanistic interpretability. We
+have argued that a causal lens on this topic—and on the critical concept of implementation
+in particular—helps clarify what it would take to get computational explanation right, and
+what problems still remain to be solved. Causal abstraction already addresses a core target
+of causal explanation, by pinpointing variables ripe for controlling the system in high-level,
+(potentially more) interpretable terms. This is captured in our “no computation without
+abstraction” principle. Additional explanatory goals, like generalizing and predicting beyond
+previously observed behavior, will require further refinement of this principle, including more
+stringent demands on allowable mappings from system to algorithm, which will plausibly be
+more tailored to specifics of the family of systems under investigation.
+
+                                  9. Contribution Statement
+
+  This work is the culmination of years of thought and conversation between the authors.
+Thomas Icard lead the paper writing process.
+
+                             References
+
+Alhama, R. G. and Zuidema, W. (2019). A review of computational models of basic rule
+   learning: The neural-symbolic debate and beyond.  Psychonomic Bulletin & Review,
+  26(4):1174–1194.
+Arora, A., Jurafsky, D., and Potts, C. (2024). CausalGym: Benchmarking causal inter-
+   pretability methods on linguistic tasks. In Ku, L.-W., Martins, A., and Srikumar, V.,
+   editors, Proceedings of the 62nd Annual Meeting of the Association for Computational
+   Linguistics (Volume 1: Long Papers), pages 14638–14663, Bangkok, Thailand. Association
+   for Computational Linguistics.
+Beckers, S., Eberhardt, F., and Halpern, J. Y. (2019). Approximate causal abstractions. In
+  Proceedings of The 35th Uncertainty in Artificial Intelligence Conference.
+Beckers, S. and Halpern, J. (2019). Abstracting causal models. In AAAI Conference on
+   Artificial Intelligence.
+Block, N. (1986). Advertisement for a semantics for psychology. Midwest Studies in Philosophy,
+  10:615–678.
+Chalmers, D. (1996). Does a rock implement every finite-state automaton?   Synthese,
+  108:310–333.
+
+   26For adaptation, learning, and fine-tuning, we want causal explanations not just of the present behavioral
+repertoire, but of the system’s cross-temporal behavior across those new tasks as well. This will generally
+require acknowledging (if only implicitly) the method by which this learning or adaptation is taking place.
+
+18               ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+Chalmers, D. (2011a). A computational foundation for the study of cognition. Journal of
+  Cognitive Science, 12(4):323–357.
+Chalmers, D. (2011b). The varieties of computation: A reply. Journal of Cognitive Science,
+  13(3):211–248.
+Chalupka, K., Eberhardt, F., and Perona, P. (2017). Causal feature learning: an overview.
+  Behaviormetrika, 44:137–164.
+Chan,   L.,  Garriga-Alonso,   A.,  Goldwosky-Dill,   N.,  Greenblatt,   R.,   Nitishin-
+  skaya,  J.,  Radhakrishnan,  A.,  Shlegeris,  B., and Thomas,  N.  (2022).   Causal
+  scrubbing,  a  method  for  rigorously  testing  interpretability  hypotheses.    AI
+  Alignment Forum.   https://www.alignmentforum.org/posts/JvZhhzycHu2Yd57RN/
+  causal-scrubbing-a-method-for-rigorously-testing.
+Christie, S. and Gentner, D. (2014). Language helps children succeed on a classic analogy
+  task. Cognitive Science, 38(2):383–397.
+Conant, R. C. and Ashby, W. R. (1970). Every good regulator of a system must be a model
+  of that system. International Journal of Systems Science, 1(2):89–97.
+Csord´as, R., Potts, C., Manning, C. D., and Geiger, A. (2024). Recurrent neural networks
+  learn to store and generate sequences using non-linear representations. In Belinkov, Y.,
+  Kim, N., Jumelet, J., Mohebbi, H., Mueller, A., and Chen, H., editors, Proceedings of the
+  7th BlackboxNLP Workshop: Analyzing and Interpreting Neural Networks for NLP, pages
+  248–262.
+Cummins, R. (1975). Functional analysis. Journal of Philosophy, 72:741–765.
+Cummins, R. (1977). Programs in the explanation of behavior.  Philosophy of Science,
+  44(2):269–287.
+Dai, Q., Heinzerling, B., and Inui, K. (2024). Representational analysis of binding in language
+  models. In Al-Onaizan, Y., Bansal, M., and Chen, Y.-N., editors, Proceedings of the 2024
+  Conference on Empirical Methods in Natural Language Processing, pages 17468–17493,
+  Miami, Florida, USA. Association for Computational Linguistics.
+Davies, X., Nadeau, M., Prakash, N., Shaham, T. R., and Bau, D. (2023). Discovering
+  variable binding circuitry with desiderata. arXiv preprint arXiv:2307.03637.
+Deletang, G., Ruoss, A., Duquenne, P.-A., Catt, E., Genewein, T., Mattern, C., Grau-
+  Moya, J., Wenliang, L. K., Aitchison, M., Orseau, L., Hutter, M., and Veness, J. (2024).
+  Language modeling is compression. In The Twelfth International Conference on Learning
+  Representations.
+Dennett, D. C. (1978). Toward a cognitive theory of consciousness. In Savage, C. W., editor,
+  Minnesota Studies in the Philosophy of Science, Volume 9: Perception and Cognition,
+  Issues in the Foundation of Psychology, pages 201–228. University of Minnesota Press.
+Douglas, H. E. (2009). Reintroducing prediction to explanation. Philosophy of Science,
+  76(4):444–463.
+Dretske, F. (1988). Explaining Behavior: Reasons in a World of Causes. MIT Press.
+Elhage, N., Hume, T., Olsson, C., Schiefer, N., Henighan, T., Kravec, S., Hatfield-Dodds,
+   Z., Lasenby, R., Drain, D., Chen, C., Grosse, R., McCandlish, S., Kaplan, J., Amodei, D.,
+  Wattenberg, M., and Olah, C. (2022). Toy models of superposition. Transformer Circuits
+  Thread.
+Engels, J., Michaud, E. J., Liao, I., Gurnee, W., and Tegmark, M. (2025). Not all language
+  model features are one-dimensionally linear. In The Thirteenth International Conference
+  on Learning Representations.
+
+       HOW CAUSAL ABSTRACTION UNDERPINS COMPUTATIONAL EXPLANATION          19
+
+Feldman, J. (2016). The simplicity principle in perception and cognition. WIREs Cognitive
+  Science, 7(5):330–340.
+Feng, J. and Steinhardt, J. (2024). How do language models bind entities in context? In The
+  Twelfth International Conference on Learning Representations.
+Finlayson, M., Mueller, A., Gehrmann, S., Shieber, S., Linzen, T., and Belinkov, Y. (2021).
+  Causal analysis of syntactic agreement mechanisms in neural language models. In Zong,
+  C., Xia, F., Li, W., and Navigli, R., editors, Proceedings of the 59th Annual Meeting of
+  the Association for Computational Linguistics and the 11th International Joint Conference
+  on Natural Language Processing (Volume 1: Long Papers), pages 1828–1843, Online.
+  Association for Computational Linguistics.
+Fodor, J. A. (1975). The Language of Thought. Harvard University Press.
+Frank, M. C. and Goodman, N. D. (2025). Cognitive modeling using artificial intelligence.
+  Annual Review of Psychology. Forthcoming.
+Geiger, A., Carstensen, A., Frank, M. C., and Potts, C. (2023). Relational reasoning and
+  generalization using nonsymbolic neural networks. Psychological Review, 130(2):308–333.
+Geiger, A., Ibeling, D., Zur, A., Chaudhary, M., Chauhan, S., Huang, J., Arora, A., Wu, Z.,
+  Goodman, N., Potts, C., and Icard, T. (2025). Causal abstraction: A theoretical foundation
+   for mechanistic interpretability. Journal of Machine Learning Research, 26(83):1–64.
+Geiger, A., Lu, H., Icard, T. F., and Potts, C. (2021). Causal abstractions of neural networks.
+  In Beygelzimer, A., Dauphin, Y., Liang, P., and Vaughan, J. W., editors, Advances in
+  Neural Information Processing Systems.
+Geiger, A., Richardson, K., and Potts, C. (2020). Neural natural language inference models
+  partially embed theories of lexical entailment and negation. In Alishahi, A., Belinkov, Y.,
+  Chrupa la, G., Hupkes, D., Pinter, Y., and Sajjad, H., editors, Proceedings of the Third
+  BlackboxNLP Workshop on Analyzing and Interpreting Neural Networks for NLP, pages
+  163–173, Online. Association for Computational Linguistics.
+Geiger, A., Wu, Z., Potts, C., Icard, T., and Goodman, N. D. (2024). Finding alignments
+  between interpretable causal variables and distributed neural representations. In Proceedings
+  of the 3rd Conference on Causal Learning and Reasoning (CLeaR), pages 160–187.
+Geva, M., Bastings, J., Filippova, K., and Globerson, A. (2023). Dissecting recall of factual
+  associations in auto-regressive language models. In The 2023 Conference on Empirical
+  Methods in Natural Language Processing.
+Godfrey-Smith, P. (2009). Triviality arguments against functionalism. Philosophical Studies,
+  145(2):273–295.
+Guerner, C., Svete, A., Liu, T., Warstadt, A., and Cotterell, R. (2023). A geometric notion
+  of causal probing. CoRR, abs/2307.15054.
+Hanna, M., Liu, O., and Variengien, A. (2023). How does GPT-2 compute greater-than?:
+  Interpreting mathematical abilities in a pre-trained language model. In Thirty-seventh
+  Conference on Neural Information Processing Systems.
+Harding, J. (2023). Operationalising representation in natural language processing. The
+  British Journal for the Philosophy of Science.
+Harding, J., Gerstenberg, T., and Icard, T. (2025). A communication-first account of
+  explanation.
+Harding, J. and Sharadin, N. (2025). What is it for a machine learning model to have a
+  capability? British Journal for the Philosophy of Science.
+
+20               ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+Hempel, C. G. and Oppenheim, P. (1948). Studies in the Logic of Explanation. Philosophy
+  of Science, 15(2):135–175.
+Hinton, G. E., McClelland, J. L., and Rumelhart, D. E. (1986). Distributed representations.
+  In Rumelhart, D. E., McClelland, J. L., and the PDP Research Group, editors, Parallel
+  Distributed Processing: Explorations in the Microstructure of Cognition: Psychological and
+  Biological Models, volume 1, pages 77–109. MIT Press.
+Holland, P. W. (1986). Statistics and causal inference. Journal of the American Statistical
+  Association, 81(396):945–960.
+Huang, J., Tao, J., Icard, T., Yang, D., and Potts, C. (2025). Internal causal mechanisms
+  robustly predict language model out-of-distribution behaviors. In Forty-second International
+  Conference on Machine Learning.
+Huang, J., Wu, Z., Potts, C., Geva, M., and Geiger, A. (2024). RAVEL: Evaluating
+  interpretability methods on disentangling language model representations. In Ku, L.-W.,
+  Martins, A., and Srikumar, V., editors, Proceedings of the 62nd Annual Meeting of the
+  Association for Computational Linguistics (Volume 1: Long Papers), pages 8669–8687,
+  Bangkok, Thailand. Association for Computational Linguistics.
+Hupkes,  D.,  Giulianelli,  M.,  Dankers,  V.,  Artetxe,  M.,  Elazar,  Y.,  Pimentel,  T.,
+  Christodoulopoulos, C., Lasri, K., Saphra, N., Sinclair, A., Ulmer, D., Schottmann,
+  F., Batsuren, K., Sun, K., Sinha, K., Khalatbari, L., Ryskina, M., Frieske, R., Cotterell,
+  R., and Jin, Z. (2023). A taxonomy and review of generalization research in NLP. Nature
+  Machine Intellignece, 5:1161–1174.
+Ibeling, D. and Icard, T. F. (2019). On open-universe causal reasoning. In Proceedings of the
+  35th Conference on Uncertainty in Artificial Intelligence (UAI).
+Icard, T. F. (2017). From programs to causal models. In Proceedings of the 21st Amsterdam
+  Colloquium.
+Ivanova, A. A., Schrimpf, M., Anzellotti, S., Zaslavsky, N., Fedorenko, E., and Isik, L. (2022).
+  Beyond linear regression: Mapping models in cognitive neuroscience should align with
+  research goals. Neurons, Behavior, Data analysis, and Theory, 1.
+James, W. (1890). Principles of Psychology, volume 1. New York: Holt.
+Janzing, D. and Mejia, S. H. G. (2022). Phenomenological causality.
+Jia, R. and Liang, P. (2017). Adversarial examples for evaluating reading comprehension
+  systems. In Proceedings of the 2017 Conference on Empirical Methods in Natural Language
+  Processing, pages 2021–2031.
+Jonas, E. and Kording, K. P. (2017). Could a neuroscientist understand a microprocessor?
+  PloS Computational Biology, 13(1).
+Kiela, D., Bartolo, M., Nie, Y., Kaushik, D., Geiger, A., Wu, Z., Vidgen, B., Prasad, G., Singh,
+  A., Ringshia, P., Ma, Z., Thrush, T., Riedel, S., Waseem, Z., Stenetorp, P., Jia, R., Bansal,
+  M., Potts, C., and Williams, A. (2021). Dynabench: Rethinking benchmarking in NLP. In
+  Proceedings of the 2021 Conference of the North American Chapter of the Association for
+  Computational Linguistics: Human Language Technologies, page 4110–4124.
+Kriegeskorte, N. (2011).   Pattern-information  analysis:  From stimulus decoding to
+  computational-model testing. NeuroImage, 56(2):411–421.
+Lashley, K. S. (1929/1948).  Brain mechanisms and intelligence.  In Dennis, W., editor,
+  Readings in the History of Psychology, page 557–570. Appleton-Century-Crofts.
+Li, K., Hopkins, A. K., Bau, D., Vi´egas, F., Pfister, H., and Wattenberg, M. (2023). Emergent
+  world representations: Exploring a sequence model trained on a synthetic task. In The
+
+       HOW CAUSAL ABSTRACTION UNDERPINS COMPUTATIONAL EXPLANATION          21
+
+  Eleventh International Conference on Learning Representations.
+Longino, H. (2002). The Fate of Knowledge. Princeton University Press.
+Marcus, G. (2001). The Algebraic Mind: Integrating Connectionism and Cognitive Science.
+  MIT Press.
+Marks, S. and Tegmark, M. (2024). The geometry of truth: Emergent linear structure in large
+  language model representations of true/false datasets. In First Conference on Language
+  Modeling.
+Marr, D. (1982). Vision. W.H. Freeman and Company.
+Meng, K., Bau, D., Andonian, A., and Belinkov, Y. (2022). Locating and editing factual
+  associations in gpt. In Koyejo, S., Mohamed, S., Agarwal, A., Belgrave, D., Cho, K., and
+  Oh, A., editors, Advances in Neural Information Processing Systems, volume 35, pages
+  17359–17372. Curran Associates, Inc.
+Mikolov, T., Sutskever, I., Chen, K., Corrado, G. S., and Dean, J. (2013).  Distributed
+  representations of words and phrases and their compositionality. In Burges, C., Bottou, L.,
+  Welling, M., Ghahramani, Z., and Weinberger, K., editors, Advances in Neural Information
+  Processing Systems, volume 26. Curran Associates, Inc.
+Mingard, C., Rees, H., Valle-P´erez, G., and Louis, A. A. (2025). Deep neural networks have
+  an inbuilt Occam’s razor. Nature Communications, 16(220):1–9.
+Moschovakis, Y. N. (2001). What is an algorithm? In Engquist, B. and Schmid, W., editors,
+  Mathematics Unlimited — 2001 and Beyond, page 919–936. Springer.
+Mueller, A., Brinkmann, J., Li, M., Marks, S., Pal, K., Prakash, N., Rager, C., Sankara-
+  narayanan, A., Sharma, A. S., Sun, J., Todd, E., Bau, D., and Belinkov, Y. (2024).
+  The quest for the right mediator: A history, survey, and theoretical grounding of causal
+   interpretability.
+Mueller, A., Geiger, A., Wiegreffe, S., Arad, D., Arcuschin, I., Belfki, A., Chan, Y. S.,
+  Fiotto-Kaufman, J. F., Haklay, T., Hanna, M., Huang, J., Gupta, R., Nikankin, Y., Orgad,
+  H., Prakash, N., Reusch, A., Sankaranarayanan, A., Shao, S., Stolfo, A., Tutek, M., Zur,
+  A., Bau, D., and Belinkov, Y. (2025). MIB: A mechanistic interpretability benchmark. In
+  Forty-second International Conference on Machine Learning.
+Nanda, N., Chan, L., Lieberum, T., Smith, J., and Steinhardt, J. (2023a). Progress measures
+   for grokking via mechanistic interpretability. In The Eleventh International Conference on
+  Learning Representations.
+Nanda, N., Lee, A., and Wattenberg, M. (2023b).  Emergent linear representations in
+  world models of self-supervised sequence models. In Belinkov, Y., Hao, S., Jumelet, J.,
+  Kim, N., McCarthy, A., and Mohebbi, H., editors, Proceedings of the 6th BlackboxNLP
+  Workshop: Analyzing and Interpreting Neural Networks for NLP, BlackboxNLP@EMNLP
+  2023, Singapore, December 7, 2023, pages 16–30. Association for Computational Linguistics.
+Neander, K. (2017). A Mark of the Mental: A Defence of Informational Teleosemantics. MIT
+  Press, Cambridge, MA.
+Olah, C., Cammarata, N., Schubert, L., Goh, G., Petrov, M., and Carter, S. (2020). Zoom
+   in: An introduction to circuits. Distill. https://distill.pub/2020/circuits/zoom-in.
+Park, K., Choe, Y. J., and Veitch, V. (2023). The linear representation hypothesis and the
+  geometry of large language models. CoRR, abs/2311.03658.
+Pearl, J. (2001). Direct and indirect effects. In Breese, J. S. and Koller, D., editors, UAI
+  ’01: Proceedings of the 17th Conference in Uncertainty in Artificial Intelligence, University
+  of Washington, Seattle, Washington, USA, August 2-5, 2001, pages 411–420. Morgan
+
+22               ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+  Kaufmann.
+Pearl, J. (2009). Causality. Cambridge University Press.
+Peters, J., Janzing, D., and Sch¨olkopf, B. (2017). Elements of Causal Inference: Foundations
+  and Learning Algorithms. The MIT Press, Cambridge, MA.
+Piantadosi, S. T. and Gallistel, C. R. (2024). Formalising the role of behaviour in neuroscience.
+  European Journal of Neuroscience, 60(5):4756–4770.
+Piantadosi, S. T. and Hill, F. (2022). Meaning without reference in large language models.
+Piccinini, G. (2015). Physical Computation: A Mechanistic Account. Oxford University Press.
+Potochnik, A. (2017). Idealization and the Aims of Science. University of Chicago Press,
+  Chicago.
+Prakash, N., Shapira, N., Sharma, A. S., Riedl, C., Belinkov, Y., Shaham, T. R., Bau, D.,
+  and Geiger, A. (2025). Language models use lookbacks to track beliefs.
+Premack, D. (1983). The codes of man and beasts. Behavioral and Brain Sciences, 6(1):125–
+  136.
+Putnam, H. (1967). Psychological predicates. In Capitan, W. H. and Merrill, D. D., editors,
+  Art, Mind, and Religion. Pittsburgh University Press.
+Putnam, H. (1975).  Philosophy and our mental life.  In Mind, Language, and Reality.
+  Cambridge University Press.
+Putnam, H. (1988). Representation and Reality. MIT Press.
+Pylyshyn, Z. W. (1984). Computation and Cognition. MIT Press.
+Rescorla, M. (2013). Against structuralist theories of computational implementation. British
+  Journal for the Philosophy of Science, 64(4):681–707.
+Rescorla, M. (2015). The representational foundations of computation. Philosophia Mathe-
+  matica, 23(3):338–366.
+Richens, J. and Everitt, T. (2024). Robust agents learn causal world models. In Kim, B.,
+  Yue, Y., Chaudhuri, S., Fragkiadaki, K., Khan, M., and Sun, Y., editors, International
+  Conference on Representation Learning, volume 2024, pages 15786–15817.
+Rodriguez, J. D., Mueller, A., and Misra, K. (2025). Characterizing the role of similarity
+  in the property inferences of language models. In Chiruzzo, L., Ritter, A., and Wang, L.,
+   editors, Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the
+  Association for Computational Linguistics: Human Language Technologies (Volume 1: Long
+  Papers), pages 11515–11533, Albuquerque, New Mexico. Association for Computational
+  Linguistics.
+Rubenstein, P. K., Weichwald, S., Bongers, S., Mooij, J. M., Janzing, D., Grosse-Wentrup, M.,
+  and Sch¨olkopf, B. (2017). Causal consistency of structural equation models. In Proceedings
+  of the 33rd Conference on Uncertainty in Artificial Intelligence (UAI).
+Rusanen, A.-M. and Lappi, O. (2016).  On computational explanations.   Synthese,
+  193:3931–3949.
+Saphra, N. and Wiegreffe, S. (2024). Mechanistic? In Belinkov, Y., Kim, N., Jumelet, J.,
+  Mohebbi, H., Mueller, A., and Chen, H., editors, Proceedings of the 7th BlackboxNLP
+  Workshop: Analyzing and Interpreting Neural Networks for NLP, pages 480–498, Miami,
+  Florida, US. Association for Computational Linguistics.
+Scherlis, A., Sachan, K., Jermyn, A. S., Benton, J., and Shlegeris, B. (2022). Polysemanticity
+  and capacity in neural networks. CoRR, abs/2210.01892.
+Scheutz, M. (2001). Computational vs. causal complexity. Minds and Machines, 11(4):543–
+  566.
+
+       HOW CAUSAL ABSTRACTION UNDERPINS COMPUTATIONAL EXPLANATION          23
+
+Searle, J. R. (1992). The Rediscovery of the Mind. MIT Press.
+Shagrir, O. (2001). Content, computation and externalism. Mind, 110(438):369–400.
+Shea, N. (2007). Content and its vehicles in connectionist systems. Mind & Language,
+  22:246–269.
+Shea, N. (2018). Representation in Cognitive Science. Oxford University Press.
+Simon, H. A. and Ando, A. (1961). Aggregation of variables in dynamic systems. Econometrica,
+  29(2):111–138.
+Smolensky, P. (1986). Neural and conceptual interpretation of PDP models. In McClelland,
+  J. L., Rumelhart, D. E., and the PDP Research Group, editors, Parallel Distributed
+  Processing: Explorations in the Microstructure of Cognition: Psychological and Biological
+  Models, volume 2, pages 390–431. MIT Press.
+Spirtes, P., Glymour, C., and Scheines, R. (2000). Causation, Prediction, and Search. MIT
+  Press.
+Sprevak, M. (2010). Computation, individuation, and the received view on representation.
+  Studies in History and Philosophy of Science, 41:260–270.
+Sprevak, M. (2018). Triviality arguments about computational implementation. In Sprevak,
+  M. and Colombo, M., editors, The Routledge Handbook of the Computational Mind, pages
+  175–191. Routledge.
+Sutter, D., Minder, J., Hofmann, T., and Pimentel, T. (2025). The non-linear representation
+  dilemma: Is causal abstraction enough for mechanistic interpretability?
+Thobani, I., Sagastuy-Brena, J., Nayebi, A., Prince, J. S., Cao, R., and Yamins, D. L. (2025).
+  Model-brain comparison using inter-animal transforms.  In 8th Annual Conference on
+  Cognitive Computational Neuroscience.
+Thompson, D. (2023). Algorithms and Execution Traces. PhD thesis, Stanford University.
+Thompson, R. K., Rattermann, M. J., and Oden, D. L. (2001). Perception and judgement of
+  abstract same-different relations by monkeys, apes and children: Do symbols make explicit
+  only that which is implicit? Croatian Review of Rehabilitation Research, 37(1):9–22.
+Tigges, C., Hollinsworth, O. J., Geiger, A., and Nanda, N. (2024). Language models linearly
+  represent sentiment. In Belinkov, Y., Kim, N., Jumelet, J., Mohebbi, H., Mueller, A.,
+  and Chen, H., editors, Proceedings of the 7th BlackboxNLP Workshop: Analyzing and
+  Interpreting Neural Networks for NLP, pages 58–87, Miami, Florida, US. Association for
+  Computational Linguistics.
+Todd, E., Li, M., Sharma, A. S., Mueller, A., Wallace, B. C., and Bau, D. (2024). Function
+  vectors in large language models. In The Twelfth International Conference on Learning
+  Representations.
+Turing, A. M. (1936). On computable numbers, with an application to the Entscheidungsprob-
+  lem. Proceedings of the London Mathematical Society, s2-42:230–265.
+Vig, J., Gehrmann, S., Belinkov, Y., Qian, S., Nevo, D., Singer, Y., and Shieber, S. (2020).
+  Causal mediation analysis for interpreting neural NLP: The case of gender bias.
+Wang, K. R., Variengien, A., Conmy, A., Shlegeris, B., and Steinhardt, J. (2023). Inter-
+  pretability in the wild: a circuit for indirect object identification in GPT-2 small. In The
+  Eleventh International Conference on Learning Representations.
+Wasserman, E. A. and Young, M. E. (2010). Same-different discrimination: the keel and
+  backbone of thought and reasoning. Journal of Experimental Psychology: Animal Behavior
+  Processes, 36(1):3–22.
+
+24               ATTICUS GEIGER, JACQUELINE HARDING, THOMAS ICARD
+
+Wendong, L., Buchholz, S., and Sch¨olkopf, B. (2025). Algorithmic causal structure emerging
+  through compression. In Huang, B. and Drton, M., editors, Proceedings of the Fourth
+  Conference on Causal Learning and Reasoning, pages 201–242.
+Woodward, J. (2003). Making Things Happen: A Theory of Causal Explanation. Oxford
+  University Press.
+Wu, Z., Geiger, A., Icard, T., Potts, C., and Goodman, N. (2023).  Interpretability at
+   scale: Identifying causal mechanisms in Alpaca. In Thirty-seventh Conference on Neural
+  Information Processing Systems.
+Ylikoski, P. and Kuorikoski, J. (2010). Dissecting explanatory power. Philosophical Studies,
+  148(2):201–219.
+Zeller, A. (2002). Isolating cause-effect chains from computer programs. In Proceedings of
+  the 10th ACM SIGSOFT Symposium on Foundations of Software Engineering, SIGSOFT
+  ’02/FSE-10, page 1–10. Association for Computing Machinery.
+Zennaro, F. M. (2022). Abstraction between structural causal models: A review of definitions
+  and properties. In UAI 2022 Workshop on Causal Representation Learning.
+Zhang, F. and Nanda, N. (2024). Towards best practices of activation patching in language
+  models: Metrics and methods.  In The Twelfth International Conference on Learning
+  Representations.

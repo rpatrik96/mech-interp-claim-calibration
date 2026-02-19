@@ -1,0 +1,1057 @@
+               Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+                                             Danielle Ensign 1  Adri`a Garriga-Alonso 2
+
+
+                         Abstract                          previous work has shown other interpretability techniques
+                                                                         apply. For example, Sharma et al. (2024) locate and edit          How well will current interpretability techniques
+                                                                              factual information with ROME (Rank One Model Editing)               generalize to future models? A relevant case
+                                                  Meng et al. (2023). Ali et al. (2024) extract hidden atten-               study is Mamba, a recent recurrent architecture
+                                                                           tion matrices, and Torres (2024); Grazzi et al. (2024) use              with scaling comparable to Transformers. We
+                                                                             linear probes to identify capabilities. Additionally, Paulo               adapt pre-Mamba techniques to Mamba and par-2024                                                                          et al. (2024) showed that Contrastive Activation Addition                   tially reverse-engineer the circuit responsible for
+                                                           (Rimsky et al., 2024), Tuned Lens (Belrose et al., 2023)                the Indirect Object Identification (IOI) task. Our
+                                                             and probes to elicit latent knowledge (Mallen et al., 2024)Jul         techniques provide evidence that 1) Layer 39 is a
+                                                                              transfer to the Mamba architecture.
+22        keynamesbottleneck,one position2) Convolutionsforward, andin 3)layerThe39nameshift        This work focuses on applying techniques from circuit-
+                  entities are stored linearly in Layer 39’s SSM. Fi-        based mechanistic interpretability to Mamba to see how
+                  nally, we adapt an automatic circuit discovery tool,        well these techniques transfer to new architectures. In par-
+                positional Edge Attribution Patching, to identify           ticular, we study state-spaces/mamba-370m, a 370-million-
+              a Mamba IOI circuit. Our contributions provide        parameter Mamba model pretrained (Gu & Dao, 2023) on
+                   initial evidence that circuit-based mechanistic in-       The Pile (Gao et al., 2020). We chose this model as it is[cs.LG]          terpretability tools work well for the Mamba ar-         the smallest Mamba model with good performance (∼96%
+                 chitecture.                                            accuracy on our templates) on the Indirect Object Identifica-
+                                                                             tion (IOI) task (Wang et al., 2023).
+
+                                                                       In particular, for the IOI task, we:          1. Introduction
+
+             If we care about using interpretability on new models, we       1. Show multiple lines of evidence suggesting layer 39 is
+          should know: Will interpretability techniques generalize to         a bottleneck:
+        new architectures?                                                       (a) Zero and Resample ablation (Section 3.1.4) ex-
+                                                                             periments point to layer 39 and layer 0.        To investigate this question, we apply existing mechanis-
+             tic interpretability techniques to a new model developed           (b) We compute greedy minimal subsets of layers
+            after most interpretability techniques: Mamba. Mamba is             allowed to transfer information across tokens (“to-
+          a State Space Model (SSM), a type of recurrent neural net-            ken cross-talk”). These always include layer 39
+        work (Gu & Dao, 2023). Mamba is the result of years of               (but layer 0 only 18% of the time).
+        work on language modeling with state space models (Gu                                                                                 2. Provide evidence that the convolution on layer 39 shiftsarXiv:2407.14008v2            et al., 2020; 2022; Fu et al., 2023), and is one of many                                                           name data to the next token position.
+        new RNN-like architectures (Beck et al., 2024; Peng et al.,
+          2023; Gu & Dao, 2023; Lieber et al., 2024). These RNNs       3. Modify the representations used by layer 39 using aver-
+          have scaling competitive with Transformers, unlike LSTMs         ages of activations, resulting in overwriting one output
+         (Kaplan et al., 2020). Because it is a recurrent network, it       name with another (Rimsky et al., 2024). These re-
+          only needs to store hidden states from the previous token,          sults suggest that in the SSM of layer 39, entity names
+           resulting in faster inference. The recurrence is also linear         are linearly represented, with different representations
+          (and thus associative) over token position, which permits          for the first and second time (or sentence) the names
+            further optimizations. See Appendix for architecture details.        appear in IOI.
+
+         While we are the first to focus on finding circuits in Mamba,      4. Provide multiple lines of evidence that layer 39 writes
+                                                                           outputs into only the final token position:
+              1Independent 2FAR AI.
+                                                                                       (a) Resample ablation on the hidden state and the
+                                                                                values added to the residual stream.
+
+                                                         1
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+                                                                    2.1. State Space Model (SSM)
+
+                                                Mamba’s SSM block can be written as mapping a 1D space
+                                                                 to a N-dimensional state space, then back to a 1D space:
+
+
+                                                                                   [N]   [N,N] [N]     [N,1] [1]
+                                                                         ht = A ht−1 + B xt              (1)
+
+                                                                                             [N]                                                                                               [1,N]                                                                                                                                 [1,1]                                                                                                                  [1]
+                                                                                 yt =                                                                                  ht +                                                 C                                               D  [1]x t                 (2)
+
+
+                                                                                                                       [N]
+                                                            In Mamba A is diagonal, so we will just write it as A and
+                                                   do an element-wise product “⊙”.
+
+                                                  Each layer does E of these in parallel. A has a separate
+                                                          value for each e, and is encoded as an [E, N] matrix. We
+                                                       can denote Ae as the N-sized entry for stream e, giving us,
+
+
+                                                                                [N]   [N]     [N]      [N,1] [1]
+                                                                                   ht,e =Ae ⊙ ht−1,e + B xt,e            (3)
+
+                                                                                            [N]                                                                                             [1,N]                                                                                                                                [1,1]                                                                                                              [1]
+                                          =                                                +                                                                                        yt,e                                                C  ht,e                                               D  [1]x t,e                (4)
+
+
+                                                                  Finally, Ae, B, and C depend on the SSM input, and so
+                                                          gain a subscript t. B also gains a subscript e through the
+                                                                                                                      [1]
+                                                               variable time-step, ∆t,e. The final SSM expressions are:
+
+
+                                                                                [N]    [N]      [N]      [N,1] [1]
+                                                                                  ht,e =At,e ⊙ ht−1,e + Bt,e xt,e           (5)
+
+                                                                                           [N]                                                                                             [1,N]                                                                                                                                [1,1]                                                                                                             [1]
+                                          =                                               +                                                                                       yt,e                                                                  Ct ht,e                                              D  [1]x t,e,                (6)
+Figure 1. Our hypothesis for the role of Layer 39. The representa-
+tions of n1–n3 and n4–n5 are interchangeable over positions.       where
+
+                                                                          [N]                  [1]
+                                                                    At,e = exp(− ∆t,e exp(Alog)e),               (7)
+      (b) A slight modification of the results of EAP gives
+                                                                          [N]      [1] [N]                    [N,E] [E]         us a subgraph that is capable of doing IOI while
+                                                                    Bt,e =∆t,e Bt,     with [N], Bt = WB xt,     (8)
+         only leaving layer 39’s final token’s outputs un-
+          patched.                                                        [N]   [N,E] [E]
+                                                         Ct = WC xt,                                  (9)
+                                                                                                      [1]               [E]   [E]       [1]
+In addition, we show that ACDC and Edge Attribution Patch-           ∆t,e = softplus( xt · W e∆ + B∆e ),            (10)
+ing (Syed et al., 2023) both result in sparse graphs when
+applied to IOI on Mamba, and provide the resulting compu-         [E,E]  [E]  [N,E] [N,E] [N,E]
+tational graphs.                                           with W ∆, B∆, WB , WC , Alog being learned parameters,
+                                                      and softplus(x) = log(1 + ex). This parameterization guar-
+                                                            antees that A < 1, and thus the hidden state does not ex-
+2. The Test Subject: Mamba                                                              plode.
+
+Here we provide a brief overview of the Mamba architecture.
+We refer the reader to Ensign et al. (2024) for a more detailed     2.2. Architecture
+                        [A,B]
+introduction. We use  v   to denote that variable v has   Mamba has multiple layers which each add to a residual
+shape [A, B].                                                stream. Each layer does:
+
+                                                2
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+                   [B,L,D]   [B,L,E]                           3.1.2. METRIC
+   • Project input  resid  to  x
+                   [B,L,D]   [B,L,E]                       There are many choices of metrics: KL-Divergence, Logit
+   • Project input  resid  to  skip                              Diff, Accuracy, Probability of the correct answer, etc. The
+                                                              best metric to use in general is an open question and may
+   • Conv over the time dimension, with a different filter                                                     be task specific. For IOI, Zhang & Nanda (2024) suggest
+     for each e ∈[E] (x = conv(x))                                                             the Normalized Logit Diff metric, as that helps propagate
+   • Apply non-linearity (silu) (x = silu(x))                 information missed by accuracy.  See the Appendix for
+                                                                 further details.
+   • y = SSM(x)
+                                                             3.1.3. COMPUTATIONAL GRAPH   • Gating: y = y ∗silu(skip)
+                                      We use the MambaLens library (see also Nanda & Bloom             [B,L,E]   [B,L,D]
+   • Project   y    to output                               (2022)) to intervene at different locations per experiment.
+
+Where B is batch size, L is context length, D is embedding        • Section 4.1.1 “Resample Ablation” uses
+dimension, and silu(x) = x ∗sigmoid(x). See Figure 2.        blocks.{layer}.hook layer input.
+
+                                                                            • Section 4.1.2 “Layer Removal” uses
+3. Circuit-based Mechanistic Interpretability       blocks.{layer}.hook out proj.
+
+To understand how large language models (LLMs) imple-        • Section 4.1.3 “Removing Cross Talk” uses
+ment their emergent capabilities (Wei et al., 2022), we focus      blocks.{layer}.hook in proj.
+on finding human-interpretable algorithms (Olah, 2022).
+This involves representing models as computational graphs        • Section 4.2 “Layer 39 Uses Conv to Shift Names One
+and identifying circuits that are subsets of that computa-         Position Forward” uses
+tional graph. Ideally, each subgraph would also be anno-      blocks.{layer}.hook in proj and
+tated to describe the role of each component (Geiger et al.,      blocks.{layer}.hook conv.
+2021).
+                                                                            • Section 4.3 “Controlling model output by modifying
+Finding circuits that capture the behavior on all inputs is         representations on layer 39” uses
+intractable for large language models. Therefore, we study      blocks.{layer}.hook ssm input. For the
+behavior on specific tasks.                                       cosine sim plots, it uses further hooks inside the ssm,
+                                                                described in Appendix.
+3.1. Problem Description
+                                                                            • Section 4.4 “Layer 39 moves information into only
+Following (Geiger et al., 2021; Conmy et al., 2023): we         the last token position” uses
+have a behavior (task) that we would like to study, a metric      blocks.{layer}.hook h.{token pos},
+for evaluating performance, and a coarse-grained compu-      blocks.{layer}.hook out proj, and the
+tational graph of the neural network on which we express        hooks used in Section D
+explanations. We would like to find the minimal subgraph
+                                                                            • Both Section D “EAP” runs usethat attains a high enough metric score (where target metric
+                                              blocks.{layer}.hook layer input andscore is a hyperparameter), with an explanation of what
+                                              blocks.{layer}.hook layer output. Theyvariations in the data each graph component captures.
+                                                                    also use hook embed (described the next section) as
+                                                                   the input node, and3.1.1. IOI TASK
+                                              blocks.47.hook resid post as the output
+We are studying the IOI task, initially examined by (Wang         node.
+et al., 2023). Consider an example data point:
+                                                                            • The “ACDC” (Section D.2) run following the (non
+Friends Isaac, Lucas and Lauren went to          positional) EAP run uses all the hooks from the EAP
+the office. Lauren and Isaac gave a                runs. It also uses blocks.{layer}.hook skip,
+necklace to                                   blocks.{layer}.hook conv, and
+                                              blocks.{layer}.hook ssm input.
+The model is asked to predict the next token, and the correct
+answer is “ Lucas”. “ Lucas” is the Indirect Object    Note that blocks.{layer}.hook layer input is
+we are trying to identify. See the Appendix for detailed    the residual stream before normalization.  If we patched
+data-generation templates and corruption information.         directly on these, it would modify downstream values as
+
+                                                3
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+                                                                 Figure 3. Fully connected causal graph, using the additivity of
+                                                                    the residual stream. This is an example network with 4 layers,
+                                                              so the output node is blocks.3.hook resid post.  The
+                                                                                full network we study has 48 layers, so the output node is
+                                               blocks.47.hook resid post
+
+
+
+
+                                                               well. Thus, to patch only a single layer’s input, we clone
+                                                                      this value first.
+
+                                                             3.1.4. ABLATIONS
+
+                                                To identify which nodes and edges are important, we take
+                                                                  inspiration from causal inference (Pearl, 2009): ablate nodes
+                                                            of our computational graph and observe changes in the
+                                                               output.
+
+                                                        Replacing activations with zero (Olsson et al., 2022; Cam-
+                                                       marata et al., 2021) or the mean over many data points
+                                               (Wang et al., 2023) was initially used. However, these can
+                                                                    result in activations that are out of distribution (Chan et al.,
+                                                            2022). Resample ablation (Geiger et al., 2021), also known
+                                                            as interchange interventions and causal tracing, is a com-
+                                                 monly used alternative (Hanna et al., 2023; Heimersheim
+                                & Janiak, 2023; Wang et al., 2023; Conmy et al., 2023).
+                                                    Resample ablation begins by running a forward pass with aFigure 2. A single layer in the Mamba architecture, with hook
+points listed in all the locations we intervene. Note that the SSM    corrupted prompt, then substitutes those corrupted activa-
+contains further hook points, described in Section 4.3, “Controlling     tions into a forward pass run on the uncorrupted prompt.
+model output”. The “SSM” and “conv” components are affected
+                                                              In addition to resample ablation, in Mamba (and Transform-
+by previous time steps.
+                                                                          ers), the residual stream is a sum of outputs from every layer.
+                                                          This allows us to create an edge between every layer (Elhage
+                                                                      et al., 2021), see Figure 3.
+
+                                                To patch an edge this causal graph (Elhage et al., 2021)
+                                                        going from layer i to layer j, we can do:
+
+                                                4
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+                                                   where k ∈[0, . . . , ITERS −1], then compute the average
+                                                            of all these scores (ITERS is an int hyperparameter that
+     [B,L,D]      [B,L,D]   [B,L,D]        [B,L,D]
+ patched inputj = inputj − outputi + corrupted outputi       determines how fine grained our approximation is, usually
+                                                        5-10 is large enough). The attribution is computed in using                                                     (11)
+                                                       Equation 12 like before, however, the forward pass for a
+                                                          given αk only “partially” applies every patch as follows:
+We give the dimensions of our tensors in square brackets
+[ ] above the term.  Here, B is batch size, L is context
+length, and D is embedding dimension. The outputi is        [B,L,D]       [B,L,D]     [1] [B,L,D]        [B,L,D]
+blocks.i.hook out proj,  computed  during  the    patched inputj = inputj − αk(outputi + corrupted outputi)
+same forward pass  as  the  inputj  and patched inputj                                                         (13)
+(which  both  use blocks.j.hook layer input).
+corrupted outputi  are  stored  values  from  a  sepa-                                                 Once we have these attribution scores, we can sort all edges
+rate  forward  pass  using  the  corrupted  prompt  and
+                                                  by their attribution and perform a binary search to find the
+blocks.i.hook out proj.
+                                                     minimal set of edges that achieves our desired metric.
+
+3.2. Semi-automatic Circuit Discovery                 The major downside of these automated methods is that
+                                                               (aside from token-level attributions) they do not yet assign
+Initially, finding circuits had to be done by hand: patch-                                                                  interpretations to nodes.
+ing subsets of nodes and edges (known as path patching
+(Goldowsky-Dill et al., 2023)) until a circuit emerges. Sev-
+eral methods have since been developed to automate this    4. Findings
+process. Subnetwork probing learns a mask over the graph                                                                    4.1. Layer 39 is Important
+using gradient descent (Cao et al., 2021). Automated Circuit
+DisCovery (ACDC) starts from sink nodes and works back-  We have three lines of evidence suggesting layer 39 is im-
+wards to reconstruct the causal graph (Conmy et al., 2023).    portant. While two of these lines of evidence also suggest
+ACDC requires a separate forward pass for every edge, and    layer 0 is important, we also provide evidence that token
+this can be very time-consuming. Head Importance Score     cross-talk in layer 0 is not usually needed.
+for Pruning (Michel et al., 2019), and more recently EAP
+(Edge Attribution Patching) (Syed et al., 2023), use the    4.1.1. RESAMPLE ABLATION
+gradient to approximate the contribution of all edges simul-
+                                                 To determine which layers are important, we will resample
+taneously. In particular, EAP approximates the attribution
+                                                                ablate blocks.{layer}.hook layer input. To de-
+scores of an edge between layer i and layer j via:
+                                                         termine which tokens matter, we do this patch separately
+                                                                 for each (layer, token position) pair. This forces us to limit
+                                                                 to the three templates that share name token positions (one
+  [B,L,D]     [B,L,D]         [B,L,D]        [B,L,D]
+                                                     (12)    could use more templates and use semantic labels instead  attri7→j = (−outputi + corrupted outputi)∇ inputj
+                                                             of token positions, but that is left to future work).
+
+Where ∇inputj is the gradient given from the backward    Because each corruption affects different positions, averag-
+hook made in these steps:                                   ing over them does not make sense. Thus, we show results
+                                                             separately for each corruption. We focus on 3-name tem-
+                                                                     plates. While 2-name templates are simpler, we find results  1. For  every  layer,  create  a  backward  hook  on
+                                                   from 2-name templates to be misleading as the task is too   blocks.j.hook layer input
+                                                             simple.
+  2. Run a forward pass that patches every edge                                                           Figure 4 shows that normalized logit diff changes most when
+                                                           patching layer 0 and 39.  3. Compute the metric on the resulting logits, and call
+   backward on the metric’s value.
+                                                             4.1.2. LAYER REMOVAL
+
+To get an attribution for each edge, we sum attri7→j over the    Each  layer adds  to  the  residual  stream.    This  al-
+L and D axes, then mean over the B axis.                 lows us  to “remove” a  layer by  setting  this added
+                                                          value   to   zero,    i.e.,   zero-ablating   layer  outputs
+This approximation can be improved by using integrated
+                                            (blocks.{layer}.hook proj out).    We   plot
+gradients (Marks et al., 2024; Sundararajan et al., 2017):
+                                                              probability of the correct answer, as there is no corrupted                   [B,L,D]  [1]            [1]
+compute a separate attri7→j(αk) for an αk = k/(ITERS−1)    answer to compare to.
+
+                                                5
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+Figure 4. Displayed is 1 - (Normalized logit diff) for each (layer, position) patch, averaged over 80 data points. 0 corresponds to acting
+like the uncorrupted forward pass, and 1 corresponds to acting like the corrupted forward pass. The y-axis is Layer, and the x-axis is
+token position. The corruptions can be observed by inspecting the token position labels. Each of the five plots correspond to different IOI
+patches.
+
+
+                                                             convolutional (conv) layer, and the SSM block. (For clarity,
+                                                                  in transformers, attention is where “token cross-talk” occurs,
+                                                            as that is where information can flow between different
+                                                         token positions)
+
+                                                              Putting corrupted data into the conv will also put corrupted
+Figure 5. Relative probability of the correct token when zero-    data into the SSM, as it is downstream of the conv. Thus,
+ablating each layer’s outputs. Relative probability is the softmax    to remove a specific layer’s ability to have token cross-
+over the 4 logits from prompt and corruption names. The clean     talk, we can apply resample ablation to that layer’s conv
+model gets 83%.                                              inputs (blocks.{layer}.hook in proj) at all posi-
+                                                                      tions. Because we also patched convs in previous positions,
+                                                             the SSM will only have information about the corrupted
+In Figure 5, we again see that, layers 0 and 39 are crucial     input.
+parts of the circuit that cannot be removed.
+                                                                           If we patch every layer before L in the manner above, this
+We also find that by repeatedly removing the layer that de-   removes any information about previous tokens at layer
+creases accuracy the least, about half of the layers can be    L. However, if we only patch some previous layers, the
+removed with minimal impact on accuracy. We replicated    previous tokens can have influence: a previous layer could
+this layer removal robustness on GPT-2-Small (Radford   move two tokens into the same position, and then a later
+et al., 2019). This might be seen as evidence for the residual     layer could process those token interactions in place.
+stream having a privileged basis that is consistent between
+                                                            Also, note that this does not completely remove “cross talk”,layers. However, it is also consistent with there being multi-
+                                                                                             it only removes cross talk that is specific to the uncorruptedple distinct spaces (for example, embed-0, 0-39, 39-out), or
+                                                    prompt (i.e., cross talk that is needed for outputting thelayers being simultaneously compatible with multiple dif-
+                                                                correct answer). Cross talk that occurs in both uncorruptedferent spaces. See Belrose et al. (2023) for more discussion
+                                                    and corrupted prompts will still occur. This is somewhaton this “privileged basis” perspective.
+                                                           acceptable because we only care about task-relevant cross
+                                                                        talk.4.1.3. REMOVING TOKEN CROSS-TALK
+                                                    Given these two disclaimers, we still feel this is a usefulIt would be useful to know where information travels be-
+                                                      proxy for “removing cross talk”.tween tokens, as opposed to just modifying the representa-
+tions in place. We conduct an experiment to find a small set    Now, start with patching all layers’ cross talk, then “unpatch”
+of layers that do this “token cross-talk”.                       the layer that improves accuracy the most. This is repeated
+                                                                    until accuracy is about 0.9, resulting in a “minimal crossThere are two ways in which a layer at a specific token
+                                                                     talk circuit” that can perform the task. We do this separatelyposition can affect future positions (“token cross-talk”): the
+
+
+                                                6
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+Figure 6. Out of all (corruption, template) pairs, the proportion of
+times a given layer was in the minimal cross talk circuit.
+
+
+for each (corruption, template) pair.
+
+In Figure 6, we see that Layers 39 and 15 appear in every
+minimal circuit found. Layer 15 seems worthy of investi-
+gation in future work, as these two also stand out in EAP.
+Inspecting the logs, Layer 39 is always the first layer added
+and has a large effect.
+
+In 82% of these minimal circuits, Layer 0 did not appear.
+This is strong evidence that for the majority of (corruption,
+template) pairs, computation Layer 0 does is in-place and    Figure 7. Cosine Similarity between the current token’s contribu-
+not cross talk.                                                                     [B,E,N][B,E,1]
+                                                                         tion to h (which is  Bi¯     xi    , each i is on the x axis), and the
+In Transformers, it is suspected that layer 0 is responsible                 [B,E,N]
+                                                              hidden state (  hj   each j is on the y axis)
+for multi-token embeddings (Nanda et al., 2023). These
+results suggest something else happens in Mamba. However,
+because all of our prompts use single token names, it is        • If hypothesis 2 were true, we should see the -1 conv
+possible that these capabilities are simply not needed for          slice at token position + 1 have a large value.
+this task (but still exist).
+
+                                                          Figure 8 supports hypothesis 2, that Layer 39 uses conv to
+4.2. Layer 39 Uses Conv to Shift Names One Position
+                                                                       shift names one position forward.
+   Forward
+                                      We did some tests to investigate multi-token names and
+When examining the hidden state, we can display the cosine                                                     found the cosine similarity plots always have lines at the
+similarity of a token’s contribution to the current state with                                                              position after the first token of the name (possibly other
+future (and previous) hidden states. This allows us to see                                                               layers handle multi-token names). It is also worth nothing
+how much the value was “kept around” (see Appendix for                                                                    that we see the horizontal lines for entities, not just names.
+more information on the hooks used here).
+                                       We do not yet know why this shifting behavior occurs, and
+As this is not causal, it should not be relied on too heavily.                                                             leave that question for future work.
+The structure seems to be name-dependent; we show three
+representative examples in Figure 7.
+                                                                    4.3. Controlling Model Output by Modifying
+What stands out is that the horizontal lines are one token        Representations on Layer 39
+after each name. This could either mean that 1) A previous
+                                      We hypothesize that the representations in the SSM are
+layer shifted the tokens over, or 2) Layer 39 shifted the
+                                                                 linear because, on a single layer, the mechanism it has to
+tokens over using the conv.
+                                                     add or remove information from tokens is linear in h.
+To distinguish between these, we can do resample ablation                                      [1]
+on the individual conv “slices”: The conv can be seen as   We tried to visualize ∆t,e adding or removing information
+four E-sized “slice” vectors for each (-3,-2,-1,0) relative     to various parts but did not find it very insightful. Instead,
+token position, that are multiplied (element-wise) by the     to investigate whether the internal representation of Layer
+corresponding E-sized token representations.              39 SSM is linear, we do the following:
+
+
+   • If hypothesis 1 were true, we should see the 0 conv       1. Create  a  large  IOI  dataset.    For  each  data
+      slice at token position + 1 have a large value.                   point,   store  the  activations  of  each  name’s
+
+                                                7
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+                                                                 Figure 9. Proportion of data where logit of the corrupted name
+                                                                                   is higher than the logit of original name, using the two methods
+                                                                 described in Section 4.3. The x-axis is the position the average
+                                                      was computed from, the y-axis is the position being substituted.
+                                                      To substitute into the fourth and fifth positions, we substitute the
+                                                                       correct answer (instead of a patched name).
+
+
+                                                     Having a separate average for each position also lets us test
+                                                                                  if token position is an important part of the representation.
+Figure 8. This is 1 - Normalized Logit Diff when patching on     If it is, we should expect that “John” at name position 2
+the given conv slice. 0 corresponds to acting like uncorrupted, 1    should not be easily substituted for “Mary” at name position
+corresponds to acting like corrupted. The x-axis is conv slices (-2,     0.
+-1, then 0) for layer 39. The y-axis is token position; observe the
+labels to see which corruption was used.                            Instead, in Figure 9 we find that the first three name positions
+                                                                are compatible, while the fourth and fifth positions are much
+                                                                    less compatible.
+    blocks.39.hook ssm input.   We  use  the
+     activation at the token position one after the name,    4.3.1. COMPATIBILITY OF FIRST THREE NAME
+     because of the shifting behavior we observed earlier.          POSITIONS
+
+  2. For each name, average the representations. Store a   The compatibility of the first three name’s representations
+     separate average for, say, “John” in the first position,    could either suggest:
+    “John” in the second position, etc. We use enough
+     data points that each (name, position) pair gets 50-100        • The IOI circuit does not store positional information in
+     values to average over.                                        the first three names, or
+
+  3. Replace Method: To write a different name, simply sub-        • There are circuits to handle incorrectly encoded posi-
+      stitute the SSM input at that position with the averaged          tional information, which got activated and handled
+     value from a different name.                               our patching well despite having incorrect positional
+                                                                  data
+  4. Subtract and Add Method Instead of substituting, sub-
+      tract the current name’s average and add the substituted                                                            Distinguishing between these is left for future work.
+     name’s average.
+
+                                                             4.3.2. INCOMPATIBILITY OF FOURTH AND FIFTH NAME
+We find that the Replace Method works adequately, while         POSITIONS
+the Subtract and Add Method works surprisingly well,
+                                                        Consider one of our data points: “Friends Isaac, Lucas and
+changing the logits to the desired output more than 95%
+                                                      Lauren went to the office. Isaac and Lucas gave a necklace
+of the time.
+                                                              to” (answer is “ Lauren”)
+One thing to note: It was possible that the SSM was using
+                                        We see that when names occur in the fourth or fifth position,
+the representations from the name’s token position, as well
+                                                                                            it is the second time they occur in the prompt.
+as the name’s token position + 1. Patching on conv slices
+was initial evidence this did not occur, and the efficacy of   One hypothesis is that the conv sees a period and encodes
+this replacement procedure provides further evidence that     that in the name representation. However, while the model
+this is not the case.                              we study (mamba-370m) has four conv slices, we find that
+
+                                                 8
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+the conv slice attending to the -3 position is always zero,    Instead, we will just sum over the D dimension and mean
+likely due to a bug in the Mamba training code. Thus, it    over the B dimension, giving us an attribution for every
+can only attend to the previous 2 positions in practice (the    (edge, position). See Appendix D.
+third conv slice is for attending to the current position). This
+                                                The results of EAP further emphasize the importance of
+means that the name in the fifth position’s representation is
+                                                     Layer 39. However, there is also significant activity else-
+not distinguishable from the name in the third position by
+                                                    where that merit further analysis.
+the conv.
+
+Thus, some token cross-talk must be happening in a layer                                                        6. Future Work
+before 39. As mentioned above, for 82% of (corruption,
+template) pairs, cross-talk in layer 0 is not needed. So while    There are still many open questions we have about the IOI
+these experiments provide strong evidence that layer 39 is a     circuit in mamba-370m. Future work can focus on:
+bottleneck, more circuit analysis is needed.
+
+                                                                            • Analysis of what cross talk is done before layer 39
+4.4. Layer 39 moves information into only the last token
+    position                                                             • Analysis of what the later layers are doing to decode
+                                                                   the answer encoded in the final token position
+We can do resample ablation on the ssm hidden state via
+blocks.{layer}.hook h.{token pos}.                     • Training Sparse Autoencoders (SAEs) and using EAP
+                                                                     to make a feature circuit capable of doing the task, to
+Figure 10 shows that it only uses the hidden states one after
+                                                                  get a more fine grained analysis (similar to work in
+the ablated token, in line with 4.2. We also see that hidden
+                                                      Marks et al. (2024))
+state values are used all the way to the last token position.
+This tells us that the answer-relevant information is moved        • Conducting similar analysis on other tasks (such as
+into the last token position. However, it is possible that         docstring (Heimersheim & Janiak, 2023) or greater
+information is also sent to other, earlier positions as well.          than (Hanna et al., 2023))
+
+To  test  for  this, we  can do  resample  ablation on
+blocks.{layer}.hook proj out, which is the value    7. Reproducibility
+added to the residual stream at the end of each layer.                                                          All   code   for   experiments   can   be   found   at
+In Figure 11 we see that only the last index is used.            https://github.com/Phylliida/investigating-mamba-ioi.
+                                                           All experiments were conducted on a RTX A6000.
+In addition, positional EAP (Section D.3.5) suggests that
+other (non-last token) connections are important, as they
+are preserved in the set of edges that get 85%. However    8. Credits
+their attribution scores are very low. Manually removing                                                 The authors would like to thank the ML Alignment & The-
+all the non-last token connections going out from layer 39                                                          ory Scholars (MATS) program for providing a workspace to
+only reduces accuracy from 85.2% to 83.8%, and reduces                                                         conduct this research, FAR AI Labs for compute, and LTFF
+normalized logit diff from to 0.877 to 0.873. This suggests                                                                for funding. We would also like to thank Niels uit de Bos,
+that either there is backup behaviour activated when those                                                                        Iv´an Arcuschin Moreno, Rohan Gupta, Thomas Kwa, Scott
+positions are patched, or that these connections are mostly                                                               Neville, Gonc¸alo Paulo and Joseph Bloom for the helpful
+spurious and not essential parts of the circuit.                                                              conversations.
+These three lines of evidence together strongly suggest that
+the task-relevant information provided by layer 39 is stored   References
+only in the last token position.
+                                                                   Ali, A., Zimerman, I., and Wolf, L. The hidden attention of
+                                             mamba models, 2024.
+5. Positional Edge Attribution Patching
+  (Positional EAP)                                  Beck, M., P¨oppel, K., Spanring, M., Auer, A., Prudnikova,
+                                                               O., Kopp, M., Klambauer, G., Brandstetter, J., and
+Here we describe a simple modification to EAP that allows                                                               Hochreiter, S. xlstm: Extended long short-term mem-
+us to have token-level edge attributions.                                                                    ory, 2024. URL https://arxiv.org/abs/2405.
+                                      [B,L,D]                04517.
+Typically, in EAP, after we compute attri7→j we sum over
+the L and D dimensions, then take the mean over the B    Belrose, N., Furman, Z., Smith, L., Halawi, D., Ostrovsky,
+dimension to get an attribution for each edge.                             I., McKinney, L., Biderman, S., and Steinhardt, J. Elicit-
+
+
+                                                9
+
+                               Investigating the Indirect Object Identification circuit in Mamba
+
+  ing latent predictions from transformers with the tuned     Geiger, A., Lu, H., Icard, T., and Potts, C. Causal ab-
+   lens, 2023.                                                      stractions of neural networks, 2021. URL https:
+                                             //arxiv.org/abs/2106.02997.
+Cammarata, N., Goh, G., Carter, S., Voss, C., Schubert, L.,
+  and Olah, C. Curve circuits. Distill, 2021. doi: 10.23915/    Goldowsky-Dill, N., MacLeod, C., Sato, L., and Arora, A.
+   distill.00024.006. https://distill.pub/2020/circuits/curve-      Localizing model behavior with path patching, 2023.
+   circuits.
+                                                              Grazzi, R., Siems, J., Schrodi, S., Brox, T., and Hutter, F. Is
+Cao, S., Sanh, V., and Rush, A. Low-complexity prob-      mamba capable of in-context learning?, 2024.
+  ing via finding subnetworks. In Proceedings of the
+  2021 Conference of the North American Chapter of       Gu, A. and Dao, T. Mamba: Linear-time sequence model-
+  the Association for Computational Linguistics: Hu-          ing with selective state spaces, 2023.
+  man Language Technologies, pp. 960–966, Online,
+  2021. Association for Computational Linguistics.        Gu, A., Dao, T., Ermon, S., Rudra, A., and Re, C. Hippo:
+   doi: 10.18653/v1/2021.naacl-main.74. URL https:       Recurrent memory with optimal polynomial projections,
+  //aclanthology.org/2021.naacl-main.74.      2020.
+
+Chan, L., Garriga-Alonso, A., Goldowsky-Dill, N.,         Gu, A., Goel, K., and R´e, C. Efficiently modeling long
+  Greenblatt, R., Nitishinskaya, J., Radhakrishnan,            sequences with structured state spaces, 2022.
+  A., Shlegeris, B., and Thomas, N.  Causal scrub-
+                                                    Hanna, M., Liu, O., and Variengien, A. How does gpt-  bing: A method for rigorously testing interpretabil-
+                                                    2 compute greater-than?: Interpreting mathematical   ity hypotheses.  Alignment Forum, 2022. URL
+                                                                           abilities in a pre-trained language model, 2023.  https://www.alignmentforum.org/posts/
+  JvZhhzycHu2Yd57RN/causal-scrubbing-a-
+                                                     Heimersheim, S. and Janiak, J. A circuit for Python doc-
+  method-for-rigorously-testing.
+                                                                    strings in a 4-layer attention-only transformer, 2023.
+Conmy, A., Mavor-Parker, A. N., Lynch, A., Heimer-       URL https://www.alignmentforum.org/
+                                            posts/u6KXXmKFbXfWzoAXn/a-circuit-  sheim, S., and Garriga-Alonso, A. Towards automated
+                                           for-python-docstrings-in-a-4-layer-   circuit discovery for mechanistic interpretability, 2023.
+                                             attention-only.
+Elhage, N., Nanda, N., Olsson, C., Henighan, T., Joseph,
+  N., Mann, B., Askell, A., Bai, Y., Chen, A., Conerly, T.,    Kaplan, J., McCandlish, S., Henighan, T., Brown, T. B.,
+  DasSarma, N., Drain, D., Ganguli, D., Hatfield-Dodds,       Chess, B., Child, R., Gray, S., Radford, A., Wu, J., and
+   Z., Hernandez, D., Jones, A., Kernion, J., Lovitt, L.,        Amodei, D. Scaling laws for neural language models,
+  Ndousse, K., Amodei, D., Brown, T., Clark, J., Kaplan,      2020.
+   J., McCandlish, S., and Olah, C. A mathematical frame-
+                                                              Lieber, O., Lenz, B., Bata, H., Cohen, G., Osin, J.,  work for transformer circuits. Transformer Circuits
+                                                        Dalmedigos, I., Safahi, E., Meirom, S., Belinkov, Y.,  Thread, 2021. URL https://transformer-
+                                                           Shalev-Shwartz, S., Abend, O., Alon, R., Asida, T.,  circuits.pub/2021/framework/index.
+                                                     Bergman, A., Glozman, R., Gokhman, M., Manevich,  html.
+                                                               A., Ratner, N., Rozen, N., Shwartz, E., Zusman, M.,
+Ensign, D., Paulo, G., and Garriga-alonso, A. Ophiol-        and Shoham, Y. Jamba: A hybrid transformer-mamba
+  ogy (or, how the mamba architecture works), 2024.          language model, 2024.
+ URL https://www.lesswrong.com/posts/
+  TYLQ8gAMAmpeFcwXN/ophiology-or-how-       Mallen, A., Brumley, M., Kharchenko, J., and Belrose,
+  the-mamba-architecture-works. Accessed:       N. Eliciting latent knowledge from quirky language
+  2024-04-09.                                             models, 2024.
+
+Fu, D. Y., Dao, T., Saab, K. K., Thomas, A. W., Rudra, A.,    Marks, S., Rager, C., Michaud, E. J., Belinkov, Y., Bau,
+  and R´e, C. Hungry hungry hippos: Towards language        D., and Mueller, A. Sparse feature circuits: Discovering
+  modeling with state space models, 2023.                  and editing interpretable causal graphs in language
+                                                           models, 2024.
+Gao, L., Biderman, S., Black, S., Golding, L., Hoppe, T.,
+   Foster, C., Phang, J., He, H., Thite, A., Nabeshima, N.,    Meng, K., Bau, D., Andonian, A., and Belinkov, Y. Lo-
+   Presser, S., and Leahy, C. The Pile: An 800gb dataset        cating and editing factual associations in gpt, 2023.
+  of diverse text for language modeling. arXiv preprint     URL https://arxiv.org/abs/2202.05262.
+  arXiv:2101.00027, 2020.                                  Accessed: 2024-7-8.
+
+                                                10
+
+                               Investigating the Indirect Object Identification circuit in Mamba
+
+Michel, P., Levy, O., and Neubig, G. Are sixteen heads      Rimsky, N., Gabrieli, N., Schulz, J., Tong, M., Hubinger,
+   really better than one? In Wallach, H. M., Larochelle,         E., and Turner, A. M. Steering llama 2 via contrastive
+  H., Beygelzimer, A., d’Alch´e-Buc, F., Fox, E. B., and         activation addition, 2024.
+  Garnett, R. (eds.), Advances in Neural Information
+                                                     Sharma, A. S., Atkinson, D., and Bau, D. Locating and
+  Processing Systems 32: Annual Conference on Neural
+                                                                  editing factual associations in mamba, 2024.
+  Information Processing Systems 2019, NeurIPS 2019,
+  December 8-14, 2019, Vancouver, BC, Canada, pp.        Sundararajan, M., Taly, A., and Yan, Q. Axiomatic attribu-
+  14014–14024, 2019. URL https://proceedings.      tion for deep networks, 2017.
+  neurips.cc/paper/2019/hash/
+                                                       Syed, A., Rager, C., and Conmy, A. Attribution patching  2c601ad9d2ff9bc8b282670cdd54f69f-
+                                                           outperforms automated circuit discovery, 2023.  Abstract.html.
+                                                                 Torres, A. Othello Mamba: Evaluating the mamba architec-
+Nanda, N. and Bloom, J.  Transformerlens. https:                                                                  ture on the othellogpt experiment, 2024. URL https:
+  //github.com/TransformerLensOrg/                                            //github.com/alxndrTL/othello_mamba.
+  TransformerLens, 2022.
+                                                Wang, K. R., Variengien, A., Conmy, A., Shlegeris, B.,
+Nanda, N., Rajamanoharan, S., Kram´ar, J., and               and Steinhardt, J. Interpretability in the wild: a circuit
+  Shah, R.   Fact finding: Do early layers spe-                  for indirect object identification in GPT-2 small. In
+   cialise in local processing? (post 5), 2023. URL          The Eleventh International Conference on Learning
+  https://www.lesswrong.com/posts/               Representations, 2023. URL https://openreview.
+  xE3Y9hhriMmL4cpsR/fact-finding-do-        net/forum?id=NpsVSN6o4ul.
+  early-layers-specialise-in-local-
+                                                      Wei, J., Tay, Y., Bommasani, R., Raffel, C., Zoph, B.,  processing. Accessed: 2023-12-22.
+                                                        Borgeaud, S., Yogatama, D., Bosma, M., Zhou, D.,
+Olah, C. Mechanistic interpretability, variables, and the        Metzler, D., Chi, E. H., Hashimoto, T., Vinyals, O.,
+  importance of interpretable bases. https://www.        Liang, P., Dean, J., and Fedus, W. Emergent abilities of
+  transformer-circuits.pub/2022/mech-           large language models, 2022.
+  interp-essay, 2022.                                                     Zhang, F. and Nanda, N. Towards best practices of activa-
+                                                                   tion patching in language models: Metrics and methods,Olsson, C., Elhage, N., Nanda, N., Joseph, N., DasSarma,
+                                                          2024.  N., Henighan, T., Mann, B., Askell, A., Bai, Y., Chen,
+  A., et al.  In-context learning and induction heads,
+  2022. URL https://transformer-circuits.
+  pub/2022/in-context-learning-and-
+  induction-heads/index.html.        Appendices
+
+Paulo, G., Marshall, T., and Belrose, N. Does transformer
+   interpretability transfer to rnns?, 2024.               A. IOI Task Details
+
+Pearl, J.  Causality.  Cambridge University Press,       We use the 4 prompt templates from (Conmy et al., 2023):
+  2 edition, 2009. ISBN 978-0-521-89560-6.  doi:
+                                          Then, [NAME], [NAME] and [NAME] went to
+  10.1017/CBO9780511803161.
+                                          the [PLACE]. [NAME] and [NAME] gave a
+Peng, B., Alcaide, E., Anthony, Q., Albalak, A., Arcad-    [OBJECT] to
+  inho, S., Biderman, S., Cao, H., Cheng, X., Chung,
+  M., Grella, M., GV, K. K., He, X., Hou, H., Lin, J.,      Afterwards [NAME], [NAME] and [NAME]
+  Kazienko, P., Kocon, J., Kong, J., Koptyra, B., Lau, H.,   went to the [PLACE]. [NAME] and [NAME]
+  Mantri, K. S. I., Mom, F., Saito, A., Song, G., Tang, X.,   gave a [OBJECT] to
+  Wang, B., Wind, J. S., Wozniak, S., Zhang, R., Zhang,
+   Z., Zhao, Q., Zhou, P., Zhou, Q., Zhu, J., and Zhu, R.-J.   When [NAME], [NAME] and [NAME] arrived
+  Rwkv: Reinventing rnns for the transformer era, 2023.   at the [PLACE], [NAME] and [NAME] gave
+  URL https://arxiv.org/abs/2305.13048.    a [OBJECT] to
+
+Radford, A., Wu, J., Child, R., Luan, D., Amodei, D.,      Friends [NAME], [NAME] and [NAME] went
+  and Sutskever, I. Language models are unsupervised    to the [PLACE]. [NAME] and [NAME] gave
+  multitask learners. 2019.                        a [OBJECT] to
+
+                                                11
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+Figure 10. Displayed is 1 - (Normalized logit diff) for each (layer, position) patch, averaged over 80 data points. 0 corresponds to acting
+like the uncorrupted forward pass, and 1 corresponds to acting like the corrupted forward pass. The y-axis is Layer, and the x-axis is
+token position. The corruptions can be observed by inspecting the token position labels. Each of the five plots correspond to different IOI
+patches.
+
+
+
+
+
+                          Figure 11. Same as Figure 10, but for blocks.{layer}.hook proj out
+
+
+
+
+
+                                                12
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+In resample ablation, there are many ways to corrupt a        • unpatched is a forward pass without our intervention
+prompt. We create a dataset choosing randomly from all          (the baseline forward pass)
+possible corruptions and locations of names that:
+                                                                            • corrupted is a forward pass without our intervention,
+                                                       where the prompt is modified to make B the correct
+  1. Replace all instances of a single name with another
+                                                          answer
+    name, and
+
+                                                                            • patched is a forward pass that patches edges (as de-  2. Change the output
+                                                                  scribed above)
+
+While we could patch two names at the same time, 1 simpli-
+fies the number of things being changed at the same time. 2    This results in a 1 when the model acts like the unpatched
+is necessary to determine if the patch had any effect.          forward pass, and 0 when the model acts like the corrupted
+                                                         forward pass. Note that it is possible to obtain scores outside
+This results in the following 5 corruptions:                                                              the [0,1] range.
+
+CAB AB C                                       The abs is a novel addition by us. For data points where
+DAB AB D                                                 the model is incorrect, maximizing normalized logit diff
+                                                  would result in the model becoming more incorrect. This
+ACB AB C                                              abs modification fixes that issue.
+ADB AB D
+                                           C. SSM Hooks used
+ABC AB C
+ABD AB D                                            For     the     cosine     similarity      plots,    we
+                                                      used                 blocks.39.hook B bar,
+ABC AB C                                  blocks.39.hook ssm input,                and
+ABC AC B                                  blocks.39.hook h.{pos}
+
+                                                     See figure C for a detailed overview of the SSM nternals.
+ABC AC B
+ABC BC A
+                                            D. Automated Circuit Discovery Results
+In each of these, the top line represents the uncorrupted
+                                       We use the following edges:
+prompt, and the bottom line represents the corrupted prompt.
+Letters correspond to names: the first three are the first three
+names, the second two are the fourth and fifth names, and        • embed   7→    layer   input   (hook embed   7→
+the last is the output. If two letters are the same, that means         blocks.i.hook layer input)
+that those places share the same name. Otherwise, the names
+                                                                            • layer output 7→later layer input (blocks.i.hook proj outare different.
+                                                              7→blocks.j.hook layer input)
+
+B. Normalized Logit Diff                                       • layer output 7→output (blocks.i.hook proj out 7→
+                                                               blocks.47.hook resid post)
+Normalized Logit Diff is defined as:
+
+                                                                            • embed     7→     output    hook embed     7→
+min_diff =
+                                                               blocks.47.hook resid post)
+    A_logit_corrupted - B_logit_corrupted
+max_diff =
+    A_logit_unpatched - B_logit_unpatched Where output is the residual stream after the final layer has
+possible_range = abs(max_diff - min_diff) added its layer output.
+# prevent divide by zero                                       We do a few separate experiments.
+possible_range[possible_range == 0] = 1
+logit_diff =                                                            D.1. EAP
+    A_logits_patched - B_logits_patched
+normalized_logit_diff =                       At the most high level, we can run (integrated gradient) EAP
+    (logit_diff-min_diff)/possible_range   without positions. Using binary search to find the minimum
+                                                  number of edges to give us at least 85% accuracy results in
+where                                                        the following adjacency matrix:
+
+                                                13
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+                 Figure 12. Internals of the SSM block, we restrict this diagram to only the parts we are interested in
+
+
+                                                            D.2. ACDC for layer information
+
+                                       We run EAP without positions using the edges listed above,
+                                                    and use binary search to find the least edges needed to get
+                                         85% accuracy. We take the resulting graph and run ACDC
+                                                  on it with a thresh of 0.0001, with (non-positional) edges
+                                                                  for individual conv slices, the ssm, the skip connection, and
+                                                                            all the edges above.
+
+                                                          This allows us to get a hint at what parts each layer is using.
+
+                                                        This resulting circuit has an average normalized logit diff
+                                                            of 0.84 and achieves 88% accuracy on a held-out test set,
+                                                         so there is little loss in performance from doing this further
+                                                       prune (because the thresh is so low, most edges pruned
+                                                              are those that decrease ability to do the task, which is why
+                                                         accuracy has gone up).
+Figure 13. Integrated gradients EAP, minimum set of edges. A
+                                                 Of note, this reproduces the “Convs of layer 39 shift names
+blue dot means the edge is present. The y-axis is the input node,
+                                                                 to the next position” result from above.the x-axis is the output node
+                                                               Ideally we could do this with EAP and no longer need
+                                          ACDC, but but leave that for future work.
+
+We also present the edge attributions here, and the corre-    D.3. EAP With Positions
+sponding actual effects on normalized logit diff (determined
+                                                             In the following:during the ACDC run below)
+
+This is not very insightful, so we clamp values to let us see        • n1 means the first name in the prompt, n2 means the
+more (the thresholds chosen by hand)                           second name in the prompt, etc.
+
+                                                14
+
+                    Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+Figure 14. Edge Attributions                                          Figure 15. Effects on normalized logit diff
+
+
+
+
+
+                                       15
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+Figure 16. ACDC results from inside layers. Each node is 1 if the edge is present, 0 if it is not. 0,-1, and -2 are the corresponding conv
+slices
+
+
+
+
+
+                                                16
+
+                         Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+Figure 17. Same as the above figure, however, each cell shows the decrease in normalized logit diff if that edge is patched
+
+
+
+
+
+                                           17
+
+Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+   Figure 18. Same as above, however, values are clamped to 0.1
+
+
+
+
+
+                        18
+
+Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+    Figure 19. Same above, however, values are clamped to 0.05
+
+
+
+
+
+                        19
+
+                               Investigating the Indirect Object Identification circuit in Mamba
+
+   • pos0 means the first token, pos1 means the second    D.3.3. LAYERS THAT ARE MISSING NAMES
+     token, etc. (these are used for non-name tokens)
+                                                                           If we consinder a layer as “having” a name if it received it
+                                                    from embed or layer 0, the following layers have n1-n5:
+   • out means the final token, where the answer is gener-
+     ated                                      And these are ones that are missing names:
+
+
+For reference, here is a prompt:                                          Missing n1: 1, 5, 28, 32, 33, 34
+                                          Missing n2: 31, 33
+pos0 <|endoftext|>                                          Missing n3: 31, 33
+pos1 Then                                          Missing n4: 32, 34, 3, 40, 9
+pos2 ,                                          Missing n5: 9, 31, 34, 40
+n1 Sally                                          Missing n1-n5: 41-47
+pos4 ,
+n2 Martha
+pos6 and                                        Of those, 1, 3, 5, 9 are only connected to 0/embed and
+n3 Edwin                                                 39. In particular, we have:
+pos8 went
+pos9 to
+                                          1: missing n1pos10 the
+                                             n1,n2,n3,n5 -> 39pos11 restaurant
+                                          3: missing n4pos12 .
+                                             n1-n5 -> 39n4 Edwin
+                                          5: missing n1pos14 and
+                                             n1-n5 -> 39n5 Sally
+                                          9: missing n4,n5pos16 gave
+                                             n1-n5 -> 39pos17 a
+pos18 drink
+out to
+                                                          Otherwise, we have
+
+D.3.1. CONNECTIONS FROM EMBED
+                                          Missing n1: 28, 32, 33, 34
+Every layer receives n1-n5, except:
+                                          Missing n2: 31, 33
+                                          Missing n3: 31, 33Missing n1: layers 1, 5, 8, 25, 28, 29,
+                                          Missing n4: 32, 34, 40     30, 32, 34, 36
+                                          Missing n5: 31, 34, 40Missing n2: 30, 31, 36
+                                          Missing n1-n5: 41-47Missing n3: layers 25, 27, 29, 30, 31,
+     34, 36, 38
+Missing n4: layers 3, 9, 25, 32, 34, 40                                          28, 31, 32, 33, 34, 40 all seem to be involved in
+Missing n5: layer 9, 25, 27, 31, 34, 37,                                                         a complex circuit, and have inputs from other layers.
+     38, 40
+Missing n1-n5: 33, 41-47                            Just examining the missing terms:
+TODO: Output?
+
+D.3.2. CONNECTIONS OF LAYER 0
+
+Layer 0 takes as input n1-n5, and sends n1-n5 to every layer,
+except:
+
+Missing n1: 1, 2, 3, 28, 31, 32, 33, 34
+Missing n2: 6, 7, 31, 33
+Missing n3: 2, 31, 33                     28 is missing n1
+Missing n4: 1, 2, 3, 9, 18, 21, 32, 34, 40
+Missing n5: 3, 9, 18, 31, 32, 34, 40      28 does not receive n1 from anyone
+Missing n1-n5: 4, 5, 41-47                    outputs n1 to 39
+
+
+                                                20
+
+                               Investigating the Indirect Object Identification circuit in Mamba
+
+                                          34 receives n4 from 32
+                                              does not output it
+
+                                          34 receives n5 from 28, 31
+                                              does not output it
+
+
+
+
+
+31 is missing n2, n3, n5
+
+31 does not receive n2 or n3 from anyone
+    output n2-n3 to 39
+                                          40 is missing n4, n5
+31 receives n5 from 29
+    outputs n5 to 34
+                                          40 does not receive n4-n5
+                                              does not output n4-n5
+
+                                                        D.3.4. CONNECTIONS TO 39
+
+                                              As expected, layer 39 stands out as noteworthy. Every layer
+                                                            before 39 has a connection to 39 for every name, with these
+                                                             exceptions:
+
+                                          Missing n1: layer 2
+32 is missing n1, n4                      Missing n2: layer 34
+                                          Missing n3: layer 34
+32 does not receive n1                    Missing n4: layers 1, 31, 32, 34
+   outputs n1 to 39                       Missing n5: layers 2, 31, 32, 34
+32 receives n4 from 28, 30
+   outputs n4 to 34                                 In addition, there are these extra connections to layer 39
+
+                                          pos6: layer 34
+                                          pos14: layers 31, 32, 34
+                                          out: layers  28, 29, 30, 33, 35, 37, 38
+
+                                               Where
+
+33 is missing n1-n3                                           • pos6 is the “ and” between n2 and n3
+
+                                                                            • pos14 is the “ and” between n4 and n5
+33 does not receive n1-n3
+   outputs n2-n3 to 39
+                                                        D.3.5. CONNECTIONS FROM 39
+   outputs n1 to 35
+                                          n1,n2,n3: layer 40
+                                          pos12: layer 43
+                                          pos14: layer 40
+                                          pos16: layers 40,41,43,44,45,46,47
+                                          pos18: layer 40
+                                          out: layers 43,45,46,47, and output
+
+
+                                                                            • pos12 is the “.”
+34 is missing n1, n4, n5
+                                                                            • pos14 is the “ and” between n4 and n5
+34 does not receive n1 from anyone
+                                                                            • pos16 is the “ gave” after n5
+    outputs n1 to 39
+                                                                            • pos18 is the object (for example, “ drink”)
+
+                                                21
+
+                               Investigating the Indirect Object Identification circuit in Mamba
+
+D.3.6. GRAPH AFTER HIDING 39, EMBED, AND 0
+
+Keeping the above in mind, once we hide those three nodes
+the graph is quite readable. If we hide 35, it is even more
+readable. We also plot layer 35, for reference.
+
+
+
+
+
+                                                22
+
+                                Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+Figure 20. Positional EAP After hiding Embed, Layer 0, and Layer 39. Numbers correspond to names, pos14 means token in position 14,
+out means the final token
+
+
+
+
+
+                                                23
+
+Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+            Figure 21. Same as above, but also hide 35
+                        24
+
+Investigating the Indirect Object Identification circuit in Mamba
+
+
+
+
+
+            Figure 22. Layer 35 Positional EAP results
+
+
+
+
+
+                        25

@@ -1,0 +1,66 @@
+models:
+  # --- Direct API models (runs completed, configs retained for reference) ---
+  # claude:                            # PRIMARY: 186/186 claims via Anthropic API
+  #   provider: anthropic
+  #   model: claude-sonnet-4-20250514
+  #   temperature: 0
+  #   max_tokens: 8192
+  # gpt5:                              # PRIMARY: 186/186 claims via OpenAI API
+  #   provider: openai
+  #   model: gpt-5.2
+  #   temperature: 0
+  #   max_tokens: 8192
+  # gemini:                             # FAILED: 0/186 claims (Google direct API error)
+  #   provider: google
+  #   model: gemini-2.0-flash
+  #   temperature: 0
+  #   max_tokens: 8192
+  # --- OpenRouter models (all runs completed) ---
+  openrouter-gemini:
+    provider: openrouter
+    model: google/gemini-3-flash-preview  # Gemini 3 Flash via OpenRouter
+    temperature: 0
+    max_tokens: 8192
+  openrouter-deepseek-r1:
+    provider: openrouter
+    model: deepseek/deepseek-r1       # reasoning model
+    temperature: 0
+    max_tokens: 8192                 # supplementary annotator (166/186); R1 exhausts tokens on long papers
+  openrouter-deepseek-v3:
+    provider: openrouter
+    model: deepseek/deepseek-v3.2     # general-purpose, very cheap
+    temperature: 0
+    max_tokens: 8192
+  openrouter-qwen:
+    provider: openrouter
+    model: qwen/qwen3-235b-a22b-2507
+    temperature: 0
+    max_tokens: 8192
+  openrouter-mistral:
+    provider: openrouter
+    model: mistralai/mistral-large-2512
+    temperature: 0
+    max_tokens: 8192
+
+
+annotation:
+  codebook_path: CODEBOOK.md
+  calibration_path: calibration_rationales.md
+  paper_texts_dir: paper_texts/
+  output_dir: annotations_multi/
+  use_structured_output: true
+  n_passes: 1
+
+# Pre-specified acceptance thresholds (set before seeing data) [V9]
+# Updated for multi-model IAA: Krippendorff's alpha replaces Cohen's kappa
+thresholds:
+  krippendorff_alpha_accept: 0.6   # substantial agreement (multi-rater)
+  calibration_gate_alpha: 0.6      # minimum alpha to proceed past Phase 0
+
+phases:
+  calibration_papers:
+    - "2211.00593"   # IOI Circuit
+    - "2202.05262"   # ROME
+    - "2301.05217"   # Grokking
+    - "2409.04478"   # SAE Evaluation
+    - "2601.11516"   # Gemini Probes

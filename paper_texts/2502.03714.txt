@@ -1,0 +1,1019 @@
+       Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+
+
+              Harrish Thasarathan 1 2  Julian Forsyth 1 Thomas Fel 3 Matthew Kowal 1 2 4 Konstantinos Derpanis 1 2
+
+
+2025
+Feb
+6
+
+
+
+
+
+           Figure 1. Overview of Universal Sparse Autoencoders. (A) We introduce Universal Sparse Autoencoders (USAEs), a method for[cs.CV]     discovering common concepts across multiple different deep neural networks. USAEs are simultaneously trained on the activations of
+            multiple models and are constrained to share an aligned and interpretable dictionary of discovered concepts. (B) We also demonstrate
+          one immediate application of USAEs, Coordinated Activation Maximization, where optimizing the inputs of multiple models to activate
+            the same concepts reveals how different models encode the same concept. Visualization reveals interesting concepts at various levels of
+             abstraction, such as ‘curves’ (top), ‘animal haunch’ (middle) and ‘the faces of crowds’ (bottom). Better viewed with zoom.
+
+                         Abstract                               portant universal concepts across vision models;
+                                                                        ranging from low-level features (e.g., colors and
+          We present Universal Sparse Autoencoders (US-
+                                                                                    textures) to higher-level structures (e.g., parts and
+              AEs), a framework for uncovering and aligning in-
+                                                                                     objects). Overall, USAEs provide a powerful new
+                 terpretable concepts spanning multiple pretrained
+                                                                 method for interpretable cross-model analysis and
+             deep neural networks. Unlike existing concept-
+                                                                                 offers novel applications—such as coordinated
+              based interpretability methods, which focus on
+                                                                                activation maximization—that open avenues for
+              a single model, USAEs jointly learn a universal
+                                                                        deeper insights in multi-model AI systems.
+              concept space that can reconstruct and interpret
+                the internal activations of multiple models at once.arXiv:2502.03714v1            Our core insight is to train a single, overcom-        1. Introduction
+                plete sparse autoencoder (SAE) that ingests ac-
+                                                                         In this work, we focus on discovering interpretable concepts                 tivations from any model and decodes them to
+                                                                   shared among multiple pretrained deep neural networks              approximate the activations of any other model
+                                                           (DNNs). The goal is to learn a universal concept space              under consideration. By optimizing a shared ob-
+                                                          – a joint space of concepts – that provides a unified lens                  jective, the learned dictionary captures common
+                                                                           into the hidden representations of diverse models. We de-                factors of variation—concepts—across different
+                                                                                fine concepts as the abstractions each network captures that                 tasks, architectures, and datasets. We show that
+                                                                     transcend individual data points—spanning low-level fea-           USAEs discover semantically coherent and im-
+                                                                             tures (e.g., colors and textures) to high-level attributes (e.g.,
+           1EECS York University, Toronto, Canada 2Vector Institute,    emotions like horror and ideas like holidays).
+            Toronto, Canada 3Kempner Institute, Harvard University, Boston,
+       USA 4FAR AI. Correspondence to: Harrish Thasarathan <har-    Grasping the underlying representations within DNNs is
+           ryt@yorku.ca>.                                                   crucial for mitigating risks during deployment (Buolamwini
+                                       & Gebru, 2018; Hansson et al., 2021), fostering the develop-
+            Preprint. Under review.
+
+                                                         1
+
+                       Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+ment of innovative model architectures (Darcet et al., 2023),    els—trained on diverse tasks and datasets—compare and
+and abiding by regulatory frameworks (Commision, 2021;    diverge in their internal representations. Finally, we demon-
+House, 2023). Prior interpretability efforts often center on     strate a novel USAE application, coordinated activation
+dissecting a single model for a specific task, leaving risk    maximization, showcasing simultaneous visualization of
+management unmanageable when each network is analyzed    universal concepts across models.
+in isolation. With a growing number of capable DNNs, find-
+ing a canonical basis for understanding model internals may    2. Related work
+yield more tractable strategies for managing potential risks.
+                                                  Our work introduces a novel concept-based interpretability
+Recent work supports this possibility. The core idea behind
+                                                    method that adapts SAEs to discover universal concepts. We
+‘foundation models’ (Henderson et al., 2023) presupposes
+                                             now review the most relevant works in each of these fields.
+that any DNN trained on a large enough dataset should en-
+code concepts that generalize to an array of downstream    Concept-based interpretability (Kim et al., 2018) emerged
+tasks for that modality. Moreover, recent work has shown    as a response to the limitations of attribution methods (Si-
+that there is a substantial amount of shared information be-   monyan et al., 2013; Zeiler & Fergus, 2014; Bach et al.,
+tween DNNs trained independently for different tasks or    2015; Springenberg et al., 2014; Smilkov et al., 2017; Sun-
+modalities (Huh et al., 2024), and recent studies (Dravid    dararajan et al., 2017; Selvaraju et al., 2017; Fong et al.,
+et al., 2023; Kowal et al., 2024a) have found shared con-    2019; Fel et al., 2021; Muzellec et al., 2024), which, de-
+cepts across vision models, implying that universality may     spite being widely used for explaining model predictions,
+be more widespread than previously assumed. However, cur-    often fail to provide a structured or human-interpretable
+rent techniques for identifying universal features (Dravid    understanding of internal model computations (Hase &
+et al., 2023; Huh et al., 2024; Kowal et al., 2024a) typically    Bansal, 2020; Hsieh et al., 2021; Nguyen et al., 2021; Colin
+operate post-hoc, extracting concepts from individual mod-    et al., 2021; Kim et al., 2022; Sixt et al., 2020).  Attri-
+els and then matching them through labor-intensive filtering    bution methods highlight input regions responsible for a
+or optimization. This approach is limited in scalability, lacks    given prediction, the where, but do not explain what the
+the efficiencies of gradient-based training, and precludes    model has learned at a higher level. In contrast, concept-
+translation between models within a unified concept space.    based approaches aim to decompose internal representa-
+Consequently, tasks that require simultaneous interaction     tions into human-understandable concepts (Genone & Lom-
+across multiple models, e.g., coordinated activation maxi-    brozo, 2012). The main components of concept-based inter-
+mization shown later, become more cumbersome.              pretability approaches can generally be broken down into
+                                                    two parts (Fel et al., 2023b): (i) concept discovery, which ex-
+To overcome these challenges, we introduce a universal
+                                                                      tracts and visualizes the interpretable units of computation
+sparse autoencoder (USAE), Fig. 1, designed to jointly
+                                                    and (ii) concept importance estimation, which quantifies
+encode and reconstruct activations from multiple DNNs.
+                                                             the importance of these units to the model output. Early
+Through qualitative and quantitative evaluations, we show
+                                                   work explored ‘closed-world’ concept settings in which they
+that the resulting concept space captures interpretable fea-
+                                                           evaluated the existence of pre-defined concepts in model
+tures shared across all models. Crucially, a USAE imposes
+                                                       neurons (Bau et al., 2017) or layer activations (Kim et al.,
+concept alignment during its end-to-end training, differing
+                                                            2018). Similar to our work, ‘open-world’ concept discovery
+from conventional post-hoc methods. We apply USAEs to
+                                                      methods do not assume the set of concepts is known a priori.
+three diverse vision models and make several interesting
+                                                     These methods pass data through the model and cluster the
+findings about shared concepts:  (i) We discover a broad
+                                                                activations to discover concepts and then apply a concept
+range of universal concepts, at low and high levels of ab-
+                                                       importance method on these discoveries (Ghorbani et al.,
+straction. (ii) We observe a strong correlation between con-
+                                                       2019; Zhang et al., 2021; Fel et al., 2023c; Graziani et al.,
+cept universality and importance. (iii) We provide quanti-
+                                                        2023; Vielhaben et al., 2023; Kowal et al., 2024a;b).
+tative and qualitative evidence that DinoV2 (Oquab et al.,
+2023) admits unique features compared to other considered    Sparse Autoencoders (SAEs) (Cunningham et al., 2023;
+vision models. (iv) Universal training admits shared repre-    Bricken et al., 2023; Rajamanoharan et al., 2024; Gao et al.,
+sentations not uncovered in model-specific SAE training.     2024; Menon et al., 2024) are a specific instance of dictio-
+                                                         nary learning (Rubinstein et al., 2010; Elad, 2010; Toˇsi´c &
+Contributions. Our main contributions are as follows. First,
+                                                             Frossard, 2011; Mairal et al., 2014; Dumitrescu & Irofti,
+we introduce USAEs: a framework that learns a shared, in-
+                                                        2018) that has regained attention (Chen et al., 2021; Tasissa
+terpretable concept space spanning multiple models, with
+                                                                     et al., 2023; Baccouche et al., 2012; Tariyal et al., 2016;
+focus on visual tasks. Second, we present a detailed anal-
+                                                   Papyan et al., 2017; Mahdizadehaghdam et al., 2019; Yu
+ysis contrasting universal concepts against model-specific
+                                                                       et al., 2023) for its ability to uncover interpretable concepts
+concepts, offering new insights into how large vision mod-
+                                                                in DNN activations. This resurgence stems from evidence
+
+
+                                                 2
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+                                                         converging toward a shared, Platonic representation of the
+                                                      world (Huh et al., 2024). Another line of research focuses
+                                                  on identifying universal features across models trained on
+                                                                  different tasks. Rosetta Neurons (Dravid et al., 2023) iden-
+                                                                          tify image regions with correlated activations across models,
+                                                        while Rosetta Concepts (Kowal et al., 2024a) extract con-
+                                                            cept vectors from video transformers by analyzing shared
+                                                           exemplars. These methods perform post-hoc mining of uni-
+                                                               versal concepts rather than learning a shared conceptual
+                                                            space. This reliance on retrospective discovery is compu-
+                                                                  tationally prohibitive for many models and prevents direct
+                                                        concept translation between architectures. A concurrent
+                                                           study (Lindsey et al., 2024) explores training SAEs (termed
+                                                           crosscoders) between different states of the same model
+Figure 2. USAE training process. In each forward pass during
+                                                             before and after fine-tuning. In contrast, our work discovers
+training, an encoder of model i is randomly selected to encode a
+                                                              universal concepts shared across distinct model architec-
+batch of that model’s activations, Z = Ψ(i)θ (A(i)). The concept                                                                 tures for vision tasks.
+space, Z, is then decoded to reconstruct every model’s activations,
+A(j), using their respective decoders, D(j). b                                                      3. Method
+that individual neurons are often polysemantic—i.e., they    Notations.  Let ∥·∥2 and ∥·∥F denote the ℓ2 and Frobenius
+activate for multiple, seemingly unrelated concepts (Nguyen    norms, respectively, and set [n] = {1, . . . , n}. We focus on
+et al., 2019; Elhage et al., 2022)—suggesting that deep net-    a broad representation learning paradigm, where a DNN,
+works encode information in superposition (Elhage et al.,   f  : X →A, maps data from X into a feature space, A ⊆
+2022). SAEs tackle this by learning a sparse (Hurley &    Rd. Given a dataset, X ⊆X of size n, these activations are
+Rickard, 2009; Eamaz et al., 2022) and overcomplete rep-    collated into a matrix A ∈Rn×d. Each row Ai (for i ∈[n])
+resentation, where the number of concepts exceeds the la-    corresponds to the feature vector of the i-th sample.
+tent dimensions of the activation space, encouraging dis-
+entanglement and interpretability. While SAEs and clus-   Background.  The main goal of a Sparse Autoencoder
+tering bear mathematical resemblance, SAEs benefit from   (SAE) is to find a sparse re-interpretation of the feature
+gradient-based optimization, enabling greater scalability     representations. Concretely, given a set of n inputs, X (e.g.,
+and efficiency in learning structured concepts. Though    images or text) and their encoding, A = f(X) ∈Rn×d, an
+widely applied in natural language processing (NLP) (Wat-   SAE learns an encoder Ψθ(·) that maps A to codes Z =
+tenberg & Vi´egas, 2024; Clarke et al., 2024; Chanin et al.,   Ψθ(A) ∈Rn×m, forming a sparse representation. This
+2024; Tamkin et al., 2023), SAEs have also been used in    sparse representation must still allow faithful reconstruction
+vision (Fel et al., 2023b; Surkov et al., 2024; Bhalla et al.,    of A through a learned dictionary (decoder) D ∈Rm×d,
+2024a). Early work compared SAEs to clustering and ana-     i.e., ZD must be close to A.  If m > d, we say D is
+lyzed early layers of Inception v1 (Mordvintsev et al., 2015;    overcomplete.  In this work, we specifically consider an
+Gorton, 2024), revealing hypothesized but hidden features.    (overcomplete) TopK SAE (Gao et al., 2024), defined as
+More recently, SAEs have been leveraged to construct text-
+based concept bottleneck models (Koh et al., 2020) from   Z = Ψθ(A) = TopK Wenc (A −bpre)  , Aˆ = ZD,  (1)
+CLIP representations (Radford et al., 2021; Rao et al., 2024;
+Parekh et al., 2024; Bhalla et al., 2024b), showcasing their    where Wenc ∈Rm×d and bpre ∈Rd are learnable weights.
+versatility across modalities. Unlike prior work that apply   The TopK(·) operator enforces ∥Zi∥0 ≤K for all i ∈[m].
+SAEs independently to models, here we consider a joint ap-   The final training loss is given by the Frobenius norm of the
+plication of SAEs fit simultaneously across diverse models.    reconstruction error:
+
+Feature Universality studies the shared information across     LSAE = ∥f(X) −Ψθ f(X) D∥F = ∥A −ZD∥F , (2)
+different DNNs. One approach, Representational Align-
+ment, quantifies the mutual information between different    with the K-sparsity constraint applied to the rows of Z.
+sets of representations—whether across models or between
+                                                                    3.1. Universal Sparse Autoencoders (USAEs)biological and artificial systems (Kriegeskorte et al., 2008;
+Sucholutsky et al., 2023).  Typically, these methods rely    Contrasting standard SAEs, which reinterpret the internal
+on paired data (e.g., text-image pairs) to compare encod-    representations of a single model, universal sparse autoen-
+ings across modalities. Recent work suggests that founda-    coders (USAEs) extend this notion across M different mod-
+tion models, regardless of their training modality, may be     els, each with its own feature dimension, di (see Fig. 2).
+
+                                                3
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+Concretely, for model i ∈[M], let A(i) ∈Rn×di denote
+the matrix of activations for n samples. The key insight of       def train_usae(Ψθ, D, A, T, Optimizers):
+                                                               M = len(Ψθ)USAEs is to learn a shared sparse code, Z ∈Rn×m, which
+                                                               for t in range(T):
+allows every model to be reconstructed from the same sparse                                                                   i = random(M)
+embedding. Specifically, each activation from model i in                                          Z = Ψ(i)θ (A(i))
+A(i) is encoded via a model-specific encoder Ψ(i)θ  , as             L = 0.0
+                                                                   for j in range(M):
+                                                                           = Z @ D(j)   Z = Ψ(i)θ (A(i)) = TopK W enc(A(i)(i)     −b(i)pre)  .   (3)                   A(j)b
+                                                  L += (A(j) - A(j)).norm(p=’fro’)                                                                          b
+Crucially, once encoded into Z, each row of any model              L.backward()
+j ∈[M] can be reconstructed by a model-specific dictionary,              Optimizers[i].step()
+D(j) ∈Rdj×m, as                                              return Ψθ, D
+
+                  A(j) = ZD(j).                   (4)
+                b                                        Figure 3. Training Universal Sparse Autoencoder. During each
+By   jointly   learning    all   encoder-decoder   pairs,     training iteration, LUniversal is the aggregated error computed from
+                                                              decoding each activation A(j). We then take an optimizer step for
+{(Ψ(i)θ  , D(i))}Mi=1,  the USAE enforces a unified con-                     b                                                           randomly selected encoder Ψ(i)θ  and associated dictionary D(i).cept space, Z, that aligns the internal representations of all
+M models. This shared code not only promotes consistency
+and interpretability across model architectures, but also
+ensures each model’s features can be faithfully recovered
+from a common set of sparse ‘concepts’.                        3.3. Application: Coordinated Activation Maximization
+
+3.2. Training USAEs                      A common technique for interpreting individual neurons
+                                                            or latent dimensions in deep networks is Activation Maxi-
+Recall that X ⊆X is our dataset of size n, mapped into
+                                                           mization (AM) (Olah et al., 2017; Tsipras et al., 2019; San-their respective feature space using DNNs f (1), . . . , f (M).
+                                                                 turkar et al., 2019; Engstrom et al., 2019; Ghiasi et al., 2021;
+A naive approach to train our respective encoder and de-
+                                                        2022; Fel et al., 2023a; Hamblin et al., 2024). AM involves
+coder would simultaneously encode and decode the features
+                                                            synthesizing an input that maximally activates a specific
+of all M models, which quickly grows expensive in memory
+                                                   component of a model—such as a neuron, channel, or con-
+and computation. Conversely, randomly sampling a pair of
+                                                            cept vector (Williams, 1986; Mahendran & Vedaldi, 2015;
+models to encode and decode results in slow convergence.
+                                          Kim et al., 2018; Fel et al., 2023c). However, in the case
+To balance these concerns, we adopt an intermediate strat-
+                                                             of a USAE, the learned latent space is explicitly structured
+egy (pseudocode detailed in Figure 3) that updates a single
+                                                                to capture shared concepts across multiple models. This
+encoder and decoder at each iteration with a reconstruction
+                                                           shared space enables a novel extension of AM: Coordinated
+loss computed through all decoders. Concretely, at each
+                                                             Activation Maximization, where a common concept index,
+mini-batch iteration, a single model i ∈[M] is selected at
+                                                               k, is simultaneously maximized across all aligned models.random, and a batch of features, A(i) ∈Rn×di, is sampled
+and encoded into the shared code space, Z = Ψ(i)θ (A(i)).   Given M models, our objective is to optimize one input per
+This code space, Z, is then used to reconstruct the feature    model, x(1)⋆, . . . , x(M)⋆    , ensuring that all inputs maximally
+representation A(j) of every model j ∈[M] via its decoder:    activate the same concept dimension k. This approach en-
+A(j) = ZD(j), where D(j) is the model-j decoder. All    ables the visualization of how a single concept manifests b
+reconstructions are aggregated to form the total loss:          across different models. By comparing these optimized
+           M                                           inputs, we can identify both consistent and divergent repre-
+         LUniversal = X ∥A(j)   A(j)∥F                 (5)    sentations of the same underlying concept. Let x(i) denote             −b                 j=1                                       the input to model i, and let f (i)(x(i)) ∈Rdi represent its
+           M                                            internal activations. Each model is associated with a USAE
+                                                                Ψ(i)θ  , which maps activations to the shared concept         = X ∥A(j) −Ψθ(A(i))D(j)∥F .     (6)    encoder
+                 j=1                                       space. The activation of concept k for model i given input
+                                                                 x(i) is defined as
+Using this universal loss, backpropagation updates the cho-                Z(i)k (x) = h Ψ(i)θ  f (i)(x) i  ,           (7)
+                                                                                                    ksen encoder Ψ(i)θ  and decoder D(i). This method promotes
+concept alignment, ensures an equal number of updates be-                                                   where k indexes the universal concept dimension in the
+tween encoders and decoders, and strikes a practical balance                                           USAE. The goal is to independently optimize each x(i)
+between training speed and memory usage.                                                        such that it maximizes the activation of the same concept k
+
+
+                                                4
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+         Concept 3152 - Yellow          Concept 4226 - Bird Background          Concept 5611 - Dog Face            Concept 972 - Animal Jaw
+
+  Input
+
+  Dino
+
+  SigLIP
+
+
+ ViT
+
+
+          Concept 4235 - Blue             Concept 3859 - Thin Objects            Concept 2824 - Bolts          Concept 1935 - Animal Group Faces
+
+  Input
+
+  Dino
+
+  SigLIP
+
+
+ ViT
+
+
+Figure 4. Qualitative results of universal concepts. We discover and visualize heatmaps of universal concepts across a broad range of
+visual abstractions, where bright green denotes a stronger activation of a given concept. We observe colors, basic shapes, foreground-
+background, parts, objects and their groupings across all considered models.
+
+across all M models:                                        cation of USAEs to coordinated activation maximization
+                                                              (Sec. 4.5).
+          x(i)⋆ = arg max Z(i)k  (x(i)) −λR(x(i)),       (8)
+              x∈X
+
+where R(x) is a regularizer that promotes natural and in-   Implementation Details. We train a USAE on the fi-
+terpretable inputs (e.g., total variation, ℓ2 penalty, or data    nal layer activations of three popular vision models: Di-
+priors), and λ controls its strength.  In all experiments,   noV2 (Oquab et al., 2023; Darcet et al., 2023), SigLIP (Zhai
+we follow the optimization and regularization strategy of     et al., 2023), and ViT (Dosovitskiy et al., 2020) (trained
+Maco (Fel et al., 2023a), which optimizes the input phase    on ImageNet (Deng et al., 2009)). These models, sourced
+while preserving its magnitude. Once the optimized inputs    from the timm library (Wightman, 2019), were selected due
+x(i)⋆  are obtained for each model, they reveal the specific     to their diverse training paradigms—image and patch-level
+structures or features (e.g., model- or task-specific biases)    discriminative learning (DinoV2), image-text contrastive
+that model i associates with this universal concept.            learning (SigLIP), and supervised classification (ViT). For
+                                                                            all experiments, we train the USAE on the ImageNet train-
+4. Experimental Results                                                          ing set, while the validation set is reserved for qualitative
+This section is split into six parts. We first provide ex-    visualizations and quantitative evaluations. Our USAE is
+perimental implementation details. Then, we qualitatively    trained on the final layer representations of each vision
+analyze universal concepts discovered by USAEs (Sec. 4.1).   model, as previous work showed final-layer features facil-
+Next, we provide a quantitative analysis of USAEs through     itate improved concept extraction and yield accurate esti-
+the validation of activation reconstruction (Sec. 4.2), measur-   mates of feature importance (Fel et al., 2023b). We base
+ing the universality and importance of concepts (Secs. 4.3),    our SAE off of the TopK Sparse Autoencoder (SAE) (Gao
+and investigating the consistency between concepts in US-     et al., 2024) and for all experiments, use a dictionary of size
+AEs and individually trained SAE counterparts (Sec. 4.4).    6144. We train all USAEs on a single Nvidia RTX 6000
+Finally, we provide a finer-grained analysis via the appli-   GPU, with training completing in approximately three days
+                                                               (see Appendix A.1 for more implementation details).
+
+                                                5
+
+                       Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+                 Decoder and Activations j used for reconstruction                                  Distribution of Firing Entropy                    Co-firing Proportions for
+                                                                                                                                                       Top Energy-Ranked Concepts                               SigLIP    DinoV2      ViT                                                                                        1500  (a)      Maximum Entropy                                                                                                                                                                                                                                             SigLIP                                                                                                                                                                                     0.8   (b)                                                                                         1.0      Z
+          to                                                                                                                                                                              DinoV2
+                                                                                                                                                                                     0.6                                         ViT                                                                                                                                                                                                                                                                 Concepts                                                                                        1000
+                                                                                                                                                                              Mean                                                                of                      SigLIP    0.61      0.36      0.25            0.8                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            Proportion
+                                                                                                                                                                                     0.4
+                                                                                         500                                    Encoded                                                                                                                                                                                     0.2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    Co-firing                                                                                         0.6                                                    Number                                                                                                                                                                                                                                                                                                                                                                          SigLIP:DinoV2:ViT:Overall:0.3260.3440.3120.266                                                                                                                                                                                     0.0                                                                                           0      i DinoV2    0.31      0.77      0.31                                                                                                                0.0    0.2    0.4    0.6    0.8    1.0         0     200    400    600    800    1000
+                                                                                         0.4                                      Normalized Firing Entropy (Hk)              Top 1000 Concepts by Energy (Proportion Sorted)                                                        Activations
+                        ViT    0.30      0.45      0.59            0.2
+                         Model                                                                                         0.0
+Figure 5. Cross model activation reconstruction. Each entry
+(i, j) represents the average R2 score when activations from model
+A(i) are encoded into the shared code space, Z, then decoded via
+D(j) to reconstruct A(j). Positive off-diagonal R2 scores indicate               b
+the presence of shared features across models captured by USAEs.
+
+                                                                 Figure 6. Quantitative analysis of universality and importance
+4.1. Universal Concept Visualizations
+                                                                     of USAE concepts via co-firing rates. (a) Histogram of firing en-
+We qualitatively validate the most important universal con-    tropy across all k concepts. We observe a bimodal distribution over
+cepts found by USAEs. We determine concept impor-     firing entropy with peaks at Hk = 1 and Hk = 0.6, demonstrating
+tance by measuring its relative energy towards reconstruc-    a group of concepts that fire uniformly across models and a group
+tion (Gillis, 2020), where the energy of a concept k is de-     that preferentially activates for some models. (b) Proportion of con-
+fined as                                                          cept co-fires for the top 1000 energetic concepts per model. The
+                                                                                          first 200 concepts co-fire between 60 −80% of the time suggest-           Energy(k) = ∥Ex[Zk(x)]Dk∥22.          (9)
+                                                                  ing high universality. (c) Relationship between concept co-firing
+This measures how much each concept contributes to re-    frequency and concept energy. We show all concepts (left) and
+constructing the original features – formally, the squared ℓ2     only frequently co-firing concepts (≥1000 co-fires) (right). The
+norm of the average activation of a concept multiplied by its     correlation strengthens (r = 0.63 vs r = 0.89) when focusing on
+dictionary element. Higher energy concepts have a greater     high-frequency concepts, suggesting a strong correlation between
+                                                  how energetic a concept is and its universality.impact on the reconstruction.
+                                                                    4.2. Validation of Cross-Model ReconstructionFigure 4 presents eight representative concepts selected
+from the 100 most important USAE concepts. These con-  A viable universal space of concepts should enable the re-
+cepts span a diverse range of ImageNet categories, demon-    construction of activations from any model. To quantify
+strating the ability of USAEs to capture meaningful features    the reconstruction performance, we use the coefficient of
+across multiple levels of abstraction and complexity (Olah    determination, or R2 score (Wright, 1921), which measures
+et al., 2017; Fel et al., 2024). At lower levels, the USAE    the proportion of variance in the original activations that
+extracts fundamental color concepts, such as ‘yellow’ and     is captured by the reconstructed activations, relative to the
+‘blue’, activating over broad spatial regions across multiple   mean activation baseline, A.¯ The R2 score is defined as
+classes. Notably, the blue bottle caps example highlights
+a precisely captured checkerboard pattern, demonstrating                                                    R2 = 1 −∥A −bA∥2F /∥A −¯A∥2F ,       (10)
+spatial precision. At intermediate levels, the USAE uncov-
+ers structural relationships consistent across models, such                                                   where ||A −bA||2F represents the residual sum of squares
+                                                                 (the reconstruction error), and ||A −¯A||2F is the total sumas foreground-background contrasts (e.g., birds against the
+                                                            of squares (the variance of the original activations relativesky) and thin, wiry objects, independent of model archi-
+                                                                to their mean). A higher R2 indicates better reconstruc-tecture. At higher levels, it identifies object-part concepts,
+                                                                 tion quality, with a score of one corresponding to a perfectlike ‘dog face’, excluding eye regions, and ‘bolts’, which
+                                                                reconstruction.activate across materials like metal and rubber. Finally, the
+USAE reveals fine-grained, compositional concepts such as    Figure 5 shows the R2 scores as a confusion matrix across
+‘mouth-open animal jaws’ and ‘faces of animals in a group’,     all three models. As expected, self-reconstruction along the
+which generalize across ImageNet classes and persist even    diagonal achieves the highest explained variance, confirm-
+in ViT, despite its lack of explicit structured supervision.      ing the USAE’s effectiveness when encoding and decoding
+                                                            within the same model. More notably, positive off-diagonalOverall, these findings show that USAEs discover robust,
+                                            R2 scores indicate successful cross-model reconstruction,generalizable concepts that persist across different archi-
+                                                            suggesting the USAE captures shared, likely universal, fea-tectures, training tasks, and datasets. This highlights their
+                                                                     tures. DinoV2 exhibits the highest self-reconstruction per-ability to reveal invariant, semantically meaningful repre-
+                                                        formance, aligning with individual SAE results where itssentations that transcend the specifics of any single model.
+
+                                                 6
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+R2 score averages 0.8, compared to 0.7 for SigLIP and ViT.             Concept Matches Across                                                                                    Cosine Similarity Thresholds
+This suggests DinoV2 features are sparser and more decom-          1.0                       SigLIP
+                                                                                                                DinoV2posable, a trend further supported in Secs. 4.3 and 4.5.                                   Threshold0.8                                                                                                                                   ViT         Model   AUC % Z > 0.5                                                        CS
+                            >                       Rand. Baseline
+4.3. Measuring Concept Universality and Importance             0.6                         SigLIP    0.30      0.23
+                                                                              DinoV2    0.36      0.26                                                                                                       0.4Having established the efficacy of cross-model reconstruc-                                                                                 ViT       0.41      0.38                                                                                                                                                                                                                                Concepts
+tion, we now assess concept universality using firing en-    of0.2                            Baseline   0.13      0.00
+tropy     and co-firing                   metrics.                 We                                 further examine                                                                                                       0.0                                               the relation-              Fraction                                                                                                           0.0    0.2    0.4    0.6    0.8    1.0              universality                           importanceship between                      and                                            in reconstructing
+                                                                                               Cosine Similarity Threshold
+ground truth activations.
+                                                                 Figure 7. Concept consistency between independent SAEs and
+Let τ be a threshold value and V be the ImageNet validation    Universal SAEs. (left) Our universal training objective discov-
+set of patches. Given data points x ∈V, let Z(i)(x) =     ers concepts that have overlap (i.e., cosine similarity) with those
+Ψ(i)θ (f (i)(x)) denote the sparse code from model i ∈[M].    discoveredably more overlap,with independentsuggestingtraining.its simplerSpecifically,architectureViTandhastrainingnotice-
+We define a concept firing for dimension k when Z(i)k (x) >     objective may yield activations that naturally encode fundamental
+τ. A co-fire occurs when a concept fires simultaneously    and universal visual concepts. (right) We consider a cosine simi-
+across all models for the same input. Formally, for concept      larity > 0.5 as a match between concepts in the SAE and USAE
+dimension k, the set of co-fires is defined as                    learned dictionaries. Across each vision model used in training,
+                                                       23 −37% of the highly universal concepts discovered by our ap-
+          Ck = {x ∈V : min Z(i)k (x) > τ}.       (11)    proach exist in independently trained SAEs.
+                          i∈[M]
+Similarly, let F(i)k = {x ∈V  : Z(i)k (x) > τ} denote the   many concepts fire uniformly across models, they do not
+set of “fires” for model i and concept k. We are now ready    reveal how frequently they co-fire on the same tokens. For
+to introduce our two metrics (i) Firing Entropy (FE) and (ii)    each model i and concept k, we compute the proportion of
+Co-Fire Proportion (CFP).                                         total fires that are also co-fires:
+Firing Entropy (FE) measures, for each concept k, the
+                                                                     CFP(i)k = |Ck|/|F(i)k  |.              (14)normalized entropy across models, as
+
+                M
+                    1                             High co-fire proportions indicate concepts that are more
+         FEk = −        X p(i)k  log p(i)k  ,        (12)    universal, i.e., when one model detects the concept, others                      log M
+                            i=1
+                                                           tend to as well.
+where              M
+                                                         Figure 6 (b) shows the CFP for the top 1000 concepts
+                   p(i)k = |F(i)k  |/X |F(j)k   |.            (13)                                                          per model. The first ∼100 concepts exhibit high co-firing
+                           j=1
+                                           (> 0.5), activating together 50–80% of the time, indicating
+The normalization ensures FEk ∈[0, 1], with FE = 1 indi-                                                        a core set of consistently recognized concepts across net-
+cating a shared concept with uniform firing across models                                                       works. The gradual decline in CFP suggests a spectrum
+and low entropy indicating that a concept has a model bias                                                            of universality, from widely shared to model-specific. For
+and fires for a single architecture or subset.                                                        our chosen models, we again notice a pattern distinguish-
+Figure 6 (a) shows a histogram of firing entropies across    ing DinoV2, which has a lower co-firing proportion (0.266)
+all concept dimensions K. Fully universal concepts should    compared to SigLIP (0.344) and ViT (0.326), suggesting
+have a maximum entropy of one, indicating uniform firing    the latter two share more concepts. This may stem from
+across models. Our results exhibit a bimodal distribution,    DinoV2’s architecture and distillation-based training, which
+with over 1000 concepts at peak entropy, confirming the    enhance its adaptability to diverse vision tasks (Amir et al.,
+USAE learns a strongly universal concept space. A second    2022). These findings also hint at a correlation between
+group shows moderate entropy, indicating concepts that fa-    co-firing and concept importance, raising the question: How
+vor two models but not all three. Few concepts fall in the    important are these highly co-firing features?
+low-entropy range (0.0–0.2), suggesting most are shared                                                  To answer this, we plot the co-fire frequency of all concepts
+rather than model-specific. Appendix A.2.1 further exam-                                                            as well as their energy-based importance in Fig. 6 (c). We
+ines these low-entropy concepts, revealing DinoV2’s unique                                                            see a moderate positive correlation r = 0.63, slope = 0.23;
+encoding of geometric features as well as SigLIP’s encoding                                                       however, zooming into concepts with > 1000 co-fires,
+of textual features.                                                  shows a much stronger correlation. Indeed, past a certain
+Co-Fire Proportion (CFP) quantifies how often concepts    threshold, co-firing frequency becomes highly predictable
+fire together for the same input. While previous results show    of concept importance. This suggests that the most impor-
+                                                           tant concept are also highly universal, firing consistently
+
+
+                                                7
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+
+
+
+
+Figure 8. Coordinated Activation Maximization. We show results for the three model USAE along with dataset exemplars, where bright
+green denotes stronger activation of the concept. We visualize the maximally activating input for a broad range of concepts, including
+basic shape compositions, textures, and various objects.
+
+across models.                                   SAEs have no such selection pressure, learning to represent
+                                                      any concept that helps reconstruction, including architecture
+4.4. Concept Consistency Between USAEs and SAEs                                                             or objective specific concepts that are not universal.
+How many concepts discovered under our universal training
+                                                                    4.5. Coordinated Activation Maximization
+regime are present in an independently trained SAE for a
+single model? Further, what percentage of highly universal    Figure 8 shows a visual comparison of several universal
+concepts appear in these same independently trained SAEs?    concepts and their corresponding coordinated activation
+To assess the alignment between independently-trained and    maximization inputs. Our method produces interpretable vi-
+universal SAEs, we analyze the similarity of their learned     sualizations for a given USAE dimension across all models
+conceptual spaces. We quantify concept overlap by com-    for a broad range of visual concepts. We show examples
+puting pairwise cosine similarities between decoder vectors    of all models encoding low-level visual primitives, e.g.,
+and use the Hungarian algorithm (Kuhn, 1955) to optimally    ‘curves’ and ‘crosses’. Other basic entities are also shown,
+align concepts, measuring consistency across models.          like ‘brown grass’ texture and ‘round objects’. Finally, we
+                                                               visualize higher-level concepts corresponding to ‘objects
+Figure 7 presents concept consistency distributions across                                                   from above’ and ‘keypads’. In all cases, our coordinated
+models. For a baseline to compare against, we sample con-                                                                activation maximization method produces plausible visual
+cept vectors from normal distributions, where the mean and                                                  phenomenon that can be used to identify differences between
+variance are those of each independent model’s dictionary.   how each model encodes the same concept.
+We observe that ViT has the strongest concept overlap with
+38% of its concepts having a cosine similarity > 0.5 with    For example, we note an interesting difference between
+its independent counterpart. This suggests ViT’s conceptual   DinoV2 and the other models: low-mid level concepts (i.e.,
+representation under the independent SAE objective is most     left two columns) appear at a much larger scale than the
+well preserved under universal training. USAEs achieve far    other models. Further, as shown in Fig. 1, DinoV2 exhibits
+better performance than the baseline (Area Under the Curve    stronger activation for the ‘curves’ concept, particularly for
+(AUC)=0.13) across models, suggesting that universal train-    larger curves, compared to the other models. Additionally,
+ing preserves meaningful concept alignments rather than    while ‘brown grass’ activates on grass in our heatmaps, some
+learn entirely new representations. On the other hand the rel-    models’ activation maximizations include birds, suggesting
+atively low proportion of overlap (23% and 26% for SigLIP    animals also influence the concept’s activation.
+and DinoV2, respectively) for concepts indicates that uni-    5. Conclusion
+versal training discovers concepts that may not emerge
+                                                              In this work, we introduced Universal Sparse Autoencodersin independent training.  Importantly, this distribution
+                                                    (USAEs), a framework for learning a unified concept spaceremains when looking at the top 1,000 co-firing concepts
+                                                                  that faithfully reconstructs and interprets activations from(see Sec. A.3.1). Universal training naturally selects for
+                                                            multiple deep vision models at once. Our experiments re-concepts that are well-represented across all models, since
+                                                          vealed several important findings: (i) qualitatively, we dis-these will better minimize the total reconstruction loss, bias-
+                                                         cover diverse concepts, from low-level primitives like col-ing towards discovering fundamental visual concepts that
+                                                                    ors, shapes and textures, to compositional, semantic, andall models have learned to represent. Independently trained
+
+
+                                                8
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+abstract concepts like groupings, object parts, and faces, (ii)      Henighan, T., and Olah, C. Towards monosemanticity:
+many concepts turn out to be both universal (firing consis-     Decomposing language models with dictionary learning.
+tently across different architectures and training objectives)      Transformer Circuits Thread, 2023. https://transformer-
+and highly important (responsible for a large proportion of       circuits.pub/2023/monosemantic-features/index.html.
+each model’s reconstruction), (iii) certain models, such as
+DinoV2, encode unique features even as they share much    Buolamwini, J. and Gebru, T. Gender shades: Intersectional
+of their conceptual basis with others, and (iv) while univer-      accuracy disparities in commercial gender classification.
+sal training recovers a significant fraction of the concepts       In Conference on Fairness, Accountability and Trans-
+learned by independent single-model SAEs, it also uncovers       parency, 2018.
+new shared representations that do not appear to emerge in
+                                                         Chanin, D., Wilken-Smith, J., Dulka, T., Bhatnagar, H., andmodel-specific training. Finally, we demonstrated a novel
+                                                     Bloom, J. A is for absorption: Studying feature splittingapplication of USAEs—coordinated activation maximiza-
+                                                      and absorption in sparse autoencoders. arXiv preprinttion—that enables simultaneous visualization of a universal
+                                                           arXiv:2409.14507, 2024.concept across multiple networks. Altogether, our USAE
+framework offers a practical and powerful tool for multi-
+                                                     Chen, J., Mao, H., Wang, Z., and Zhang, X. Low-rank
+model interpretability, shedding light on the commonalities
+                                                                 representation with adaptive dictionary learning for sub-
+and distinctions that arise when different architectures, tasks,
+                                                            space clustering. Knowledge-Based Systems, 223:107053,
+and datasets converge on shared high-level abstractions.
+                                                          2021.
+
+References                                               Clarke,   M.,   Bhatnagar,   H.,   and  Bloom,    J.
+                                                           Compositionality  and   ambiguity:     Latent   co-
+Amir, S., Gandelsman, Y., Bagon, S., and Dekel, T. Deep
+                                                           occurrence  and   interpretable   subspaces,   2024.
+  ViT Features as Dense Visual Descriptors. Proceedings of
+                                                          https://www.lesswrong.com/posts/WNoqEivcCSg8gJe5h/
+   the European Conference on Computer Vision Workshops
+                                                              compositionality-and-ambiguity-latent-co-occurrence-
+    , 2022.
+                                                              and.
+
+Baccouche, M., Mamalet, F., Wolf, C., Garcia, C., and
+                                                            Colin, J., Fel, T., Cad`ene, R., and Serre, T. What I cannot
+  Baskurt, A. Spatio-temporal convolutional sparse auto-
+                                                                    predict, I do not understand: A human-centered evalua-
+  encoder for sequence classification. In Proceedings of
+                                                                    tion framework for explainability methods. In Advances
+  the British Machine Vision Conference, 2012.
+                                                                    in Neural Information Processing Systems, 2021.
+Bach, S., Binder, A., Montavon, G., Klauschen, F., M¨uller,
+                                                    Commision, E. Laying down harmonised rules on artificial  K.-R., and Samek, W. On pixel-wise explanations for
+                                                                    intelligence (artificial intelligence act) and amending cer-  non-linear classifier decisions by layer-wise relevance
+                                                                      tain union legislative acts. European Commision, 2021.  propagation. PloS one, 10(7), 2015.
+
+                                                  Cunningham, H., Ewart, A., Riggs, L., Huben, R., andBau, D., Zhou, B., Khosla, A., Oliva, A., and Torralba, A.
+                                                            Sharkey, L.   Sparse autoencoders find highly inter-  Network dissection: Quantifying interpretability of deep
+                                                                pretable features in language models.  arXiv preprint  visual representations. In IEEE Conference on Computer
+                                                           arXiv:2309.08600, 2023.  Vision and Pattern Recognition, 2017.
+
+Bhalla, U., Oesterling, A., Srinivas, S., Calmon, F. P., and    Darcet, T., Oquab, M., Mairal,  J., and Bojanowski, P.
+  Lakkaraju, H. Interpreting clip with sparse linear concept      Vision transformers need registers.   arXiv preprint
+  embeddings (splice). arXiv preprint arXiv:2402.10376,      arXiv:2309.16588, 2023.
+  2024a.
+                                                     Deng, J., Dong, W., Socher, R., Li, L.-J., Li, K., and Fei-Fei,
+Bhalla, U., Srinivas, S., Ghandeharioun, A., and Lakkaraju,      L. ImageNet: A large-scale hierarchical image database.
+  H. Towards unifying interpretability and control: Evalua-      In Proceedings of the IEEE Conference on Computer
+   tion via intervention. arXiv preprint arXiv:2411.04430,      Vision and Pattern Recognition, 2009.
+  2024b.
+                                                           Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn,
+Bricken, T., Templeton, A., Batson, J., Chen, B., Jermyn, A.,       D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M.,
+  Conerly, T., Turner, N., Anil, C., Denison, C., Askell, A.,      Heigold, G., Gelly, S., et al. An image is worth 16x16
+  Lasenby, R., Wu, Y., Kravec, S., Schiefer, N., Maxwell,      words: Transformers for image recognition at scale. In
+   T., Joseph, N., Hatfield-Dodds, Z., Tamkin, A., Nguyen,      International Conference on Learning Representations,
+  K., McLean, B., Burke, J. E., Hume, T., Carter, S.,      2020.
+
+                                                9
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+Dravid, A., Gandelsman, Y., Efros, A. A., and Shocher, A.      In Proceedings of the IEEE International Conference on
+  Rosetta neurons: Mining the common units in a model      Computer Vision, 2019.
+  zoo. In Proceedings of the IEEE/CVF International Con-
+  ference on Computer Vision, 2023.                     Gao, L., la Tour, T. D., Tillman, H., Goh, G., Troll, R.,
+                                                          Radford, A., Sutskever, I., Leike, J., and Wu, J. Scal-
+Dumitrescu, B. and Irofti, P. Dictionary learning algorithms      ing and evaluating sparse autoencoders. arXiv preprint
+  and applications. Springer, 2018.                           arXiv:2406.04093, 2024.
+
+Eamaz, A., Yeganegi, F., and Soltanalian, M. On the build-   Genone, J. and Lombrozo, T. Concept possession, experi-
+  ing blocks of sparsity measures. IEEE Signal Processing      mental semantics, and hybrid theories of reference. Philo-
+   Letters, 29:2667–2671, 2022.                                sophical Psychology, 25(5):717–742, 2012.
+
+Elad, M.  Sparse and redundant representations: From                                                             Ghiasi, A., Kazemi, H., Reich, S., Zhu, C., Goldblum, M.,
+  theory to applications in signal and image processing.                                                      and Goldstein, T. Plug-in inversion: Model-agnostic in-
+  Springer Science & Business Media, 2010.                                                               version for vision with data augmentations. Proceedings
+                                                                  of the International Conference on Machine Learning,Elhage, N., Hume, T., Olsson, C., Schiefer, N., Henighan,
+                                                          2021.   T., Kravec, S., Hatfield-Dodds, Z., Lasenby, R., Drain,
+  D., Chen, C., Grosse, R., McCandlish, S., Kaplan, J.,
+                                                             Ghiasi, A., Kazemi, H., Borgnia, E., Reich, S., Shu, M.,
+  Amodei, D., Wattenberg, M., and Olah, C. Toy models of
+                                                        Goldblum, M., Wilson, A. G., and Goldstein, T. What do
+  superposition. arXiv preprint arXiv:2209.10652, 2022.
+                                                               vision transformers learn? A visual exploration. arXiv
+Engstrom,  L.,  Ilyas,  A.,  Santurkar,  S.,  Tsipras,  D.,       preprint arXiv:2212.06727, 2022.
+  Tran, B., and Madry, A.  Adversarial robustness as
+                                                        Ghorbani, A., Wexler, J., Zou, J. Y., and Kim, B. Towards
+  a prior for learned representations.   arXiv preprint
+                                                           automatic concept-based explanations. In Advances in
+  arXiv:1906.00945, 2019.
+                                                         Neural Information Processing Systems, 2019.
+Fel, T., Cadene, R., Chalvidal, M., Cord, M., Vigouroux,
+                                                                        Gillis, N. Nonnegative matrix factorization. SIAM, 2020.  D., and Serre, T. Look at the variance! Efficient black-
+  box explanations with sobol-based sensitivity analysis.
+                                                        Gorton, L. The missing curve detectors of inceptionv1:
+  In Advances in Neural Information Processing Systems,
+                                                         Applying sparse autoencoders to inceptionv1 early vision.
+  2021.
+                                                           arXiv preprint arXiv:2406.03662, 2024.
+Fel, T., Boissin, T., Boutin, V., Picard, A., Novello, P., Colin,
+                                                               Graziani, M., Nguyen, A.-p., O’Mahony, L., M¨uller, H., and
+   J., Linsley, D., Rousseau, T., Cad`ene, R., Goetschalckx,
+                                                         Andrearczyk, V. Concept discovery and dataset explo-
+   L., et al. Unlocking feature visualization for deeper net-
+                                                                   ration with singular value decomposition. In Workshop-
+  works with magnitude constrained optimization. In Ad-
+                                                            Proceedings of the International Conference on Learning
+  vances in Neural Information Processing Systems, 2023a.
+                                                               Representations, 2023.
+Fel, T., Boutin, V., Moayeri, M., Cad`ene, R., Bethune, L.,
+                                                     Hamblin, C., Fel, T., Saha, S., Konkle, T., and Alvarez, G.  Chalvidal, M., and Serre, T. A holistic approach to unify-
+                                                            Feature accentuation: Revealing’what’features respond  ing automatic concept extraction and concept importance
+                                                                  to in natural images. arXiv preprint arXiv:2402.10039,  estimation. Advances in Neural Information Processing
+                                                          2024.  Systems, 2023b.
+Fel, T., Picard, A., Bethune, L., Boissin, T., Vigouroux, D.,    Hansson, S. O., Belin, M.-˚A., and Lundgren, B. Self-driving
+  Colin, J., Cad`ene, R., and Serre, T. CRAFT: Concept      vehicles-An ethical overview. Philosophy & Technology,
+  recursive activation factorization for explainability. In       pp. 1–26, 2021.
+  Proceedings of the IEEE Conference on Computer Vision
+                                                        Hase, P. and Bansal, M. Evaluating explainable AI: Which
+  and Pattern Recognition, 2023c.
+                                                               algorithmic explanations help users predict model behav-
+Fel, T., Bethune, L., Lampinen, A. K., Serre, T., and Her-       ior? Proceedings of the Annual Meeting of the Associa-
+  mann, K. Understanding visual feature reliance through       tion for Computational Linguistics, 2020.
+  the lens of complexity. Advances in Neural Information
+                                                       Henderson, P., Li, X., Jurafsky, D., Hashimoto, T., Lemley,  Processing Systems, 2024.
+                                             M. A., and Liang, P. Foundation models and fair use.
+Fong, R., Patrick, M., and Vedaldi, A. Understanding deep      Journal of Machine Learning Research, 24(400):1–79,
+  networks via extremal perturbations and smooth masks.      2023.
+
+                                                10
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+House, T. W. President biden issues executive order on safe,   Kuhn, H. W. The hungarian method for the assignment
+   secure, and trustworthy artificial intelligence. The White      problem. Naval Research Logistics Quarterly, 2:83–97,
+  House, 2023.                                            1955. doi: 10.1002/nav.3800020109.
+
+Hsieh, C.-Y., Yeh, C.-K., Liu, X., Ravikumar, P., Kim, S.,    Lindsey, J., Templeton, A., Marcus, J., Conerly, T., Bat-
+  Kumar, S., and Hsieh, C.-J. Evaluations and methods for       son, J., and Olah, C. Sparse crosscoders for cross-layer
+  explanation through robustness analysis. In Proceedings       features and model diffing. 2024.  https://transformer-
+   of the International Conference on Learning Representa-      circuits.pub/2024/crosscoders/index.html.
+   tions, 2021.
+                                                  Mahdizadehaghdam, S., Panahi, A., Krim, H., and Dai,
+Huh, M., Cheung, B., Wang,  T., and Isola,  P.  The      L. Deep dictionary learning: A parametric network ap-
+  platonic representation hypothesis.   arXiv preprint       proach. IEEE Transactions on Image Processing, 28(10):
+  arXiv:2405.07987, 2024.                                4790–4802, 2019.
+
+                                                     Mahendran, A. and Vedaldi, A. Understanding deep imageHurley, N. and Rickard, S. Comparing measures of sparsity.
+                                                                representations by inverting them. In IEEE Conference  IEEE Transactions on Information Theory, 55(10):4723–
+                                                     on Computer Vision and Pattern Recognition, 2015.  4741, 2009.
+
+                                                            Mairal, J., Bach, F., and Ponce, J.  Sparse modeling forIoffe, S. and Szegedy, C. Batch normalization: accelerat-
+                                                     image and vision processing. Foundations and Trends®  ing deep network training by reducing internal covariate
+                                                                    in Computer Graphics and Vision, 8(2-3):85–283, 2014.   shift. In Proceedings of the International Conference on
+  Machine Learning, 2015.                                                  Menon, A., Shrivastava, M., Krueger, D., and Lubana, E. S.
+                                                        Analyzing (in) abilities of SAEs via formal languages.
+Kim, B., Wattenberg, M., Gilmer, J., Cai, C., Wexler, J.,
+                                                           arXiv preprint arXiv:2410.11767, 2024.
+  and Viegas, F.  Interpretability beyond feature attribu-
+   tion: Quantitative testing with concept activation vectors    Mordvintsev,  A.,  Olah,  C.,  and Tyka, M.    Incep-
+  (TCAV). In International Conference on Machine Learn-      tionism:    Going  deeper   into  neural  networks.
+   ing, 2018.                                                   https://blog.research.google/2015/06/inceptionism-
+                                                            going-deeper-into-neural.html?m=1, 2015.
+Kim, S. S. Y., Meister, N., Ramaswamy, V. V., Fong, R.,
+  and Russakovsky, O. HIVE: Evaluating the human inter-    Muzellec, S., Andeol, L., Fel, T., VanRullen, R., and Serre,
+   pretability of visual explanations. In Proceedings of the       T. Gradient strikes back: How filtering out high frequen-
+  IEEE European Conference on Computer Vision, 2022.        cies improves explanations. Proceedings of the Interna-
+                                                                    tional Conference on Learning Representations, 2024.
+Kingma, D. P. and Ba, J. Adam: A method for stochastic
+  optimization. arXiv preprint arXiv:1412.6980, 2014.      Nguyen, A., Yosinski, J., and Clune, J. Understanding neu-
+                                                                            ral networks via feature visualization: A survey. Explain-
+Koh, P. W., Nguyen, T., Tang, Y. S., Mussmann, S., Pierson,      able AI: interpreting, explaining and visualizing deep
+   E., Kim, B., and Liang, P. Concept bottleneck models. In                                                                 learning, 2019.
+  International Conference on Machine Learning, 2020.
+                                                    Nguyen, G., Kim, D., and Nguyen, A. The effectiveness of
+Kowal, M., Dave, A., Ambrus, R., Gaidon, A., Derpanis,       feature attribution methods and its correlation with auto-
+  K. G., and Tokmakov, P. Understanding video transform-      matic evaluation scores. Advances in Neural Information
+   ers via universal concept discovery. In Proceedings of      Processing Systems, 2021.
+  the IEEE Conference on Computer Vision and Pattern
+  Recognition, 2024a.                                    Olah, C., Mordvintsev, A., and Schubert, L.  Feature vi-
+                                                                   sualization.  Distill, 2017. doi: 10.23915/distill.00007.
+Kowal, M., Wildes, R. P., and Derpanis, K. G. Visual con-       https://distill.pub/2017/feature-visualization.
+  cept connectome (VCC): Open world concept discovery
+  and their interlayer connections in deep models. In Pro-   Oquab, M., Darcet, T., Moutakanni, T., Vo, H., Szafraniec,
+  ceedings of the IEEE Conference on Computer Vision      M., Khalidov, V., Fernandez, P., Haziza, D., Massa, F.,
+  and Pattern Recognition, 2024b.                           El-Nouby, Alaaeldin Assran, M., Ballas, N., Galuba, W.,
+                                                     Howes, R., Huang, P.-Y., Li, S.-W., Misra, I., Rabbat, M.,
+Kriegeskorte, N., Mur, M., and Bandettini, P. A. Repre-     Sharma, V., Synnaeve, G., Xu, H., Jegou, H., Mairal, J.,
+   sentational similarity analysis-connecting the branches of       Labatut, P., Joulin, A., and Bojanowski, P. Dinov2: Learn-
+  systems neuroscience. Frontiers in systems neuroscience,      ing robust visual features without supervision. Transac-
+  2:249, 2008.                                                    tions on Machine Learning Research, 2023.
+
+                                                11
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+Papyan, V., Romano, Y., and Elad, M. Convolutional dictio-    Sucholutsky, I., Muttenthaler, L., Weller, A., Peng, A., Bobu,
+  nary learning via local processing. International Confer-       A., Kim, B., Love, B. C., Grant, E., Groen, I., Achterberg,
+  ence on Computer Vision, 2017.                                         J., et al. Getting aligned on representational alignment.
+                                                           arXiv preprint arXiv:2310.13018, 2023.
+Parekh, J., Khayatan, P., Shukor, M., Newson, A., and Cord,
+  M. A concept-based explainability framework for large    Sundararajan, M., Taly, A., and Yan, Q. Axiomatic attribu-
+  multimodal models. arXiv preprint arXiv:2406.08074,       tion for deep networks. In Proceedings of the Interna-
+  2024.                                                           tional Conference on Machine Learning, 2017.
+
+Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G.,    Surkov, V., Wendler, C., Terekhov, M., Deschenaux, J.,
+  Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark,      West, R., and Gulcehre, C. Unpacking sdxl turbo: Inter-
+   J., Krueger, G., and Sutskever, I. Learning transferable       preting text-to-image models with sparse autoencoders.
+  visual models from natural language supervision.  In      arXiv preprint arXiv:2410.22366, 2024.
+  International Conference on Machine Learning, 2021.
+                                                       Tamkin, A., Taufeeque, M., and Goodman, N. D. Codebook
+Rajamanoharan, S., Lieberum, T., Sonnerat, N., Conmy, A.,       features: Sparse and discrete interpretability for neural
+  Varma, V., Kram´ar, J., and Nanda, N. Jumping ahead:      networks. arXiv preprint arXiv:2310.17230, 2023.
+  Improving reconstruction fidelity with jumprelu sparse
+                                                                 Tariyal, S., Majumdar, A., Singh, R., and Vatsa, M. Deep  autoencoders. arXiv preprint arXiv:2407.14435, 2024.
+                                                                 dictionary learning. IEEE Access, 4:10096–10109, 2016.
+Rao, S., Mahajan, S., B¨ohle, M., and Schiele, B. Discover-
+                                                                 Tasissa, A., Tankala, P., Murphy, J. M., and Ba, D. K-deep  then-name: Task-agnostic concept bottlenecks via auto-
+                                                             simplex: Manifold learning via local dictionaries. IEEE  mated concept discovery. In Proceedings of the IEEE
+                                                             Transactions on Signal Processing, 2023.  European Conference on Computer Vision, 2024.
+
+                                                                                     Toˇsi´c, I. and Frossard, P. Dictionary learning. IEEE SignalRubinstein, R., Bruckstein, A. M., and Elad, M. Dictionaries
+                                                            Processing Magazine, 28(2):27–38, 2011.   for sparse representation modeling. Proceedings of the
+  IEEE International Conference on Acoustics, Speech and                                                              Tsipras, D., Santurkar, S., Engstrom, L., Turner, A., and
+  Signal Processing, 2010.                                                       Madry, A. Robustness may be at odds with accuracy. In
+                                                            Proceedings of the International Conference on LearningSanturkar, S., Ilyas, A., Tsipras, D., Engstrom, L., Tran, B.,
+                                                               Representations, 2019.  and Madry, A. Image synthesis with a single (robust)
+   classifier. Advances in Neural Information Processing                                                          Vielhaben,  J., Bluecher, S., and Strodthoff, N.  Multi-
+  Systems, 32, 2019.                                                            dimensional concept discovery (MCD): A unifying frame-
+                                                  work with completeness guarantees.  Transactions onSelvaraju, R. R., Cogswell, M., Das, A., Vedantam, R.,
+                                                     Machine Learning Research, 2023.  Parikh, D., and Batra, D. Grad-CAM: Visual explana-
+   tions from deep networks via gradient-based localization.                                                         Wattenberg, M. and Vi´egas, F. B. Relational composition
+  In IEEE International Conference on Computer Vision,                                                                  in neural networks: A survey and call to action. arXiv
+  2017.                                                                 preprint arXiv:2407.14662, 2024.
+
+Simonyan, K., Vedaldi, A., and Zisserman, A. Deep in-                                                   Wightman, R. PyTorch image models, 2019.
+  side convolutional networks:  Visualising image clas-
+   sification models and saliency maps.  arXiv preprint    Williams, R. Inverting a connectionist network mapping by
+  arXiv:1312.6034, 2013.                                    back-propagation of error. In Proceedings of the Annual
+                                                        Meeting of the Cognitive Science Society, 1986.
+Sixt, L., Granz, M., and Landgraf, T. When explanations lie:
+ Why many modified BP attributions fail. In Proceedings    Wright, S. Correlation and causation. Journal of Agricul-
+   of the International Conference on Machine Learning,       tural Research, 20(7):557–585, 1921.
+  2020.
+                                                       Yu, Y., Buchanan, S., Pai, D., Chu, T., Wu, Z., Tong, S.,
+Smilkov, D., Thorat, N., Kim, B., Vi´egas, F., and Watten-      Haeffele, B., and Ma, Y. White-box transformers via
+  berg, M. Smoothgrad: Removing noise by adding noise.      sparse rate reduction. Advances in Neural Information
+  arXiv preprint arXiv:1706.03825, 2017.                     Processing Systems, 2023.
+
+Springenberg, J. T., Dosovitskiy, A., Brox, T., and Ried-    Zeiler, M. D. and Fergus, R. Visualizing and understanding
+   miller, M. Striving for simplicity: The all convolutional       convolutional networks.  In Proceedings of the IEEE
+   net. arXiv preprint arXiv:1412.6806, 2014.                European Conference on Computer Vision, 2014.
+
+                                                12
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+Zhai, X., Mustafa, B., Kolesnikov, A., and Beyer, L. Sig-
+  moid loss for language image pre-training. In IEEE Inter-
+  national Conference on Computer Vision, 2023.
+
+Zhang, R., Madumal, P., Miller, T., Ehinger, K. A., and Ru-
+   binstein, B. I. Invertible concept-based explanations for
+ CNN models with non-negative concept activation vec-
+   tors. In Proceedings of the AAAI Conference on Artificial
+   Intelligence, 2021.
+
+Zhou, J., Wei, C., Wang, H., Shen, W., Xie, C., Yuille, A.,
+  and Kong, T. iBoT: Image bert pre-training with online
+   tokenizer. Proceedings of the International Conference
+  on Learning Representations, 2021.
+
+
+
+
+
+                                                13
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+A. Appendix
+
+A.1. SAE Training Implementation details
+
+ We modify the TopK Sparse Autoencoder (SAE) (Gao et al., 2024) by replacing the ℓ2 loss with an ℓ1 loss, as we find that
+this adjustment improves both training dynamics and the interpretability of the learned concepts. The encoder consists of
+a single linear layer followed by batch normalization (Ioffe & Szegedy, 2015) and a ReLU activation function, while the
+decoder is a simple dictionary matrix.
+
+For all experiments, we use a dictionary of size 8 × 768 = 6144 which is an expansion factor of 8 multiplied by the
+largest feature dimension in any of the three models, 768.  All SAE encoder-decoder pairs have independent Adam
+optimizers (Kingma & Ba, 2014), each with an initial learning rate of 3e−4, which decays to 1e−6 following a cosine
+schedule with linear warmup. To account for variations in activation scales caused by architectural differences, we
+standardize each model’s activations using 1000 random samples from the training set. Specifically, we compute the mean
+and standard deviation of activations for each model and apply standardization, thereby preserving the relative relationship
+between activation magnitudes and directions while mitigating scale differences.
+
+Since SigLIP does not incorporate a class token, we remove class tokens from DinoV2 and ViT to ensure consistency across
+models. Additionally, we interpolate the DinoV2 token count to match a patch size of 16 × 16 pixels, aligning it with SigLIP
+and ViT. We train all USAEs on a single NVIDIA RTX 6000 GPU, with training completing in approximately three days.
+
+
+A.2. Discovering Unique Concepts with USAEs
+
+With our universal training objective, we are in a unique position to explore concepts that may arise independently in one
+model, but not in others. Using metrics for universality, Eqs. 13 and 12, we can search for concepts that fire with a low
+entropy, thereby isolating firing distributions whose probability mass is allocated to a single model. We explore this direction
+by isolating unique concepts for DinoV2 and SigLIP, both of which have been studied for their unique generalization
+capabilities to different downstream tasks (Amir et al., 2022; Zhai et al., 2023).
+
+A.2.1. UNIQUE DINOV2 CONCEPTS
+
+ DinoV2’s unique concepts are presented in Figures 9 and 11. Interestingly, we find concepts that solely fire for DinoV2
+related to depth and perspective cues. These features follow surfaces and edges to vanishing points as in concept 3715
+and 4189, demonstrating features for converging perspective lines. Further, we find features for object groupings placed
+in the scene at varying depths in concept 4756, and background depth cues related to uphill slanted surfaces in concept
+1710. We also find features that suggest a representation of view invariance, such as concepts related to the angle or tilt of an
+image (Fig. 10) for both left (concept 3003) and right views (concept 2562). Lastly, we observe unique geometric features in
+Fig. 12 that suggest some low-level 3D understanding, such as concept 4191 that fires for the top face of rectangular prisms,
+concept 3448 for brim lines that belong to dome shaped objects, as well as concept 1530 for corners of objects resembling
+rectangular prisms.
+
+View invariance, depth cues, and low-level geometric concepts are all features we expect to observe unique to DinoV2’s
+training regime and architecture (Oquab et al., 2023). Specifically, self-distillation across different views and crops at the
+image level emphasizes geometric consistency across viewpoints. This, in combination with the masked image modelling
+iBOT objective (Zhou et al., 2021) that learns to predict masked tokens in a student-teacher distillation framework, would
+explain the sensitivity of DinoV2 to perspective and geometric properties, as well as view-invariant features.
+
+A.2.2. UNIQUE SIGLIP CONCEPTS
+
+ Similar to DinoV2, we isolate concepts with low firing-entropy where probability mass is concentrated for SigLIP. Example
+concepts are presented in Fig. 13. We observe concepts that fire for both visual and textual elements of the same concept.
+Concept 5718 fires for both the shape of a star, as well as regions of images with the word or even just a subset of letters on
+a bottlecap and sign at different scales. Additionally, concept 2898 fires broadly for various musical instruments, as well as
+music notes, while concept 923 fires for the letter ‘C’. For each of these concepts, the coordinated activation maximization
+visualization has both the physical semantic representation of the concept, as well as printed text. The presence of image and
+textual elements are expected given SigLIP is trained as a vision-language model with a contrastive learning objective, where
+the aim is to align image and text latent representations from separate image and language encoders. While we do not train
+
+
+
+                                                14
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+
+
+
+
+Figure 9. Qualitative results of DinoV2 low-entropy concepts. These concepts fire frequently for DinoV2, depicting converging
+perspective lines to the right (concept 3715, above) and to the left (concept 4189, below).
+
+
+
+
+
+on any activations directly from the language model, we still observe textual concepts in our image-space visualizations.
+
+
+A.3. Additional Results
+
+A.3.1. ADDITIONAL QUANTITATIVE RESULTS
+
+ Figure 14 presents concept consistency distributions across models for the top 1,000 co-firing concepts. We observe
+consistent findings with Sec. 4.4, mainly that ViT has the strongest concept overlap with 35% of its concepts having a
+cosine similarity > 0.5 with its independent counterpart. USAEs again achieve far better performance than the baseline
+for all models, suggesting that universal training preserves meaningful concept alignments rather than learn entirely new
+representations. The lower proportion of overlap for SigLIP and DinoV2 indicates that universal training discovers
+universal concepts that may not emerge in independent training. Universal training favors concepts that are consistently
+represented across all models, as these concepts more effectively reduce overall reconstruction loss. This may lead to a bias
+toward fundamental visual concepts that are commonly learned by all models. In contrast, independently trained SAEs lack
+this selection pressure, allowing them to learn any concept that aids reconstruction, including those specific to a particular
+architecture or objective, rather than universally shared ones.
+
+A.3.2. ADDITIONAL QUALITATIVE RESULTS
+
+We provide additional universal concept visualizations for the top activating images for that concept across each model.
+Specifically, we showcase low-level concepts in Fig. 15 related to texture like shell and wood for concepts 1716 and 2533,
+respectively, as well as tiling for concept 5563. We also showcase high-level concepts in Fig. 16 related to environments like
+auditoriums in concept 4691, object interactions like ground contact in concept 5346, as well as facial features like snouts in
+concept 3479.
+
+                                                15
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+
+
+
+
+Figure 10. Qualitative results of low-entropy concepts that fire for DinoV2. We discover concepts related to view-invariance, such as
+angled scenes both right (above) and left (below) in concept 2562 and 3003, respectively.
+
+
+A.4. Limitations
+
+Our universal concept discovery objective successfully discovers fundamental visual concepts encoded between vision
+models trained under distinct objectives and architectures, and allows us to explore features that fire distinctly for a particular
+model of interest under our regime. However, we note some limitations that we aim to address in future work. We
+notice some sensitivity to hyperparameters when increasing the number of models involved in universal training, and use
+hyperparameter sweeps to find an optimal configuration. We also constrain our problem to discovering features at the
+last layer of each vision model. We choose to do so as a tractable first step in this novel paradigm of learning to discover
+universal features. We leave an exploration of universal features across different layer depths for future work. Lastly, we do
+find qualitatively that a small percentage of concepts are uninterpretable. They may be still stored in superposition (Elhage
+et al., 2022) or they could be useful for the model but simply difficult for humans to make sense of. This is a phenomena
+that independently trained SAEs suffer from as well. Many of the limitations of our approach are tightly coupled to the
+limitations of training independent SAEs, an active area of research.
+
+
+
+
+
+                                                16
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+
+
+
+
+Figure 11. Qualitative results of low-entropy concepts that fire for DinoV2. We discover features related to depth cues for foreground
+objects as well as background in concept 4756 (above) and 1710 (below).
+
+
+
+
+
+Figure 12. Qualitative results for low-entropy concepts that fire for DinoV2. We discover DinoV2 independent features that are not
+universal suggesting 3D understanding like corners (concepts 1530), top face of rectangular prism (concept 4191), and brim of dome
+(concept 3448).
+
+
+                                                17
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+
+
+
+
+Figure 13. Qualitative results of low-entropy SigLIP concepts. We consistently find concepts that fire for abstract concepts in image
+space such as images or text of ‘star’ (concept 923), letters (concept 5718), and music notes (concept 2958).
+
+
+
+
+                                                                Single to Universal:
+                                         Concept Matches Across Cosine Similarity Thresholds
+                                                       Top 1000 cofiring Concepts
+                                                         1.0                                                     SigLIP (AUC=0.30)
+                                                                                           DinoV2 (AUC=0.36)
+                                                                                                          ViT (AUC=0.40)
+                                                                                Random Baseline (AUC=0.13)
+                                                         0.8                                                                                                                       Threshold
+                                        MCS 0.6
+             >
+
+
+                                                         0.4                                                                                                         Concepts
+                          of
+
+                                                         0.2                                                                                                         Fraction
+
+                                                         0.0
+
+                                                                0.0             0.2             0.4             0.6             0.8             1.0
+                                                                    Cosine Similarity Threshold
+
+
+Figure 14. Top 1000 co-firing concept consistency between independent SAEs and Universal SAEs. Our universal training objective
+discovers universal concepts that have overlap (i.e., cosine similarity) with those discovered with independent training. ViT again has
+noticeably more overlap, suggesting its simpler architecture and training objective may yield activations that naturally encode fundamental
+and universal visual concepts.
+
+
+
+                                                18
+
+                      Universal Sparse Autoencoders: Interpretable Cross-Model Concept Alignment
+
+
+
+
+
+Figure 15. Qualitative results of universal concepts. We depict low-level visual features related to textures, such as shells (concept
+1716), wood (concept 2533), and tiling (concept 5563).
+
+
+
+
+
+Figure 16. Qualitative results of universal concepts. We depict high-level visual features related to environments, such as auditoriums
+(concept 4691), ground contact (concept 5346), and animal snouts (concept 3479).
+
+
+
+
+
+                                                19

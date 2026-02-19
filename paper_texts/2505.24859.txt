@@ -1,0 +1,1630 @@
+                Beyond Multiple Choice: Evaluating Steering Vectors
+                            for Adaptive Free-Form Summarization
+
+
+
+                                 Joschka Braun 1 Carsten Eickhoff 1 Seyed Ali Bahrainian 1
+
+
+                         Abstract               A promising fourth strategy is activation engineering, an
+                                                              emerging field focused on directly modifying model ac-
+                Steering vectors are a lightweight method for con-         tivations during text generation (Zou et al., 2025). Con-
+                  trolling text properties by adding a learned bias to          trastive Activation Addition (CAA) (Rimsky et al., 2024),
+              language model activations at inference time. So        an interpretability-inspired activation engineering method,2025            far, steering vectors have predominantly been eval-       shows considerable promise in aligning foundation models
+               uated in multiple-choice settings, while their ef-        with user preferences. Although previous research demon-
+                fectiveness in free-form generation tasks remains          strates the effectiveness of steering methods in multiple-Jul
+                understudied. Moving "Beyond Multiple Choice,"         choice settings and simplified toy tasks, their effectiveness
+                                                                            for practical NLP tasks like adaptive free-form summariza-13      we thoroughly evaluate the effectiveness of steer-               ing vectors in adaptively controlling topical focus,         tion remains understudied. Our work addresses this gap by
+                sentiment, toxicity, and readability in abstractive         applying CAA to adaptive free-form summarization on the
+             summaries of the NEWTS dataset. We find that     NEWTS dataset (Bahrainian et al., 2022). Adaptive sum-
+                 steering effectively controls the targeted summary         marization focuses on generating concise and high-quality
+                 properties, but high steering strengths consistently         abstractive summaries that align with selected user prefer-
+              degrade both intrinsic and extrinsic text quality.         ences, thus providing a rigorous testbed for the practical[cs.LG]            Compared to steering, prompting offers weaker          applicability of steering vectors beyond constrained evalua-
+                control, while preserving text quality. Combin-          tions.
+               ing steering and prompting yields the strongest
+                                                               This paper makes the following contributions:                control over text properties and offers the most
+               favorable efficacy-quality trade-off at moderate           1. We apply activation steering to control topical focus,
+                steering strengths. Our results underscore the             sentiment, toxicity, and readability in adaptive free-form
+                 practical trade-off between control strength and            summaries. With the exception of toxicity, all text prop-
+                 text quality preservation when applying steering               erties can be effectively influenced.
+                vectors to free-form generation tasks.                                                                                2. We evaluate summaries for unwanted side effects on in-
+                                                                                       trinsic and extrinsic text quality, finding that high steer-
+                                                                        ing strengths meaningfully degrade overall summary
+          1. Introduction                                                    quality.
+                                                                                3. We compare activation steering to prompting and their
+         Large pre-trained language models have emerged as the
+                                                                         combination, finding that prompting alone offers weaker
+           preferred method for addressing numerous natural languagearXiv:2505.24859v2                                                                      control but better preserves text quality, while combin-
+          processing (NLP) tasks (Devlin et al., 2019; Brown et al.,
+                                                                        ing methods yields the strongest control and the most
+           2020). Consequently, the ability to adapt foundation models
+                                                                             favorable efficacy-quality trade-off at moderate steering
+            to specific tasks and align their outputs with user preferences
+                                                                                 strengths.
+              is crucial. Previous research on controlling language models
+                                                                                4. We release our source code and steering vector training         can often be classified into three main strategies: prompt
+                                                                                datasets to promote reproducibility and facilitate further           engineering (Shin et al., 2020; Lester et al., 2021; Wei et al.,
+                                                                               research, available at: GitHub Repository.          2022), trainable decoding mechanisms (Deng et al., 2020)
+         and fine-tuning according to specific objectives (Ouyang
+            et al., 2022a; Rafailov et al., 2023).
+
+               1Health NLP Lab, University of Tübingen, Germany. Corre-
+           spondence to: Joschka Braun <joschkacbraun@gmail.com>.
+
+
+
+
+                                                         1
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+2. Related Work                                    summaries, each focussed on either one of the two most
+                                                       prominent topics in the article. There are 50 unique topics.
+LLM-based Controllable Summarization  Generating                                               More details can be found in the Appendix A.1.
+adaptive summaries tailored to user preferences typically
+involves fine-tuning existing foundation models, modifying
+                                                                    3.2. Steering Method: Contrastive Activation Addition
+model architectures, or employing specialized training pro-
+cedures (Urlana et al., 2024; Bahrainian et al., 2024; Zhang   We use Contrastive Activation Addition (CAA) by Rimsky
+et al., 2025; Braun et al., 2025b). For instance, Bahrainian     et al. (2024) as the steering method. To compute the layer-
+et al. (2021) introduces an abstractive summarization model    and behavior-specific steering vector sl ∈Rd from training
+that enables topic-level customization through a novel ’topi-    dataset Dtrain = {(x+i , x−i )}Ntraini=1 , we record residual stream
+cal attention’ mechanism. Similarly, Blinova et al. (2023)    activations at layer l. Activations are recorded at the last
+proposes a two-stage model for document-level text sim-    position of the training sample. The resulting activations are
+plification that first summarizes and then further simplifies    noted al(x+i )) and al(x−i )) respectively. The steering vec-
+content using transformers, enhanced by keyword prompts     tor sl ∈Rd is the mean difference between positive and neg-
+and an embedding similarity loss. Bahrainian et al. (2023)     ative activations: sl = 1/|Dtrain| PDtrain al(x+i ) −al(x−i ) .
+use a Transformer-based architecture for controllable topic-   To steer during inference, we add λsl to the residual stream
+focused summarization, which modifies the cross-attention     at layer l. Here λ ∈R is the steering strength. Most of our
+mechanism for guiding the topical focus.                    experiments are done with a range of steering strengths.
+
+Steering Vectors for LLM Control  Controlling text gen-    3.3. Topic Representations
+eration by adding a steering vector is easier to implement
+                                                The 50 latent topics derived from the LDA model in theand only requires sufficient training data to be effective.
+                                    NEWTS dataset (Bahrainian et al., 2022) provide a com-Steering vectors leverage the interpretability-based insight
+                                                               pelling target for steering language models. Unlike binarythat many human-interpretable text properties like truthful-
+                                                                  qualities such as sentiment or toxicity, these topics rep-ness (Marks & Tegmark, 2024; Li et al., 2023), refusal
+                                                              resent more nuanced, multi-faceted concepts that can be(Arditi et al., 2024) and sentiment (Turner et al., 2023;
+                                                        understood through various representations, making themTigges et al., 2024) are likely represented linearly. Vari-
+ous methods based on this insight have been proposed to    an interesting challenge. Steering topical focus is also practi-
+                                                                  cally relevant, for instance, when summarizing informationcontrol LLM outputs (Subramani et al., 2022; Turner et al.,
+                                                                for a particular stakeholder or expert, as it allows for the2023; Rimsky et al., 2024; Li et al., 2023; Hendel et al.,
+                                                               selection of content most important to that specific reader.2023; Todd et al., 2024; Rimsky et al., 2024; Konen et al.,
+                                                        Topic representations are explained in Appendix A.1.1 and2024; Zou et al., 2025).
+                                                            presented in Table 1.
+
+Limitations of Steering Vectors  Despite their appeal as
+lightweight control methods, activation steering methods     3.4. Evaluation of Summaries
+face significant challenges (Braun et al., 2024). Recent                                        We evaluate generated summaries across six key dimensions:
+studies highlight issues with reliability and generalization,                                                                      intrinsic quality based on text characteristics, extrinsic qual-
+noting high variance across inputs and instances where steer-                                                                           ity against reference summaries, topical focus relative to
+ing produces the opposite of the intended effect (Tan et al.,                                                            predefined topics, sentiment polarity, toxicity and readabil-
+2024; Brumley et al., 2024; Braun et al., 2025a). Further-                                                                                   ity. For robustness, we measure two to four metrics for each
+more, steering vectors are often evaluated in constrained                                                                    text property.
+settings, like multiple-choice questions, rather than more
+challenging free-form generation tasks (Pres et al., 2024;                                                             3.4.1. INTRINSIC QUALITY EVALUATION
+Braun et al., 2024)
+                                                                   Intrinsic quality, assessing the linguistic quality and flu-
+                                                     ency of the generated text without relying on reference
+3. Methods and Experimental Setup
+                                                       summaries, is evaluated to measure undesirable generation
+3.1. NEWTS dataset                                                artifacts.
+
+We generate summaries for articles from the NEWTS
+dataset by (Bahrainian et al., 2022), designed specifically    Perplexity (PPL):  Perplexity measures how well a pre-
+for topical summarization. The NEWTS dataset is based    trained language model can predict the generated text se-
+on the CNN/DailyMail dataset (Nallapati et al., 2016) and    quence. A lower perplexity score generally indicates higher
+consists of 2400 training and 600 test samples. Each sample    fluency and text that is more statistically likely according to
+provides a source article and two human-written reference    the language model (Bengio et al., 2000).
+
+                                                2
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+       Table 1: Table illustrating different types of topic representations and their corresponding representations.
+
+ Representation
+                  Representation
+ Type
+ words             “children”, “child”, “parents”, “birth”, “born”, “kids”, “families”, “mother”, “family”, “care”,
+                   “daughter”, “young”, “girl”, “syndrome”, “adults”,
+ n-grams           “children and parents”, “families with children”, “having kids”, “giving birth”, “she became a
+                   mother”, “baby was born”
+  descriptions      “This topic is about having kids, becoming a mother, giving birth, children and their parents, and
+                     families with children when a baby is born.”
+ documents        “families with children receive money to support the kids in the UK...”, “Children with special needs
+                 were mentioned in a political campaign...”, “Only half of British children live with both parents...”
+
+
+Bigram Repetition (Distinct-2 Word):  Distinct-2 Word    3.4.3. TOPICAL FOCUS EVALUATION
+measures textual diversity and penalizes unnatural word rep-
+                                                 To evaluate the alignment of generated summaries with the
+etition. It is calculated as the ratio of unique word bigrams
+                                                            intended topics, we utilize three methods to quantify topical
+to the total number of bigrams in the generated text. Lower
+                                                              focus:
+Distinct-2 scores indicate higher repetition, which often cor-
+relates negatively with human-annotated quality (Li et al.,
+2016).                                              Lemmatization-Based Scoring:  This method processes
+                                                              the generated text by lemmatizing words to their canonical
+Character  Bigram  Repetition  (Distinct-2  Char):    forms. Using the LDA model, it matches these lemmas
+Distinct-2 Char assesses fine-grained textual diversity and    against the lemmas of the top topic words identified for the
+penalizes character sequence repetition.  This metric is    relevant topic. The topical focus score is then calculated
+calculated as the ratio of unique character bigrams to the    as the weighted presence of these lemmas in the summary,
+total number of character bigrams. It is particularly useful    normalized by the total weight of all top topic lemmas.
+for texts without clear word separation and for identifying
+various forms of text degradation; lower scores signify
+increased character bigram repetition and potential quality    Tokenization-Based Scoring:  This approach tokenizes
+issues.                                                       the summary using the bert-base-multilingual-uncased to-
+                                                               kenizer. The score represents the proportion of tokens in
+3.4.2. EXTRINSIC QUALITY EVALUATION                   the summary that match the token IDs derived from the top
+                                                   words of the target LDA topic, providing a direct measure
+To evaluate extrinsic quality, we measure the similarity                                                             of topical vocabulary usage at the sub-word level.
+and faithfulness of generated summaries to their respective
+NEWTS reference summaries using the following metrics:
+                                                     Dictionary-Based Evaluation:  This method employs a
+ROUGE Score:  Recall-Oriented Understudy for Gisting    bag-of-words representation for the summary, utilizing the
+Evaluation (ROUGE) includes three variants that quantify   Gensim dictionary associated with the LDA model. The
+the overlap between a candidate summary c and a refer-  LDA model infers a topic distribution for the summary, and
+ence r. ROUGE-1 and ROUGE-2 respectively assess uni-    the score reflects the computed prevalence of the target topic
+gram and bigram overlap considering recall, precision and    within this distribution.
+F1, while ROUGE-L measures the longest common subse-
+quence. Collectively, these metrics capture content fidelity,    3.4.4. SENTIMENT EVALUATION
+fluency and sequence-level coherence (Lin, 2004).                                                To evaluate the sentiment expressed in the generated sum-
+                                                             maries, we use two approaches:
+BERTScore:  BERTScore (Zhang* et al., 2020) lever-
+ages contextual embeddings from the pre-trained trans-
+former model to compute semantic similarity between two    Lexicon-Based Analysis (VADER): We  incorporate
+text distributions.  This make the metric robust against   VADER (Valence Aware Dictionary and sEntiment Rea-
+paraphrasing, a key advantage over ROUGE scores. For    soner) (Hutto & Gilbert, 2014), a lexicon and rule-based
+our evaluation, we employ the ‘BERTScorer‘ class with    sentiment analysis tool. VADER provides multiple scores,
+the microsoft/deberta-xlarge-mnli model (He et al.,    including a normalized compound score ranging from -1
+2021), selected for its strong correlation with human evalua-    (most negative) to +1 (most positive), effective at capturing
+tions of semantic content.                                   sentiment intensity and negation.
+
+                                                3
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+Transformer-Based Analysis:  We leverage a pre-trained     3.5. Prompt Engineering
+transformer model fine-tuned for sentiment classification:
+                                        We use a consistent prompt structure for all models and steer-
+nlptown/bert-base-multilingual-uncased-sentiment (Town,
+                                                             ing vectors in our primary experiments. The basic prompt x
+2023). We renormalize the model output to -1 to 1.
+                                                                          is designed to elicit a general, neutral three-sentence sum-
+                                                 mary and is formatted as follows:
+3.4.5. TOXICITY EVALUATION
+
+Abstractive summaries must not reproduce hateful, harass-   Write a three sentence summary of the article.
+ing, or threatening language. We therefore measure toxicity    Article:
+for every generated summary with two Transformer classi-   {article}
+fiers. Toxicity is also an challenging property for steering    Summary:
+experiments, as language models typically undergo exten-
+                                                            In this template, {article} denotes the placeholder forsive post-training alignment to curb the generation of such
+                                                             the input article text. We defer the detailed description ofcontent, making any residual or induced toxicity a notable
+                                                    prompt variations engineered to encourage or discourageoutcome to control.
+                                                               selected text properties to the Appendix B.
+
+Toxic-BERT  Toxic-BERT is a BERT-base model fine-
+                                                                    3.6. Language Modelstuned to predict the probabilities for eight labels (toxic,
+severe_toxic, obscene, threat, insult, identity_attack, sex-                                      We use Meta’s Llama instruction-tuned models in three
+ual_explicit, non_toxic) (Devlin et al., 2019). We use the                                                                   sizes:  Llama-3.2-1B, Llama-3.2-3B and Llama-3.1-8B
+toxic and severe_toxic logits, normalised to the range [0, 1],                                               Llama3Team (2024). These models represent successive
+as separate indicators of surface-level and extreme toxicity.                                                               capability increases across roughly an order of magnitude
+                                                                  in parameter count, allowing us to study the relationship be-
+RoBERTa  toxicity  classifier  This  classifier  distils    tween model scale and summarization performance. The im-
+RoBERTa-base (Liu et al., 2019), producing a binary toxic-    pact of model scale is further investigated in Appendix C.11,
+ity score between [0, 1]. It is more conservative calibration    but this aspect is not central to our paper, which primarily fo-
+complements Toxic-BERT’s multi-label view.                cuses on the efficacy of steering vectors for free-form adap-
+                                                                     tive summarization. All three models are instruction-tuned
+3.4.6. READABILITY EVALUATION                        using supervised fine-tuning and reinforcement learning
+                                                         with human feedback, making them well-suited for naturalReadability and language complexity are especially impor-
+                                                        language tasks like summarization. They feature a 128k to-tant text properties. Steering for readability is particularly
+                                                      ken context window, sufficient for handling long documents.relevant as it enables the generation of text summaries per-
+                                      We selected these models for their strong performance atsonalized to a user’s specific comprehension level, for in-
+                                                          reasonable sizes, widespread adoption in both academicstance, matching their educational background or literacy
+                                                            research and practical applications, and consistent archi-skills. We therefore quantify the readability of each sum-
+                                                                  tectural design that enables controlled comparison acrossmary with two regression models.
+                                                                   scales.
+
+DistilBERT fine-tuned for readability  The DistilBERT
+                                                                    3.7. Summary Generation and Steering Setupvariant (Sanh et al., 2020) was fine-tuned for readability and
+produces a continuous score in [−5, 5] with higher values                                                       For summary generation, output was limited to 150 tokens,
+signifying high readability and negative values low readabil-                                                        a length roughly corresponding to the top 25% of human-
+ity.                                                            generated summaries. Steering was applied at specific layers
+                                                                for each Llama model: Layer 8 for the 1B model, Layer
+DeBERTa-V3  Fine-tuned version of DeBERTa-V3 (He   16 for the 3B model, and Layer 24 for the 8B model. This
+et al., 2023) to predict U.S. grade levels (1–18). Therefore    layer selection strategy aligns with established heuristics
+low scores correspond to simple text, and high scores to    and previous literature. Unless otherwise specified, each
+complext texts.                                                 setting was evaluated on a random sample of 250 articles
+                                                    from the NEWTS training dataset. As this data is not used
+                                                                 for steering vector training, no data leakage occurs.
+
+
+
+
+
+                                                4
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+4. Results                                                 4.1.3. TOXICITY STEERING
+
+4.1. Steering Vectors successfully control behaviors       Model post-training, particularly instruction tuning, often
+                                                     aims to suppress toxic output, which can make toxicity a
+Our plots show results for the Llama-3.2-1B model, with                                                                          difficult attribute to steer (Ouyang et al., 2022b). Therefore,
+results for other model sizes found in Appendix C.11. Com-                                                          attempting to control toxicity in such models provides an
+plementing quantitative metrics from the results section,                                                                  interesting case study on steering effectiveness.
+Appendix C.10 provides qualitative summaries illustrating
+                                                                                              Toxicity Steering: Toxicity Scores vs. Steering Strengththe impact of applied methods on text properties, including
+                                                                                          1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity
+text degradation from high steering strengths.                                 Mean        Mean              Mean
+                                                                                                                                        (0-1) 0.8
+4.1.1. TOPIC STEERING                                                                                  Score 0.6
+                                                                                          0.4
+Topic       steering                  is              more challenging                              due                                          to the                                      50 unique
+topics.       For each                    article,                 we steer the                            summary                                          towards                                                                      its                 Toxicity 0.2
+most dominant topic.                                                             0.0
+                                                                                                        -5     -2    -1.5    -1    -0.5   0    0.5   1    1.5   2    5
+                                                                                                                          Steering Strength
+              Topic Steering: Topic Scores vs. Steering Strength
+    1.0        Dict Score      Tokenize Score     Lemmatize Score                  Figure 3: Steering for toxicity only impacts toxicity for steer-
+            Mean        Mean           Mean                          ing strengths of 2 and larger. The safety-tuned Llama model
+ (tid1) 0.8                                                                       is able to avoid generating toxic text until very high steering
+    0.6
+ Score                                                            strengths likely shift the activations out-of-distribution, by-
+    0.4                                                      passing post-training and massively degrading text quality.
+ Topic 0.2
+                                                             4.1.4. READABILITY STEERING
+    0.0
+            -5     -2    -1.5    -1    -0.5   0    0.5   1    1.5   2    5        Readability is a key text property for personalizing sum-
+                                   Steering Strength                                                        maries to a user’s specific comprehension level. However,
+Figure 1: The topic scores for all three metrics, increase     steering for readability can be challenging because its mul-
+monotonically for steering strengths up to 2. The effect size     tifaceted nature is difficult to represent as a single steering
+of steering strengths between -1 and 1 is relatively small,    direction.
+and there is a noticeable improvement for steering strengths
+larger than magnitude 1. Applying the vector with a negative         Readability Steering: Readability Scores vs. Steering Strength
+                                                                            0factor makes the topic less dominant. For a steering strength                                   DeBERTa      DistilBERT                   1.0
+                                                                                                     Mean       Mean                       0.5of 5 the text degrades and the topic scores with it.                    5
+                                                                                                                                        Score 10                                                                 0.00.5Score
+4.1.2. SENTIMENT STEERING                                                                                                                     1.0
+                                                                           15                                                                   1.5                                                                                                                                                                                              DeBERTa                                                                                                                                                               2.0DistilBERTSentiment is an established steering target and typically easy        20
+                                                                                                                                                               2.5
+to control (Turner et al., 2023).                                                                           25                                                                   3.0
+        Sentiment Steering: Sentiment Scores vs. Steering Strength                   -5    -2   -1.5   -1   -0.5   0   0.5   1   1.5   2    5                                                                                                                      Steering Strength
+1)  1.0       Transformer    VADER
+to          Mean         Mean                                  Figure 4: The readability improves with increased steering
+ (-1  0.5                                                          strength. The DeBERTa Scores decrease, the DistilBERT
+ Score  0.0                                                  Scores increase, which is both indicate more simple lan-
+                                                    guage is used in the summaries. The trend only breaks for
+      0.5                                                           steering strengths with an absolute value larger than 2. This  Sentiment                                                     break in the trend occurs, as explained later, because the      1.0
+              -5    -2    -1.5    -1    -0.5   0    0.5   1    1.5   2    5        generated text quality degrades significantly at these highest
+                                    Steering Strength                         steering strengths.
+Figure 2: Steering vectors successfully control the senti-
+                                                                    4.2. Large Steering Magnitudes Degrade Text Qualityment of generated summaries. Without steering the average
+sentiment is neutral. Negative and positive steering strength                                                               Overall, applying steering vectors with steering multipliers
+effectively shift the average sentiment towards the target                                                       exceeding an absolute value of 2 substantially degrades
+polarity. Both metrics result in similar sentiment scores and                                                         both intrinsic and extrinsic text quality. This degradation is
+measure a monotonic increase in sentiment relative to the                                                                 particularly pronounced for the toxicity steering vector, as
+applied steering strength.                                                 shown in Figures 5 and 6.
+
+                                                5
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+     Sentiment Steering: Intrinsic Quality vs. Steering Strength                Toxicity Steering: Intrinsic Quality vs. Steering Strength
+                       Perplexity      Distinct-2 Words      Distinct-2 Chars                                        Perplexity      Distinct-2 Words      Distinct-2 Chars
+   50           Mean        Mean            Mean                               (0-1)      15         Mean        Mean            Mean                               (0-1)
+   40                                                                   1.0                                                                              1.0                                                                         0.8Score                                                                           0.8Score   30                                                                 10
+                                                                         0.6                                                                              0.6                                                                                                                                                                                                                                                              Perplexity  Perplexity 20                                                                                                                                                        0.4                                                                         0.4                                                                        5   10                                                                   0.2Distinctness                                                                           0.2Distinctness
+    0                                                                   0.0                                                                              0.0
+           -5    -2   -1.5   -1   -0.5   0    0.5   1    1.5   2    5                         -5    -2   -1.5   -1   -0.5   0   0.5   1   1.5   2    5
+                                Steering Strength                                                                Steering Strength
+
+Figure 5: In both cases, intrinsic text quality decreases for larger steering strengths. But the change is much more pronounced
+for toxicity steering compare to sentiment steering. For toxicity, steering strengths larger than 1 degrade performance
+significantly, which for sentiment performance degradation is milder and only starts at larger steering strengths. Distinct-2
+Word Metric is most sensitive for moderate steering strengths.
+
+     Sentiment Steering: Extrinsic Quality vs. Steering Strength                 Toxicity Steering: Extrinsic Quality vs. Steering Strength
+    1.0         ROUGE-1     ROUGE-2     ROUGE-L     BERTScore F1      1.0          1.0         ROUGE-1     ROUGE-2     ROUGE-L     BERTScore F1      1.0
+               Mean       Mean       Mean       Mean                                  Mean       Mean       Mean       Mean
+ (0-1) 0.8                                                                  0.8(0-1)      (0-1) 0.8                                                                  0.8(0-1)
+ Score 0.6                                                                  0.6F1      Score 0.6                                                                  0.6F1
+    0.4                                                                  0.4          0.4                                                                  0.4 ROUGE 0.2                                                                  0.2BERTScore      ROUGE 0.2                                                                  0.2BERTScore
+
+    0.0                                                                  0.0          0.0                                                                  0.0
+            -5    -2   -1.5   -1   -0.5   0   0.5   1   1.5   2    5                          -5    -2   -1.5   -1   -0.5   0    0.5   1    1.5   2    5
+                                Steering Strength                                                                  Steering Strength
+Figure 6: Extrinsic text quality is constant between for small steering strengths and degrades for larger steering strengths.
+For sentiment steering scores are stable between -1.5 to 1.5 and then continuously fall for increased steering intensity. This
+same trend is much more pronounced for toxicity steering, where already for steering strengths larger than 1 the extrinsic
+quality drops substantially.
+
+4.3. Steering Side effects on Unrelated Properties                    Sentiment Steering: Toxicity Scores vs. Steering Strength
+                                                                                          1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity
+To assess potential steering direction entanglement, we eval-                 Mean        Mean              Mean
+uate the generated summaries for unintended impacts on          (0-1) 0.8
+                                                                                          0.6unrelated text properties. Our findings indicate that, apart          Score
+from the specific interaction where toxicity steering also          0.4
+influences sentiment (Figure 7), steering vectors generally                Toxicity 0.2
+do not affect other measured properties. See Appendix C.1                                                                                          0.0
+for more detail.                                                                                 -5     -2    -1.5    -1    -0.5   0    0.5   1    1.5   2    5
+                                                                                                                          Steering Strength
+           Toxicity Steering: Sentiment Scores vs. Steering Strength      Figure 8: The effect of sentiment steering on summary tox-
+1)  1.0       Transformer    VADER                                            icity. Conversely, steering for sentiment (either positive
+to          Mean         Mean                                                            or negative) does not significantly alter the toxicity levels (-1  0.5
+                                                            of the generated summaries. This assymetry is likely ex-
+ Score  0.0                                                     plained by the fact that content with negative sentiment is
+                                                           not necessarily toxic.      0.5  Sentiment                                                                 4.4. Comparing Steering to Prompt Engineering
+      1.0
+              -5    -2    -1.5    -1    -0.5   0    0.5   1    1.5   2    5     We compare prompt engineering with steering vectors un-
+                                    Steering Strength
+                                                          der an identical setup, using the Llama-3.2-1B model and
+Figure 7: The effect of toxicity steering on summary senti-                                                  500 random NEWTS training samples for evaluation. For
+ment. Steering summaries towards increased toxicity also                                                        each target property, we designed encouraging, neutral (the
+shifts their sentiment towards being more negative. This                                                                steering baseline), and discouraging prompt variations. Ap-
+interaction is expected, given the common association be-                                                       pendix B specifies these prompts.  Table 2 presents the
+tween toxic content and negative sentiment.                                                                        results, and Appendix C.3 contains the corresponding plots.
+
+
+                                                6
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+Table 2: Mean metric values comparing control of summary properties via steering (λ) versus prompt engineering. Steering
+generally offers stronger control than prompting. For topic and sentiment, λ = 1 matches or exceeds prompting effects,
+while λ = 2 has an even larger effect. Prompting better increases readability complexity and has a similar simplification
+effects to steering. Effects on toxicity are negligible for both methods, except for λ = 2 which also degrades text quality.
+Individual metric values are provided in Appendix C.2.
+
+
+                  Steering with strength λ          Prompting model for behavior         Steering with strength λ
+
+ Behavior      λ = −2     λ = −1     Discourage      Neutral     Encourage    λ = 1      λ = 2
+
+ Topic         0.02 ± 0.0    0.10 ± 0.0    0.13 ± 0.0    0.14 ± 0.0    0.16 ± 0.0    0.16 ± 0.0    0.25 ± 0.0
+ Sentiment     -0.55 ± 0.3    -0.30 ± 0.4    -0.30 ± 0.3    -0.08 ± 0.5    0.27 ± 0.4    0.20 ± 0.5    0.79 ± 0.1
+ Readability    6.69 ± 3.5    6.52 ± 2.3    7.19 ± 3.6    6.00 ± 2.7    5.00 ± 2.1    4.94 ± 2.8    5.40 ± 5.7
+ Toxic         0.00 ± 0.0    0.00 ± 0.0    0.00 ± 0.0    0.00 ± 0.0    0.01 ± 0.0    0.00 ± 0.0    0.10 ± 0.0
+
+
+Prompting only has negligible effects on text quality.              Sentiment Scores for Sentiment Steering and Prompting
+The effects on text quality when prompting a language    1)  1.0       Transformer    VADER
+                                                      to          Mean         Meanmodel to focus on a property are minimal, more details                                                                                 (-1  0.5
+in the Appendix C.5.
+                                                                                                                                        Score  0.0
+4.5. Combining Steering Vectors and Prompting
+                                                                                            0.5A combined strategy of steering with promting, where                   Sentiment
+                                                                                            1.0
+prompts are encouraging for λ > 0, neutral for λ = 0                      -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E    5/E
+and discouraging for λ < 0, leads to greater effect sizes.               Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+Appendix C.7 provides a side-by-side comparison with    Figure 11: Combined steering and prompting achieves sig-
+steering-only results.                                              nificant average sentiment changes from baseline (to approx.
+                                                      ±0.5) with λ = ±0.5. Steering alone requires λ ≈±1.5 to                Topic Scores for Topic Steering and Prompting
+    1.0        Dict Score      Tokenize Score     Lemmatize Score                  achieve similar respective positive or negative shifts. This
+            Mean        Mean           Mean                           synergistic advantage diminishes for larger λ magnitudes.
+ (tid1) 0.8
+    0.6
+ Score                                                                             Readability Scores for Readability Steering and Prompting    0.4                                                                      0                                                                                                              DeBERTa      DistilBERT                   1.0
+                                                                                                     Mean       Mean                       0.5 Topic 0.2                                                                      5
+    0.0                                                                                                                             Score 10                                                                 0.00.5Score
+             -5/D   -2/D   -1.5/D  -1/D   -0.5/D   0/N   0.5/E   1/E    1.5/E   2/E    5/E                                                                                   1.0
+         Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)          15                                                                   1.5                                                                                                                                                                                              DeBERTa                                                                                                                                                               2.0DistilBERTFigure 9: Combined steering and prompting more strongly                                                                           20
+                                                                                                                                                               2.5influences topical focus than either technique alone. Topical
+                                                                           25                                                                   3.0
+focus generally increases with positive λ values until text                   -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E   5/E
+degradation begins to reduce these scores.                                 Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+                                                          Figure 12: Combined steering and prompting impacts text
+              Toxicity Scores for Toxicity Steering and Prompting           readability more strongly than either method alone. For λ >
+    1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity                   2, substantial text degradation causes different readability
+            Mean        Mean              Mean                       metrics to offer divergent assessments of complexity.    0.8 (0-1)
+ Score 0.6
+    0.4                                                              4.6. Text Quality Degradation for Combined Steering
+ Toxicity 0.2                                               and Prompting
+    0.0                                               Combining promting and steering does not only amplify the
+             -5/D   -2/D   -1.5/D  -1/D   -0.5/D   0/N   0.5/E   1/E    1.5/E   2/E    5/E        effect size, but also undesirable quality degradation of the         Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+                                                            generated summaries. Details can be found in the Appendix
+Figure 10: Meaningful toxicity increases at moderate λ
+                                                              C.9. In general, the combination of both techniques provides
+values occur almost exclusively when combining prompting
+                                                              the most favorable trade-off between efficacy and quality.
+and steering.
+
+
+                                                7
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+5. Discussion                                     mal trade-off between control quality and control.  De-
+                                                         veloping a decision mechanism to dynamically adjust the
+This study evaluates the effectiveness of CAA steering vec-                                                               steering strength λ could be promising. For example, one
+tors for controlling relevant text properties during free-                                                          could project the incoming activation onto a linear classifier
+form abstractive summarization.  Our findings demon-                                                               trained on the steering vector training data and only apply
+strate that steering effectively controls topical focus, sen-                                                             the steering vector with the strength needed to shift the ac-
+timent (Bahrainian & Dengel, 2015), and readability, but                                                                  tivation to the desired side of the decision boundary. Such
+this control inherently involves an efficacy-quality trade-                                                     an approach could potentially minimize text quality degra-
+off: higher steering strengths achieve greater control at the                                                              dation while maintaining strong control over text properties
+cost of significant degradation in both intrinsic and extrinsic                                                    by applying steering only when necessary and only as much
+summary quality.                                                             as necessary.
+Steering for toxicity proved particularly challenging with                                                     Another important area for future exploration is the appli-
+the instruction-tuned Llama models. Coherent toxic out-                                                              cation of steering vectors in multiple-attribute controllable
+put was rarely achieved without high steering strengths that                                                        summarization. This would involve developing and apply-
+severely compromised text quality, likely by pushing activa-                                                             ing methods to steer multiple text properties simultaneously.
+tions out-of-distribution and overriding safety alignments.                                                          This approach could present new challenges related to vector
+This highlights a practical hurdle for steering attributes ac-                                                          composition, possible interference between steering direc-
+tively suppressed during model training.                                                                     tions, and managing cumulative impacts on text quality.
+Compared to steering, prompt engineering offered weaker
+control but substantially better preservation of text quality.    5.3. Conclusion
+This makes prompting a viable alternative when quality is
+                                                              Steering vectors, as an interpretability-inspired method, rep-
+paramount and moderate control suffices. Combining steer-
+                                                                 resent an effective but lightweight method for adapting large-
+ing vectors with prompting emerged as the most promising
+                                                              scale foundation models to user preferences at inference
+strategy, yielding the strongest control, often already with
+                                                             time. We find that CAA steering vectors are applicable to
+moderate steering strengths. This hybrid approach achieved
+                                                             free-form adaptive summarization, but their use is governed
+the most favorable efficacy-quality trade-off, though large
+                                                    by a critical trade-off between control efficacy and text qual-
+steering strengths still degrade text quality substantially.
+                                                                                 ity. The combination of steering and prompting appears to
+Our work extends previous research from constrained set-    provide the most effective balance. Our work points towards
+tings to the complexities of free-form generation, providing    hybrid methods as a promising path for robustly aligning
+concrete evidence for the practical challenges of steering   LLM behavior with user preferences in complex, real-world
+vector. These results underscore that practitioners must     applications.
+carefully calibrate steering strength and consider hybrid ap-
+proaches depending on their specific application’s tolerance                                         Acknowledgements
+for quality degradation versus the need for strong control.
+                                      We thank the anonymous reviewers for their constructive
+5.1. Limitations                                         feedback which helped to improve the manuscript. This re-
+                                                            search utilized compute resources at the Tübingen Machine
+Our conclusions are shaped and limited by our key method-                                                        Learning Cloud, DFG FKZ INST 37/1057-1 FUGG.
+ological choices. We only use CAA steering vectors and
+our findings may not generalize across all steering methods.
+Similarly, the results are specific to the summarization task   Impact Statement
+on the NEWTS dataset and the Llama model family. Per-                                                          This paper presents work whose goal is to advance the field
+formance in other tasks, data sets, or model architectures                                                            of Machine Learning. There are many potential societal
+could differ. Furthermore, the automated metrics used for                                                      consequences of our work, none which we feel must be
+evaluation, while standard, have inherent limitations in fully                                                                   specifically highlighted here.
+capturing nuanced human judgments. Broader research is
+therefore necessary to further validate the effectiveness of
+steering methods for free-form generation tasks.           References
+
+                                                                  Arditi, A., Obeso, O., Syed, A., Paleka, D., Panickssery,
+5.2. Future Work                                              N., Gurnee, W., and Nanda, N.  Refusal in language
+                                                      models is mediated by a single direction, 2024. URLThe observed trade-off between control efficacy and text
+                                                     https://arxiv.org/abs/2406.11717.quality degradation motivates methods that find an opti-
+
+
+
+                                                8
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+Bahrainian, S. A. and Dengel, A. Sentiment analysis of texts    Braun, J., Eickhoff, C., Krueger, D., Bahrainian, S. A.,
+  by capturing underlying sentiment patterns. Web Intelli-     and Krasheninnikov, D. Understanding (un)reliability
+  gence, 13(1):53–68, 2015. doi: 10.3233/WEB-150309.       of steering vectors in language models. In ICLR 2025
+                                                      Workshop on Foundation Models in the Wild, 2025a. URL
+Bahrainian, S. A., Zerveas, G., Crestani, F., and Eick-                                                     https://openreview.net/forum?id=qGCp2AYosf.
+   hoff, C.  Cats: Customizable abstractive topic-based
+  summarization. ACM Trans. Inf. Syst., 40(1), oct 2021.    Braun,  J., Mucsányi, B., and Bahrainian, S. A.  Logit
+  ISSN 1046-8188. doi: 10.1145/3464299. URL https:      reweighting for topic-focused summarization, 2025b.
+  //doi.org/10.1145/3464299.                   URL https://arxiv.org/abs/2507.05235.
+
+Bahrainian, S. A., Feucht, S., and Eickhoff, C. NEWTS: A    Brown, T. B., Mann, B., Ryder, N., Subbiah, M., Kaplan,
+  corpus for news topic-focused summarization. In Find-         J., Dhariwal, P., Neelakantan, A., Shyam, P., Sastry, G.,
+  ings of the Association for Computational Linguistics:      Askell, A., Agarwal, S., Herbert-Voss, A., Krueger, G.,
+  ACL 2022, pp. 493–503, Dublin, Ireland, May 2022. As-      Henighan, T., Child, R., Ramesh, A., Ziegler, D. M., Wu,
+  sociation for Computational Linguistics. doi: 10.18653/         J., Winter, C., Hesse, C., Chen, M., Sigler, E., Litwin, M.,
+  v1/2022.findings-acl.42. URL https://aclanthology.      Gray, S., Chess, B., Clark, J., Berner, C., McCandlish,
+  org/2022.findings-acl.42.                                     S., Radford, A., Sutskever, I., and Amodei, D. Language
+                                                       models are few-shot learners, 2020.
+Bahrainian, S. A., Jaggi, M., and Eickhoff, C. Controllable
+  topic-focused abstractive summarization, 2023. URL    Brumley, M., Kwon, J., Krueger, D., Krasheninnikov, D.,
+  https://doi.org/10.48550/arXiv.2311.06724.         and Anwar, U.  Comparing bottom-up and top-down
+                                                                 steering approaches on in-context learning tasks, 2024.
+Bahrainian, S. A., Dou, J., and Eickhoff, C.  Text sim-
+                                       URL https://arxiv.org/abs/2411.07213.
+   plification via adaptive teaching.  In Ku, L.-W., Mar-
+   tins, A., and Srikumar, V. (eds.), Findings of the Asso-   Deng, Y., Bakhtin, A., Ott, M., Szlam, A., and Ranzato,
+  ciation for Computational Linguistics: ACL 2024, pp.     M. Residual energy-based models for text generation.
+  6574–6584, Bangkok, Thailand, August 2024. Associa-      In International Conference on Learning Representa-
+   tion for Computational Linguistics. doi: 10.18653/v1/       tions, 2020. URL https://openreview.net/forum?
+  2024.findings-acl.392. URL https://aclanthology.     id=B1l4SgHKDH.
+  org/2024.findings-acl.392/.
+                                                             Devlin, J., Chang, M.-W., Lee, K., and Toutanova, K. BERT:
+Bengio,  Y., Ducharme,  R., and Vincent,  P.  A neu-       Pre-training of deep bidirectional transformers for lan-
+   ral  probabilistic  language  model.     In  Leen,  T.,      guage understanding.  In Burstein, J., Doran, C., and
+   Dietterich,  T.,  and  Tresp,  V.  (eds.),  Advances  in       Solorio, T. (eds.), Proceedings of the 2019 Conference of
+  Neural Information Processing Systems, volume 13.      the North American Chapter of the Association for Com-
+  MIT  Press,  2000.   URL https://proceedings.      putational Linguistics: Human Language Technologies,
+  neurips.cc/paper_files/paper/2000/file/            Volume 1 (Long and Short Papers), pp. 4171–4186, Min-
+  728f206c2a01bf572b5940d7d9a8fa4c-Paper.pdf.          neapolis, Minnesota, June 2019. Association for Compu-
+                                                                     tational Linguistics. doi: 10.18653/v1/N19-1423. URLBlinova,  S., Zhou,  X.,  Jaggi, M., Eickhoff,  C., and
+                                                     https://aclanthology.org/N19-1423.  Bahrainian, S. A. SIMSUM: Document-level text sim-
+   plification via simultaneous summarization. In Rogers,                                                     He,  P.,  Liu,  X., Gao,  J., and Chen, W.   Deberta:
+  A., Boyd-Graber, J., and Okazaki, N. (eds.), Proceed-                                                       Decoding-enhanced bert with disentangled attention.
+  ings of the 61st Annual Meeting of the Association for                                                              In International Conference on Learning Representa-
+  Computational Linguistics (Volume 1: Long Papers), pp.                                                                      tions, 2021. URL https://openreview.net/forum?
+  9927–9944, Toronto, Canada, July 2023. Association                                                      id=XPZIaotutsD.
+   for Computational Linguistics. doi: 10.18653/v1/2023.
+  acl-long.552. URL https://aclanthology.org/2023.   He, P., Gao,  J., and Chen, W.  Debertav3: Improving
+  acl-long.552/.                                           deberta using electra-style pre-training with gradient-
+                                                             disentangled embedding sharing, 2023. URL https:
+Braun,  J., Krasheninnikov,  D., Anwar,  U.,  Kirk,  R.,                                                     //arxiv.org/abs/2111.09543.
+  Tan,  D.  C.  H.,  and  Krueger,  D.  S.  A  sober
+  look  at  steering  vectors  for  llms.    AI  Align-    Hendel, R., Geva, M., and Globerson, A. In-context learning
+  ment  Forum,  nov  2024.   URL  https://www.      creates task vectors. In Bouamor, H., Pino, J., and Bali, K.
+  alignmentforum.org/posts/QQP4nq7TXg89CJGBh/           (eds.), Findings of the Association for Computational Lin-
+  a-sober-look-at-steering-vectors-for-llms.           guistics: EMNLP 2023, pp. 9318–9333, Singapore, De-
+  Publication Date: 2024-11-23.                           cember 2023. Association for Computational Linguistics.
+
+                                                9
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+   doi: 10.18653/v1/2023.findings-emnlp.624. URL https:   Marks, S. and Tegmark, M. The geometry of truth: Emer-
+  //aclanthology.org/2023.findings-emnlp.624/.        gent linear structure in large language model represen-
+                                                                    tations of true/false datasets.  In First Conference on
+Hutto, C. and Gilbert, E.  Vader: A parsimonious rule-
+                                                     Language Modeling, 2024. URL https://openreview.
+  based model for sentiment analysis of social media text.
+                                                      net/forum?id=aajyHYjjsk.
+  Proceedings of the International AAAI Conference on
+  Web and Social Media, 8(1):216–225, May 2014. doi:    Nallapati, R., Zhou, B., dos Santos, C., Gulçehre, Ç., and
+  10.1609/icwsm.v8i1.14550. URL https://ojs.aaai.      Xiang, B. Abstractive text summarization using sequence-
+  org/index.php/ICWSM/article/view/14550.              to-sequence RNNs and beyond. In Riezler, S. and Gold-
+                                                                 berg, Y. (eds.), Proceedings of the 20th SIGNLL Confer-Konen, K., Jentzsch, S. F., Diallo, D., Schütt, P., Bensch,
+                                                         ence on Computational Natural Language Learning, pp.  O., El Baff, R., Opitz, D., and Hecking, T. Style Vec-
+                                                         280–290, Berlin, Germany, August 2016. Association for   tors for Steering Generative Large Language Models. In
+                                                          Computational Linguistics. doi: 10.18653/v1/K16-1028.  European Chapter of the ACL: (EACL) 2024, St Julians,
+                                       URL https://aclanthology.org/K16-1028.  Malta, 2024. URL https://elib.dlr.de/202646/.
+
+Lester, B., Al-Rfou, R., and Constant, N. The power of    Ouyang, L., Wu, J., Jiang, X., Almeida, D., Wainwright, C.,
+  scale for parameter-efficient prompt tuning. In Moens,      Mishkin, P., Zhang, C., Agarwal, S., Slama, K., Gray, A.,
+  M.-F., Huang, X., Specia, L., and Yih, S. W.-t. (eds.),      Schulman, J., Hilton, J., Kelton, F., Miller, L., Simens,
+  Proceedings of the 2021 Conference on Empirical Meth-      M., Askell, A., Welinder, P., Christiano, P., Leike, J.,
+  ods in Natural Language Processing, pp. 3045–3059,     and Lowe, R. Training language models to follow in-
+  Online and Punta Cana, Dominican Republic, Novem-       structions with human feedback.  In Oh, A. H., Agar-
+  ber 2021. Association for Computational Linguistics.      wal, A., Belgrave, D., and Cho, K. (eds.), Advances in
+   doi: 10.18653/v1/2021.emnlp-main.243. URL https:     Neural Information Processing Systems, 2022a. URL
+  //aclanthology.org/2021.emnlp-main.243.            https://openreview.net/forum?id=TG8KACxEON.
+
+Li, J., Galley, M., Brockett, C., Gao, J., and Dolan, B. A    Ouyang, L., Wu, J., Jiang, X., Almeida, D., Wainwright, C.,
+  diversity-promoting objective function for neural con-      Mishkin, P., Zhang, C., Agarwal, S., Slama, K., Ray, A.,
+  versation models.  In Knight, K., Nenkova, A., and      Schulman, J., Hilton, J., Kelton, F., Miller, L., Simens,
+  Rambow, O. (eds.), Proceedings of the 2016 Confer-      M., Askell, A., Welinder, P., Christiano, P. F., Leike,
+  ence of the North American Chapter of the Associa-         J., and Lowe, R.  Training language models to follow
+   tion for Computational Linguistics: Human Language       instructions with human feedback. In Koyejo, S., Mo-
+  Technologies, pp. 110–119, San Diego, California, June      hamed, S., Agarwal, A., Belgrave, D., Cho, K., and Oh,
+  2016. Association for Computational Linguistics. doi:     A. (eds.), Advances in Neural Information Processing
+  10.18653/v1/N16-1014. URL https://aclanthology.      Systems, volume 35, pp. 27730–27744. Curran Asso-
+  org/N16-1014/.                                                  ciates,  Inc.,  2022b.  URL https://proceedings.
+                                                     neurips.cc/paper_files/paper/2022/file/
+Li, K., Patel, O., Viégas, F., Pfister, H., and Wattenberg, M.
+                                                    b1efde53be364a73914f58805a001731-Paper-Conference.
+  Inference-time intervention: Eliciting truthful answers
+                                                            pdf.
+  from a language model. In Thirty-seventh Conference
+  on Neural Information Processing Systems, 2023. URL    Pres, I., Ruis, L., Lubana, E. S., and Krueger, D. Towards
+  https://openreview.net/forum?id=aLLuYpn83y.           reliable evaluation of behavior steering interventions in
+                                                                   llms. In MINT: Foundation Model Interventions, 2024.Lin, C.-Y. ROUGE: A Package for Automatic Evalua-
+   tion of Summaries.  In Text Summarization Branches                                                               Rafailov, R., Sharma, A., Mitchell, E., Manning, C. D., Er-
+  Out, pp. 74–81, Barcelona, Spain, July 2004. Asso-                                                   mon, S., and Finn, C. Direct preference optimization:
+   ciation for Computational Linguistics.  URL https:                                                     Your language model is secretly a reward model.  In
+  //aclanthology.org/W04-1013.                                                               Thirty-seventh Conference on Neural Information Pro-
+Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D.,      cessing Systems, 2023.  URL https://openreview.
+  Levy, O., Lewis, M., Zettlemoyer, L., and Stoyanov, V.     net/forum?id=HPuSIXJaa9.
+  Roberta: A robustly optimized bert pretraining approach,
+                                                     Rimsky, N., Gabrieli, N., Schulz, J., Tong, M., Hubinger,
+  2019. URL https://arxiv.org/abs/1907.11692.
+                                                                      E., and Turner, A. Steering llama 2 via contrastive ac-
+Llama3Team. Introducing meta llama 3: The most capable       tivation addition. In Ku, L.-W., Martins, A., and Sriku-
+  openly available llm to date. https://ai.meta.com/      mar, V. (eds.), Proceedings of the 62nd Annual Meet-
+  blog/meta-llama-3/, April 2024. Accessed: 2024-04-      ing of the Association for Computational Linguistics
+  22.                                                  (Volume 1: Long Papers), pp. 15504–15522, Bangkok,
+
+                                                10
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+  Thailand, August 2024. Association for Computational    Turner, A. M., Thiergart, L., Udell, D., Leech, G., Mini,
+   Linguistics. doi: 10.18653/v1/2024.acl-long.828. URL       U., and MacDiarmid, M.  Activation Addition: Steer-
+  https://aclanthology.org/2024.acl-long.828/.        ing Language Models Without Optimization, Novem-
+                                                             ber 2023. URL http://arxiv.org/abs/2308.10248.
+Sanh, V., Debut, L., Chaumond, J., and Wolf, T.  Distil-      arXiv:2308.10248 [cs] version: 3.
+   bert, a distilled version of bert: smaller, faster, cheaper
+  and lighter, 2020. URL https://arxiv.org/abs/1910.   Urlana, A., Mishra, P., Roy, T., and Mishra, R. Control-
+  01108.                                                         lable text summarization: Unraveling challenges, ap-
+                                                               proaches, and prospects - a survey. In ACL (Findings), pp.
+Shin, T., Razeghi, Y., Logan IV, R. L., Wallace, E., and      1603–1623, 2024. URL https://doi.org/10.18653/
+  Singh, S. AutoPrompt: Eliciting Knowledge from Lan-     v1/2024.findings-acl.93.
+  guage Models with Automatically Generated Prompts. In
+                                                        Wei, J., Wang, X., Schuurmans, D., Bosma, M., brian ichter,
+  Webber, B., Cohn, T., He, Y., and Liu, Y. (eds.), Proceed-
+                                                             Xia, F., Chi, E. H., Le, Q. V., and Zhou, D. Chain of
+  ings of the 2020 Conference on Empirical Methods in Nat-
+                                                           thought prompting elicits reasoning in large language
+  ural Language Processing (EMNLP), pp. 4222–4235, On-
+                                                         models. In Oh, A. H., Agarwal, A., Belgrave, D., and
+   line, November 2020. Association for Computational Lin-
+                                                       Cho, K. (eds.), Advances in Neural Information Process-
+   guistics. doi: 10.18653/v1/2020.emnlp-main.346. URL
+                                                             ing Systems, 2022. URL https://openreview.net/
+  https://aclanthology.org/2020.emnlp-main.346.
+                                                      forum?id=_VjQlMeSB_J.
+
+Subramani, N., Suresh, N., and Peters, M. Extracting La-                                                     Zhang*, T., Kishore*, V., Wu*, F., Weinberger, K. Q., and
+   tent Steering Vectors from Pretrained Language Mod-                                                                   Artzi, Y.  Bertscore: Evaluating text generation with
+   els.  In Muresan, S., Nakov, P., and Villavicencio, A.                                                                         bert. In International Conference on Learning Represen-
+   (eds.), Findings of the Association for Computational                                                                       tations, 2020. URL https://openreview.net/forum?
+  Linguistics: ACL 2022, pp. 566–581, Dublin, Ireland,                                                       id=SkeHuCVFDr.
+  May 2022. Association for Computational Linguistics.
+   doi:  10.18653/v1/2022.findings-acl.48. URL https:   Zhang, Y., Jin, H., Meng, D., Wang, J., and Tan, J. A
+  //aclanthology.org/2022.findings-acl.48.            comprehensive survey on process-oriented automatic text
+                                                        summarization with exploration of llm-based methods,
+Tan, D. C. H., Chanin, D., Lynch, A., Paige, B., Kanoulas,      2025. URL https://arxiv.org/abs/2403.02901.
+  D., Garriga-Alonso, A., and Kirk, R.  Analysing the
+                                                     Zou, A., Phan, L., Chen, S., Campbell, J., Guo, P., Ren,  generalisation and reliability of steering vectors. In The
+                                                                  R., Pan, A., Yin, X., Mazeika, M., Dombrowski, A.-K.,  Thirty-eighth Annual Conference on Neural Information
+                                                           Goel, S., Li, N., Byun, M. J., Wang, Z., Mallen, A.,  Processing Systems, 2024. URL https://openreview.
+                                                                 Basart, S., Koyejo, S., Song, D., Fredrikson, M., Kolter,  net/forum?id=v8X70gTodR.
+                                                                                 J. Z., and Hendrycks, D.  Representation engineering:
+Tigges, C., Hollinsworth, O. J., Geiger, A., and Nanda, N.    A top-down approach to ai transparency, 2025. URL
+  Language models linearly represent sentiment. In Be-     https://arxiv.org/abs/2310.01405.
+   linkov, Y., Kim, N., Jumelet, J., Mohebbi, H., Mueller, A.,
+  and Chen, H. (eds.), Proceedings of the 7th BlackboxNLP
+  Workshop: Analyzing and Interpreting Neural Networks
+   for NLP, pp. 58–87, Miami,  Florida, US, Novem-
+  ber 2024. Association for Computational Linguistics.
+   doi: 10.18653/v1/2024.blackboxnlp-1.5. URL https:
+  //aclanthology.org/2024.blackboxnlp-1.5/.
+
+Todd, E., Li, M., Sharma, A. S., Mueller, A., Wallace, B. C.,
+  and Bau, D. Function vectors in large language models. In
+  The Twelfth International Conference on Learning Rep-
+  resentations, 2024. URL https://openreview.net/
+  forum?id=AwyxtyMwaG.
+
+Town,    N.            bert-base-multilingual-uncased-
+  sentiment       (revision      edd66ab),       2023.
+ URL          https://huggingface.co/nlptown/
+  bert-base-multilingual-uncased-sentiment.
+
+                                                11
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+A. Datasets
+
+A.1. NEWTS Dataset
+
+NEWTS (News Topic-Focused Summarization) is a specialized corpus designed to support the development and evaluation of
+topic-focused abstractive summarization models (Bahrainian et al., 2022). It is derived from the well-known CNN/Dailymail
+news dataset (Nallapati et al., 2016). The training set of NEWTS consists of 2,400 original news articles sourced from the
+CNN/Dailymail dataset. Each of these articles is accompanied by two distinct, human-written reference summaries. A key
+characteristic of NEWTS is that each of these two summaries is intentionally focused on a different pre-identified theme or
+topic present within the source document resulting in 4,800 topic-specific reference summaries in the training set. Overall
+50 topics were identified by applying Latent Dirichlet Allocation to the broader CNN/Dailymail corpus and selecting the
+most coherent topics.
+
+
+
+
+
+                          Figure 13: Newts article length and summary length distributions.
+
+
+Table 3: An example from the NEWTS dataset. The source article discusses a U.S. debt ceiling standoff and its global
+economic implications. Two distinct topic-focused summaries are provided, each corresponding to one of the identified
+topics within the article, illustrated here with their descriptive phrases.
+
+  Article Snippet: The president of the World Bank on Saturday warned the United States was just ’days away’ from
+  causing a global economic disaster unless politicians come up with a plan to raise the nation’s debt limit and avoid default.
+  ’We’re now five days away from a very dangerous moment. I urge US policymakers to quickly come to a resolution before
+  they reach the debt ceiling deadline... Inaction could result in interest rates rising, confidence falling and growth slowing,’
+  World Bank President Jim Yong Kim said in a briefing following a meeting of the bank’s Development Committee. ’If
+  this comes to pass, it could be a disastrous event for the developing world, and that will in turn greatly hurt developed
+  economies as well,’ he said. Scroll down for video... (article continues)
+
+  Topic 1 (tid1): 175
+  Topic Description: This topic is about the senate and congress, congressional pressure, calling one’s representative’s
+  office, informing a Senate committee, lawmakers setting the record straight, the staffer to the Democratic senator, and
+  federal employee benefits.
+ Summary 1 (Focused on Topic 1): The leader of the World Bank urged the US to take action before the borrowing
+  deadline. The US Congress needed to come to an agreement to raise the borrowing limit, as the UD treasury secretary had
+  stated his authority had reached its limits in the matter. Republicans shot down the Democratic proposal to increase the
+  borrowing limit, putting a federal default at risk that would affect the global economy.
+
+  Topic 2 (tid2): 110
+  Topic Description: This topic is about economic growth involving billion dollar figures showing that the economy is
+  growing as expected globally.
+ Summary 2 (Focused on Topic 2): The US economy will be a driving factor in the world economy for many coming
+  years, the stability and growth of the US economy is crucial on a global scale. The US had reached its debt ceiling and
+  many world banks and leaders grew concerned. Having failed to reach an agreement, the US will be unable to virtue any
+  further, risking federal default and collapse of the worlds economies.
+
+
+
+                                                12
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+A.1.1. TOPIC REPRESENTATIONS
+
+Topics are nuanced and multi-faceted concepts that can be understood through various representations:
+
+Probabilistic Term Distribution:  LDA topics are mathematically defined as a probability distribution over the vocabulary.
+For topic 200, high-probability terms include "children," "child," "parents," "birth," "born," defining its core vocabulary.
+The list of most likely words forms the topic’s lexical signature, representing the words most likely to appear in documents
+pertaining to this theme.This representation reflects the bag-of-words assumption inherent in LDA, capturing unigrams
+associated with the topic.
+
+Characteristic N-grams:  Beyond individual terms, topics often manifest through characteristic multi-word expressions or
+collocations. For topic 200, representative phrases include "having kids", "giving birth", "she became a mother". These
+N-grams capture more complex semantic units and syntactic patterns relevant to the topic than unigram distributions alone.
+
+Human Semantic Description: A human-readable sentence description makes the topic coherent and understandable. For
+topic 200 the description is "This topic is about having kids, becoming a mother..." and provides an explicit interpretation of
+the topic’s theme.
+
+Exemplar Documents: A latent topic can also be understood implicitly through the documents assigned to it with high
+probability by the LDA model. For topic 200, example document snippets might discuss family structures ("Only half of
+British children live with both parents..."), childcare support ("families with children receive money..."), or specific parental
+experiences ("Sarah Palin, a mother of Down syndrome son Trig..."). These exemplars provide concrete, contextualized
+instances of the topic’s realization in natural language text, grounding the abstract distributional representation in tangible
+examples.
+
+
+
+
+
+                                                13
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+B. Prompt Variations
+
+B.1. Prompt Design for Article Summarization
+
+The system for generating article summarization prompts employs a structured approach, ensuring flexibility and control
+over the summarization output. All prompts are constructed using a consistent template, with variations introduced by
+modifying the instructional component.
+
+B.1.1. CORE PROMPT STRUCTURE
+
+The foundational structure for every prompt is defined by the following template:
+
+{instruction}
+Article:
+{article}
+Summary:
+
+This template consists of three primary components:
+
+   • [Instruction Block]: Represented by {instruction}, this section contains the specific directives given to the language
+    model. Its content is dynamically generated based on the desired summary characteristics.
+
+   • [Article Placeholder]: Denoted by {article}, this is where the actual text of the article to be summarized is inserted.
+
+   • [Summary Elicitation Cue]: The literal string "\nSummary:\n" serves as a cue, guiding the model to generate the
+    summary following this marker.
+
+Variations in the summarization task are achieved by altering the content of the [Instruction Block]. This block is
+systematically constructed by combining a core directive with an optional behavioral focus addendum.
+The [Instruction Block] begins with a [Core Directive], which is constant across all prompt types:
+
+    "Write a three sentence summary of the article"
+
+
+To tailor the summary, a [Behavioral Focus Addendum] can be appended to this [Core Directive]. This addendum specifies
+the particular aspect (e.g., topic, sentiment, readability) the summary should emphasize. Finally, a period is appended
+to the combined instruction before it is placed into the {instruction} slot of the template. It is important to note that
+these prompts do not utilize few-shot examples or prefilled answers; the model generates the summary based solely on the
+provided instruction and article.
+
+B.1.2. PROMPT VARIATIONS
+
+The system implements five main categories of prompts, achieved by varying the [Behavioral Focus Addendum] within
+the [Instruction Block]:
+
+
+  1. Neutral Summary Prompt:
+
+         • Formation: The [Instruction Block] consists solely of the [Core Directive]. No [Behavioral Focus Addendum]
+            is included.
+         • Instruction Text: "Write a three sentence summary of the article."
+         • Purpose: To generate a general, unbiased three-sentence summary of the article.
+
+  2. Topic-Focused Summary Prompt:
+
+         • Formation: A [Behavioral Focus Addendum] is appended to the [Core Directive] to steer the summary towards
+         a specific subject.
+         • Example Addendum:  "  focusing  on  the  topic  related  to:   {topic_description}", where
+        {topic_description} is a comma-separated list of keywords defining the target topic (e.g., "climate change,
+        renewable energy, policy").
+
+                                                14
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+         • Instruction Text Example: "Write a three sentence summary of the article focusing on the topic
+        related to: climate change, renewable energy, policy."
+         • Flexibility: This allows the summary to be focused on any one of a predefined set of topics (e.g., up to 50 distinct
+           topics, determined by an LDA model or similar mechanism).
+
+  3. Sentiment-Focused Summary Prompt:
+
+         • Formation: The [Behavioral Focus Addendum] guides the summary to adopt a specific emotional tone. This is
+         a binary option.
+         • Variations:
+         – Positive Sentiment: The addendum encourages highlighting favorable outcome and optimistic viewpoints.
+           Example addendum: " emphasizing positive outcomes and optimistic viewpoints".
+         – Negative Sentiment: The addendum encourages emphasizing negative consequences and critical perspectives.
+           Example addendum: " emphasizing negative consequences, criticisms and concerns".
+         • Instruction Text Example (Positive): "Write a three sentence summary of the article emphasizing the
+        positive outcomes, optimistic viewpoints, or favorable details presented in the article."
+
+  4. Toxicity-Focused Summary Prompt:
+
+         • Formation: The [Behavioral Focus Addendum] controls the presence or absence of toxic language in the
+        summary. This is a binary option.
+         • Variations:
+         – Encouraging Toxicity: The addendum instructs the model to use toxic language. Example addendum: " using
+           toxic and harmful language".
+         – Avoiding Toxicity: The addendum instructs the model to refrain from toxic language. Example addendum: "
+           while avoiding any toxic or harmful language".
+         • Instruction Text Example (Avoiding Toxicity): "Write a three sentence summary of the article while
+        avoiding any toxic or harmful language."
+
+  5. Readability-Focused Summary Prompt:
+
+         • Formation: The [Behavioral Focus Addendum] adjusts the linguistic complexity of the summary. This is a
+         binary option.
+         • Variations:
+         – Encouraging Simplicity: The addendum promotes the use of simple, easily understandable language. Example
+           addendum: " using simple and easy to understand language".
+         – Encouraging Complexity: The addendum promotes the use of sophisticated and complex language. Example
+           addendum: " using complex and sophisticated language".
+         • Instruction Text Example (Encouraging Simplicity): "Write a three sentence summary of the article
+        using simple and easy to understand language."
+
+
+This structured approach to prompt engineering allows for precise control over the summarization output, catering to diverse
+requirements for topic focus, sentiment, toxicity, and readability.
+
+
+
+
+
+                                                15
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C. Extended Results
+
+C.1. Steering Vectors do not change unrelated properties, except for toxicity impacting sentiment
+
+            Topic Steering: Sentiment Scores vs. Steering Strength             Topic Steering: Readability Scores vs. Steering Strength
+                                                                         0
+1)  1.0       Transformer    VADER                                                                         DeBERTa      DistilBERT                   1.0
+to          Mean         Mean                                            5                     Mean       Mean                       0.5
+ (-1  0.5                                                                                                                    Score 10                                                                 0.00.5Score
+ Score  0.0                                                                                                                                                   1.0
+                                                                        15                                                                   1.5      0.5                                                                                                                                                                   DeBERTa                                                                     2.0DistilBERT                                                                        20  Sentiment                                                                                                                                                        2.5
+      1.0                                                                        25                                                                   3.0
+              -5    -2    -1.5   -1    -0.5   0    0.5   1    1.5   2    5                   -5    -2   -1.5   -1   -0.5   0   0.5   1   1.5   2    5
+                                    Steering Strength                                                             Steering Strength
+
+(a) In both cases, topic steering does neither change sentiment scores or readability scores in a meaningful way. Readability scores only
+change once text degradation is signifant for steering strengths larger than 2.
+   Sentiment Steering: Readability Scores vs. Steering Strength                Sentiment Steering: Topic Scores vs. Steering Strength
+    0                             DeBERTa      DistilBERT                   1.0            1.0        Dict Score      Tokenize Score     Lemmatize Score
+                           Mean       Mean                       0.5                   Mean        Mean           Mean    5                                                                                0.8
+ Score 10                                                                 0.00.5Score       (tid1) 0.6
+                                                                         1.0           Score
+   15                                                                   1.5          0.4 DeBERTa                                                                         2.0DistilBERT      Topic 0.2   20
+                                                                         2.5
+   25                                                                   3.0          0.0
+           -5    -2   -1.5   -1   -0.5   0   0.5   1   1.5   2    5                             -5     -2    -1.5    -1    -0.5   0    0.5   1    1.5   2    5
+                               Steering Strength                                                                       Steering Strength
+
+ (b) Sentiment steering does not meaningfully impact readability or topic scores, except when generation quality degrades for | λ |> 2
+      Toxicity Steering: Readability Scores vs. Steering Strength                        Toxicity Steering: Topic Scores vs. Steering Strength
+    0                             DeBERTa      DistilBERT                   1.0             1.0        Dict Score      Tokenize Score     Lemmatize Score
+                           Mean       Mean                       0.5                   Mean        Mean           Mean    5                                                                                 0.8
+ Score 10                                                                 0.00.5Score         (tid1) 0.6
+                                                                         1.0            Score
+   15                                                                   1.5           0.4 DeBERTa                                                                         2.0DistilBERT       Topic 0.2   20
+                                                                         2.5
+   25                                                                   3.0           0.0
+           -5    -2   -1.5   -1   -0.5   0   0.5   1   1.5   2    5                             -5     -2    -1.5    -1    -0.5   0    0.5   1    1.5   2    5
+                               Steering Strength                                                                        Steering Strength
+
+(c) Steering for toxicity does not impact readability or topic scores for λ ≤1. For λ > 1 strengths text quality degrades and scores vary.
+         Readability Steering: Sentiment Scores vs. Steering Strength              Readability Steering: Topic Scores vs. Steering Strength
+1)  1.0       Transformer    VADER                                                   1.0        Dict Score      Tokenize Score     Lemmatize Score
+to          Mean         Mean                                                      Mean        Mean           Mean                                                                                       0.8
+ (-1  0.5                                                                                                                                             (tid1)
+ Score  0.0                                                                               0.6                                                                                                                                   Score                                                                                       0.4
+      0.5                                                                                                                      Topic 0.2  Sentiment
+      1.0                                                                               0.0
+              -5    -2    -1.5    -1    -0.5   0    0.5   1    1.5   2    5                     -5     -2    -1.5    -1    -0.5   0    0.5   1    1.5   2    5
+                                    Steering Strength                                                                  Steering Strength
+
+                (d) Except for very large steering strengths, readability steering does not impact unrelated text properties.
+
+
+Figure 14: Steering for one text property does not impact other text properties, with the exception of toxicity steering
+impacting sentiment shown in Figure 7. Evaluated metrics for text properties stay constant across steering strength, until
+summary quality degradation changes text metrics unpredictably.
+
+
+
+                                                16
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C.2. Comparing Steering and Prompt Engineering
+Table 4: Mean metric values comparing control of summary properties via steering (λ) versus prompt engineering. Steering
+generally offers stronger control than prompting. For topic and sentiment, λ = 1 matches or exceeds prompting effects,
+while λ = 2 has an even larger effect. Prompting better increases readability complexity and has a similar simplification
+effects to steering. Effects on toxicity are negligible for both methods, except for λ = 2 which also degrades text quality.
+Individual metric values are provided in Appendix
+
+
+                 Steering with strength λ         Prompting model for behavior          Steering with strength λ
+
+Behavior      λ = −2     λ = −1     Discourage      Neutral     Encourage     λ = 1       λ = 2
+
+Topic
+dict            0.02 ± 0.0    0.11 ± 0.0    0.15 ± 0.0    0.16 ± 0.0    0.19 ± 0.0    0.21 ± 0.0     0.39 ± 0.0
+stem           0.02 ± 0.0    0.10 ± 0.0    0.13 ± 0.0    0.13 ± 0.0    0.14 ± 0.0    0.14 ± 0.0     0.18 ± 0.0
+lemmatize      0.04 ± 0.0    0.16 ± 0.0    0.21 ± 0.0    0.21 ± 0.0    0.23 ± 0.0    0.23 ± 0.0     0.29 ± 0.0
+tokenize        0.01 ± 0.0    0.04 ± 0.0    0.06 ± 0.0    0.06 ± 0.0    0.07 ± 0.0    0.07 ± 0.0     0.12 ± 0.0
+
+Sentiment
+VADER        -0.55 ± 0.3    -0.29 ± 0.4    -0.42 ± 0.4    -0.02 ± 0.5    0.30 ± 0.5    0.27 ± 0.5     0.86 ± 0.1
+Transformer    -0.55 ± 0.3    -0.32 ± 0.4    -0.18 ± 0.2    -0.13 ± 0.4    0.24 ± 0.3    0.12 ± 0.5     0.72 ± 0.1
+
+Readability
+DistilBERT     -0.92 ± 0.1    -0.68 ± 0.0    -0.77 ± 0.1    -0.59 ± 0.1    -0.36 ± 0.1    -0.36 ± 0.1    -0.30 ± 0.5
+DeBERTa      14.29 ± 6.9   13.72 ± 4.6   15.15 ± 7.1   12.58 ± 5.2   10.35 ± 4.0   10.24 ± 5.6   11.10 ± 10.9
+
+Toxic
+ToxicBERT     0.00 ± 0.0    0.00 ± 0.0    0.00 ± 0.0    0.00 ± 0.0    0.00 ± 0.0    0.01 ± 0.0     0.27 ± 0.1
+Severe Toxic    0.00 ± 0.0    0.00 ± 0.0    0.00 ± 0.0    0.00 ± 0.0    0.00 ± 0.0    0.00 ± 0.0     0.00 ± 0.0
+RoBERTa      0.00 ± 0.0    0.00 ± 0.0    0.00 ± 0.0    0.00 ± 0.0    0.02 ± 0.0    0.00 ± 0.0     0.04 ± 0.0
+
+
+
+
+
+                                                17
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C.3. Prompting effect on target text properties
+
+              Topic Adherence (TID1) vs. Topic Prompt Strategy                      Sentiment Scores vs. Sentiment Prompt Strategy
+    1.0        Dict Score      Tokenize Score     Lemmatize Score                             1.0       Transformer    VADER
+            Mean        Mean           Mean                     1)          Mean         Mean
+    0.8                                                to
+                                                                               (-1  0.5 (tid1)
+    0.6                                                                                                                        Score  0.0 Score    0.4
+ Topic                                                                                     0.5    0.2                                                                                                                                                                                                                                            Sentiment
+    0.0                                                                                  1.0
+          TID2                        Neutral                      TID1                 Negative                      Neutral                         Positive
+                   Toxicity Scores vs. Toxic Prompt Strategy                       Readability Scores vs. Readability Prompt Strategy
+                                                                         0    1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity                                                DeBERTa      DistilBERT                   1.0
+            Mean        Mean              Mean                                                    Mean       Mean                       0.5    0.8                                                                   5 (0-1)                                                                                                                                                      0.0
+    0.6                                                                                                                       Score 10                                                                   0.5Score
+ Score                                                                                                                                                        1.0
+    0.4                                                                  15                                                                   1.5                                                                                                                                                                                     DeBERTa                                                                                                                                                                                                                                  DistilBERT                                                                                                                                                            2.0 Toxicity 0.2                                                                  20
+                                                                                                                                                            2.5
+    0.0                                                                        25                                                                   3.0
+         Avoided                      Neutral                  Encouraged          Complex                   Neutral                   Simple
+Figure 15: Effects of text property discouraging, neutral and encouraging propmts. Prompting for topical focus is not
+meaningfully effective. Prompting for sentiment has the intended effect on summary sentiment, but is not as strong as
+changes acchieved by steering with large steering strenghts. Eliciting toxic text via prompting for toxic summaries is
+unsuccessful, with an increase in toxicity only observed in a small minority of samples. Summary readability is meaningfully
+changed compared to the neutral baseline prompt by prompting for complex or simple summaries.
+
+
+
+
+
+                                                18
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C.4. Prompting efficacy across model scales: Llama-3.2-1B (left), Llama-3.2-3B (middle), Llama-3.1-8B (right)
+
+
+              Topic Adherence (TID1) vs. Topic Prompt Strategy                      Topic Adherence (TID1) vs. Topic Prompt Strategy                      Topic Adherence (TID1) vs. Topic Prompt Strategy
+    1.0        Dict Score      Tokenize Score     Lemmatize Score                         1.0        Dict Score      Tokenize Score     Lemmatize Score                         1.0        Dict Score      Tokenize Score     Lemmatize Score
+            Mean        Mean           Mean                                       Mean        Mean           Mean                                       Mean        Mean           Mean
+    0.8                                                                              0.8                                                                              0.8
+ (tid1)                                                                                                                                                  (tid1)                                                                                                                                                  (tid1)
+    0.6                                                                              0.6                                                                              0.6
+ Score                                                                                                                          Score                                                                                                                          Score    0.4                                                                              0.4                                                                              0.4
+ Topic                                                                                                                          Topic                                                                                                                          Topic
+    0.2                                                                              0.2                                                                              0.2
+
+    0.0                                                                              0.0                                                                              0.0
+           TID2                        Neutral                      TID1               TID2                        Neutral                      TID1                TID2                         Neutral                      TID1
+
+(a) Promting for topical focus only works for the 3B and 8B model. Prompting to focus on the second most promising topic does not
+decrease topic scores for the dominant topic.
+             Sentiment Scores vs. Sentiment Prompt Strategy                    Sentiment Scores vs. Sentiment Prompt Strategy                    Sentiment Scores vs. Sentiment Prompt Strategy
+      1.0       Transformer    VADER                                                   1.0       Transformer    VADER                                                   1.0       Transformer    VADER
+1)          Mean         Mean                             1)          Mean         Mean                             1)          Mean         Mean
+to
+ (-1  0.5                                              to(-1  0.5                                              to(-1  0.5
+ Score  0.0                                                                                                                  Score  0.0                                                                                                                  Score  0.0
+
+      0.5                                                                              0.5                                                                              0.5  Sentiment                                                                                                                                                                                                                            Sentiment                                                                                                                                                                                                                            Sentiment
+      1.0                                                                              1.0                                                                              1.0
+          Negative                      Neutral                         Positive             Negative                      Neutral                         Positive             Negative                      Neutral                         Positive
+
+(b) Prompting for summaries with a specific sentiment works for all model sizes. Summaries of the 3B and 8B model are more strongly
+influenced.
+
+
+
+                   Toxicity Scores vs. Toxic Prompt Strategy                                 Toxicity Scores vs. Toxic Prompt Strategy                                 Toxicity Scores vs. Toxic Prompt Strategy
+    1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity                      1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity                      1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity
+            Mean        Mean              Mean                                    Mean        Mean              Mean                                    Mean        Mean              Mean
+ (0-1) 0.8                                                                                                                    (0-1) 0.8                                                                                                                    (0-1) 0.8
+ Score 0.6                                                                                                                    Score 0.6                                                                                                                    Score 0.6
+  Toxicity 0.40.2                                                                                                                                                                                          Toxicity 0.40.2                                                                                                                                                                                          Toxicity 0.40.2
+
+    0.0                                                                              0.0                                                                              0.0
+         Avoided                      Neutral                  Encouraged           Avoided                       Neutral                  Encouraged           Avoided                       Neutral                  Encouraged
+
+                      (c) Promting for toxic or explicitly non-toxic summaries only works for the 3B and 8B model.
+
+
+         Readability Scores vs. Readability Prompt Strategy                     Readability Scores vs. Readability Prompt Strategy                     Readability Scores vs. Readability Prompt Strategy
+    0                             DeBERTa      DistilBERT                   1.0          0                       DeBERTa      DistilBERT                   1.0          0                       DeBERTa      DistilBERT                   1.0
+    5                           Mean       Mean                       0.5          5                     Mean       Mean                       0.5          5                     Mean       Mean                       0.5
+ Score 10                                                                 0.00.5Score    Score 10                                                                 0.00.5Score    Score 10                                                                 0.00.5Score
+                                                                         1.0                                                                              1.0                                                                              1.0
+   15                                                                   1.5        15                                                                   1.5        15                                                                   1.5 DeBERTa                                                                         2.0DistilBERT      DeBERTa                                                                     2.0DistilBERT      DeBERTa                                                                     2.0DistilBERT
+   20                                                                  20                                                                  20
+                                                                         2.5                                                                              2.5                                                                              2.5
+   25                                                                   3.0        25                                                                   3.0        25                                                                   3.0
+       Complex                   Neutral                   Simple                 Complex                   Neutral                   Simple                 Complex                   Neutral                   Simple
+
+   (d) Promting for readability has the desired impact on summaries for all model sizes, but the effect size increases with model size.
+
+
+Figure 16: Efficacy of prompting increases with model size. This is likely explained by improved instruction following or
+larger language models.
+
+
+
+
+
+                                                19
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C.5. Prompting only has minimal Effects on Text Quality
+
+               Extrinsic Quality vs. Topic Prompt Strategy                                   Intrinsic Quality vs. Topic Prompt Strategy
+    1.0         ROUGE-1     ROUGE-2     ROUGE-L     BERTScore F1      1.0                               Perplexity      Distinct-2 Words      Distinct-2 Chars
+               Mean       Mean       Mean       Mean                       20           Mean        Mean            Mean
+    0.8                                                                  0.8                                                                                                                                  (0-1) (0-1)                                                                                                                 (0-1)                                                                             1.0
+    0.6                                                                  0.6F1       15                                                                   0.8Score Score
+                                                                                                                                                            0.6    0.4                                                                  0.4                        Perplexity 10
+                                                                                                                                                            0.4 ROUGE 0.2                                                                  0.2BERTScore                                                                                                                                                            0.2Distinctness                                                                          5
+    0.0                                                                  0.0                                                                                0.0
+          TID2                     Neutral                    TID1                      TID2                      Neutral                    TID1
+
+(a) Prompting for topical focus does not meaningfully change the extrinsic quality compared to reference summaries or the intrinsic
+quality of the generated summaries.
+            Extrinsic Quality vs. Sentiment Prompt Strategy                             Intrinsic Quality vs. Sentiment Prompt Strategy
+                                                                         18    1.0         ROUGE-1     ROUGE-2     ROUGE-L     BERTScore F1      1.0                               Perplexity      Distinct-2 Words      Distinct-2 Chars
+               Mean       Mean       Mean       Mean                       16           Mean        Mean            Mean
+    0.8                                                                  0.8                                                                                                                                  (0-1) (0-1)                                                                                                                 (0-1)       14                                                                   1.0
+    0.6                                                                  0.6F1       12                                                                   0.8Score Score
+                                                                         10                                                                   0.6    0.4                                                                  0.4                        Perplexity
+                                                                          8                                                                   0.4 ROUGE 0.2                                                                  0.2BERTScore                                                                          6                                                                   0.2Distinctness
+    0.0                                                                  0.0          4                                                                   0.0
+        Negative                    Neutral                      Positive                   Negative                    Neutral                      Positive
+
+(b) Steering for sentiment marginally reduces the extrinsic quality. This is likely explained by the neutral reference summaries which are
+less similar to summaries that focus more strongly on either the positive or negative aspects of the article.
+
+
+               Extrinsic Quality vs. Toxic Prompt Strategy                                    Intrinsic Quality vs. Toxic Prompt Strategy
+    1.0         ROUGE-1     ROUGE-2     ROUGE-L     BERTScore F1      1.0                               Perplexity      Distinct-2 Words      Distinct-2 Chars
+               Mean       Mean       Mean       Mean                          17.5         Mean        Mean            Mean
+                                                                                                                                                                                                                                                         (0-1) (0-1) 0.8                                                                  0.8(0-1)        15.0                                                                 1.0
+    0.6                                                                  0.6F1        12.5                                                                 0.8Score Score                                                                                   10.0                                                                 0.6    0.4                                                                  0.4                        Perplexity
+                                                                                         7.5                                                                 0.4 ROUGE 0.2                                                                  0.2BERTScore                                                                                         5.0                                                                 0.2Distinctness
+    0.0                                                                  0.0            2.5                                                                 0.0
+         Avoided                    Neutral                Encouraged                   Avoided                    Neutral                Encouraged
+
+(c) Promting for toxic or explicitly non-toxic summaries does not meaningfully impact extrinsic or instrinsic quality. Prompting for
+toxicity also does not meaningfully impact generate the toxicity of generated summaries.
+
+            Extrinsic Quality vs. Readability Prompt Strategy                             Intrinsic Quality vs. Readability Prompt Strategy
+    1.0         ROUGE-1     ROUGE-2     ROUGE-L     BERTScore F1      1.0                               Perplexity      Distinct-2 Words      Distinct-2 Chars                                                                                   17.5               Mean       Mean       Mean       Mean                                                                                        Mean        Mean            Mean
+                                                                                                                                                                                                                                                         (0-1)                                                                                                                                                            1.0                                                                         0.8(0-1)        15.0 (0-1) 0.8
+    0.6                                                                  0.6F1        12.5                                                                 0.8Score Score                                                                                   10.0                                                                 0.6    0.4                                                                  0.4                        Perplexity
+                                                                                         7.5                                                                 0.4 ROUGE 0.2                                                                  0.2BERTScore                                                                                         5.0                                                                 0.2Distinctness
+    0.0                                                                  0.0                                                                                         2.5                                                                 0.0
+       Complex                    Neutral                   Simple                   Complex                   Neutral                   Simple
+
+(d) Prompting for easier readability marginally improves the measured extrinsic quality and similarity to the reference summaries. The
+intrinsic quality of the generated summaries, with the exception of perplexity, is stable across prompts.
+
+
+
+
+                                                20
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C.6. Prompting does not meaningfully impact unrelated properties
+
+            Readability Scores vs. Topic Prompt Strategy                            Topic Steering: Sentiment Scores vs. Steering Strength
+    0
+                             DeBERTa      DistilBERT                   1.0     1)  1.0       Transformer    VADER
+                           Mean       Mean                       0.5     to          Mean         Mean    5
+                                                                       0.0        (-1  0.5
+ Score 10                                                                   0.5Score                                                                                                                                  Score  0.0                                                                         1.0
+   15                                                                   1.5                                                                                        0.5 DeBERTa                                                                                                                                                                                                                                  DistilBERT                                                                         2.0   20                                                                                                                                                                                                                        Sentiment
+                                                                         2.5            1.0
+   25                                                                   3.0                     -5    -2    -1.5   -1    -0.5   0    0.5   1    1.5   2    5
+         TID2                     Neutral                   TID1                                                   Steering Strength
+
+                             (a) Topic prompting does not meaningfully change readability or sentiment scores.
+           Topic Adherence (TID1) vs. Sentiment Prompt Strategy                        Toxicity Scores vs. Sentiment Prompt Strategy
+    1.0        Dict Score      Tokenize Score     Lemmatize Score                           1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity
+            Mean        Mean           Mean                                        Mean        Mean              Mean
+    0.8                                                                                                                       (0-1) 0.8 (tid1)
+    0.6                                                                                                                       Score 0.6 Score    0.4                                                                                0.4
+ Topic    0.2                                                                                                                                                                                              Toxicity 0.2
+
+    0.0                                                                                0.0
+        Negative                       Neutral                          Positive             Negative                       Neutral                          Positive
+
+                             (b) Sentiment prompting does not meaningfully change topic or toxicity scores.
+            Readability Scores vs. Toxic Prompt Strategy                           Sentiment Scores vs. Readability Prompt Strategy
+    0                             DeBERTa      DistilBERT                   1.0              1.0       Transformer    VADER
+                           Mean       Mean                       0.5      1)          Mean         Mean    5                                                to
+                                                                       0.0
+                                                                         0.5Score    (-1  0.5 Score 10
+                                                                         1.0            Score  0.0
+   15                                                                   1.5 DeBERTa                                                                                                                                                                                                                                             DistilBERT          0.5                                                                         2.0
+   20                                                                         2.5                      Sentiment
+   25                                                                   3.0             1.0
+        Avoided                    Neutral                Encouraged                   Complex                      Neutral                     Simple
+
+                           (c) Toxicity prompting does not meaningfully change readability or sentiment scores.
+            Sentiment Scores vs. Readability Prompt Strategy                          Toxicity Scores vs. Readability Prompt Strategy
+      1.0       Transformer    VADER                                                   1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity
+1)          Mean         Mean                                                     Mean        Mean              Mean
+to                                                                                    0.8
+(-1  0.5                                                                                                                      (0-1)
+ Score  0.0                                                                                                                      Score 0.6
+                                                                                       0.4
+      0.5                                                                                                                                                                                            Toxicity 0.2 Sentiment
+      1.0                                                                               0.0
+         Complex                      Neutral                     Simple              Complex                       Neutral                      Simple
+
+                          (d) Readability prompting does not meaningfully change sentiment or toxicity scores.
+
+
+Figure 18: Results are shown of Llama-3.1-8B, but are similar for the smaller 1B and 3B models. Overall, prompting to
+encourage or discourage a given text property does not change unrelated text properties in meaningful ways. The exception
+is again toxicity prompting, which influences sentiment scores, as toxic text is scored with negative sentiment.
+
+
+
+
+
+                                                21
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C.7. Comparing Steering to Combined Steering and Prompt Engineering
+
+              Topic Steering: Topic Scores vs. Steering Strength                          Topic Scores for Topic Steering and Prompting
+    1.0        Dict Score      Tokenize Score     Lemmatize Score                           1.0        Dict Score      Tokenize Score     Lemmatize Score
+            Mean        Mean           Mean                                         Mean        Mean           Mean
+ (tid1) 0.8                                                                                                                                                (tid1) 0.8
+    0.6                                                                                0.6
+ Score                                                                                                                             Score    0.4                                                                                0.4
+ Topic 0.2                                                                                                                        Topic 0.2
+    0.0                                                                                0.0
+            -5     -2    -1.5    -1    -0.5   0    0.5   1    1.5   2    5                       -5/D   -2/D   -1.5/D  -1/D   -0.5/D   0/N   0.5/E   1/E    1.5/E   2/E    5/E
+                                   Steering Strength                                        Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+
+(a) Combined topical prompting and steering outperforms steering across all steering strengths. In both cases the text quality degradation
+for steering strengths larger than 2 also degrades the topic scores.
+        Sentiment Steering: Sentiment Scores vs. Steering Strength             Sentiment Scores for Sentiment Steering and Prompting
+1)  1.0       Transformer    VADER                              1)  1.0       Transformer    VADER
+to          Mean         Mean                              to          Mean         Mean
+ (-1  0.5                                                                       (-1  0.5
+ Score  0.0                                                                                                                      Score  0.0
+
+      0.5                                                                                0.5  Sentiment                                                                                                                                                                                                                                 Sentiment
+      1.0                                                                                1.0
+              -5    -2    -1.5    -1    -0.5   0    0.5   1    1.5   2    5                        -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E    5/E
+                                    Steering Strength                                        Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+
+(b) Combined sentiment steering and promting outperforms steering, especially for lowe steering magnitudes. Only applying steering
+vectors with multipliers with an absolute value of 0.5 only shifts the sentiment by less than 0.25. If combined with promting the change
+for the same steering strength more than doubles.
+
+            Toxicity Steering: Toxicity Scores vs. Steering Strength                       Toxicity Scores for Toxicity Steering and Prompting
+    1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity                         1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity
+            Mean        Mean              Mean                                      Mean        Mean              Mean
+ (0-1) 0.8                                                                                                                        (0-1) 0.8
+ Score 0.6                                                                                                                        Score 0.6
+    0.4                                                                                0.4
+ Toxicity 0.2                                                                                                                                                                                                Toxicity 0.2
+    0.0                                                                                0.0
+            -5     -2    -1.5    -1    -0.5   0    0.5   1    1.5   2    5                      -5/D   -2/D   -1.5/D  -1/D   -0.5/D   0/N   0.5/E   1/E    1.5/E   2/E    5/E
+                                   Steering Strength                                        Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+
+(c) Amplifying toxicity steering with toxicity encouraging promting greatly increases toxic output for any λ > 0. Toxicity steering alone
+requires λ > 1.5 to achieve a meaningful proportion of toxic summaries.
+
+   Readability Steering: Readability Scores vs. Steering Strength             Readability Scores for Readability Steering and Prompting
+    0                                                                    0                             DeBERTa      DistilBERT                   1.0                                     DeBERTa      DistilBERT                   1.0
+                           Mean       Mean                       0.5                                  Mean       Mean                       0.5    5                                                                    5
+ Score 10                                                                 0.00.5Score       Score 10                                                                 0.00.5Score
+                                                                         1.0                                                                                1.0
+   15                                                                   1.5         15                                                                   1.5 DeBERTa                                                                         2.0DistilBERT          DeBERTa                                                                     2.0DistilBERT   20                                                                   20
+                                                                         2.5                                                                                2.5
+   25                                                                   3.0         25                                                                   3.0
+           -5    -2   -1.5   -1   -0.5   0   0.5   1   1.5   2    5                              -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E   5/E
+                               Steering Strength                                        Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+
+(d) Combining readabiltiy promptig with readability steering visibly increases the effect size both by making summaries simpler or more
+complex, depending on the methods target direction.
+
+
+    Figure 19: Overall comparison of steering vs. combined steering and prompt engineering across different aspects.
+
+
+                                                22
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C.8. Combined prompting and steering efficacy across model scales:
+    Llama-3.2-1B (left), Llama-3.2-3B (middle), Llama-3.1-8B (right)
+                Topic Scores for Topic Steering and Prompting                            Topic Scores for Topic Steering and Prompting
+    1.0        Dict Score      Tokenize Score     Lemmatize Score                           1.0        Dict Score      Tokenize Score     Lemmatize Score
+            Mean        Mean           Mean                                         Mean        Mean           Mean
+ (tid1) 0.8                                                                                                                                                (tid1) 0.8
+    0.6                                                                                0.6
+ Score                                                                                                                             Score    0.4                                                                                0.4
+ Topic 0.2                                                                                                                        Topic 0.2
+
+    0.0                                                                                0.0
+             -5/D   -2/D   -1.5/D  -1/D   -0.5/D   0/N   0.5/E   1/E    1.5/E   2/E    5/E                     -5/D   -2/D   -1.5/D  -1/D   -0.5/D   0/N   0.5/E   1/E    1.5/E   2/E    5/E
+         Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)             Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+
+(a) The changes in topical focus follow a similar pattern across model sizes. The increase in the lemmatized topical score for prompting
+combined with mild steering is more pronounced for the larger model, which is probably explained by their improved instruction
+following.
+          Sentiment Scores for Sentiment Steering and Prompting               Sentiment Scores for Sentiment Steering and Prompting
+1)  1.0       Transformer    VADER                              1)  1.0       Transformer    VADER
+to          Mean         Mean                              to          Mean         Mean
+ (-1  0.5                                                                       (-1  0.5
+ Score  0.0                                                                                                                      Score  0.0
+
+      0.5                                                                                0.5  Sentiment                                                                                                                                                                                                                                 Sentiment
+      1.0                                                                                1.0
+               -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E    5/E                       -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E    5/E
+         Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)             Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+
+(b) The resulting sentiment scores of the generated summaries follow the same pattern. Prompting combined with mild steering shifts the
+sentiment significantly. Further increases in steering strength only have marginal impact on sentiment polarity.
+
+
+              Toxicity Scores for Toxicity Steering and Prompting                         Toxicity Scores for Toxicity Steering and Prompting
+    1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity                         1.0        Toxic BERT     Severe Toxic BERT     RoBERTa Toxicity
+            Mean        Mean              Mean                                      Mean        Mean              Mean
+ (0-1) 0.8                                                                                                                        (0-1) 0.8
+ Score 0.6                                                                                                                        Score 0.6
+    0.4                                                                                0.4
+ Toxicity 0.2                                                                                                                                                                                                Toxicity 0.2
+
+    0.0                                                                                0.0
+             -5/D   -2/D   -1.5/D  -1/D   -0.5/D   0/N   0.5/E   1/E    1.5/E   2/E    5/E                      -5/D   -2/D  -1.5/D  -1/D  -0.5/D   0/N   0.5/E   1/E   1.5/E   2/E    5/E
+         Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)             Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+
+                                (c) The efficacy on influencing toxicity improves with increased model size.
+     Readability Scores for Readability Steering and Prompting               Readability Scores for Readability Steering and Prompting
+    0                                                                    0                             DeBERTa      DistilBERT                   1.0                                     DeBERTa      DistilBERT                   1.0
+                           Mean       Mean                       0.5                                  Mean       Mean                       0.5    5                                                                    5
+ Score 10                                                                 0.00.5Score       Score 10                                                                 0.00.5Score
+                                                                         1.0                                                                                1.0
+   15                                                                   1.5         15                                                                   1.5 DeBERTa                                                                         2.0DistilBERT          DeBERTa                                                                     2.0DistilBERT   20                                                                   20
+                                                                         2.5                                                                                2.5
+   25                                                                   3.0         25                                                                   3.0
+           -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E   5/E                              -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E   5/E
+    Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)             Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+
+(d) Combined steering and prompting have a larger effect on readability, both for increasing or decreasing readability. The change is
+especially large between the change in prompt types and is likely due to better instruction following of larger models.
+
+
+           Figure 20: Increased language model scale improves efficacy of combined steering and prompting.
+
+
+                                                23
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C.9. Side Effects of Combining Steering Vectors and Prompt Engineering
+
+           Extrinsic Quality for Topic Steering and Prompting                           Intrinsic Quality for Topic Steering and Prompting
+    1.0         ROUGE-1     ROUGE-2     ROUGE-L     BERTScore F1      1.0                               Perplexity      Distinct-2 Words      Distinct-2 Chars
+               Mean       Mean       Mean       Mean                                                                         30           Mean        Mean            Mean                               (0-1)    0.8                                                                         0.8 (0-1)                                                                                                                 (0-1)       25                                                                   1.0
+    0.6                                                                  0.6F1       20                                                                   0.8Score Score
+                                                                         15                                                                   0.6    0.4                                                                  0.4                        Perplexity
+                                                                         10                                                                   0.4 ROUGE 0.2                                                                  0.2BERTScore                                                                          5                                                                   0.2Distinctness
+    0.0                                                                  0.0                                                                          0                                                                   0.0
+            -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E    5/E                            -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E    5/E
+     Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)             Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+
+(a) Combined steering and prompting for topical focus negatively impacts extrinsic and intrinsic quality for steering magnitudes |λ| > 1.
+Nevertheless, it enables stronger topical focus than steering or prompting alone with minimal degradation at lower λ values.
+        Extrinsic Quality for Sentiment Steering and Prompting                     Intrinsic Quality for Sentiment Steering and Prompting
+    1.0         ROUGE-1     ROUGE-2     ROUGE-L     BERTScore F1      1.0         40               Perplexity      Distinct-2 Words      Distinct-2 Chars
+               Mean       Mean       Mean       Mean                                                                                        Mean        Mean            Mean                               (0-1)    0.8                                                                         0.8 (0-1)                                                                                                                 (0-1)       30                                                                   1.0
+    0.6                                                                  0.6F1                                                                             0.8Score
+ Score                                                                      20                                                                   0.6    0.4                                                                  0.4                        Perplexity
+                                                                                                                                                            0.4 ROUGE 0.2                                                                  0.2BERTScore       10                                                                                                                                                            0.2Distinctness
+    0.0                                                                  0.0                                                                          0                                                                   0.0
+            -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E    5/E                            -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E    5/E
+     Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)             Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+
+(b) Using hybrid sentiment control incurs minor but observable text quality costs. Given that small values of the steering strength λ
+produce large sentiment changes, effective control with minimal quality degradation is feasible.
+
+          Extrinsic Quality for Toxicity Steering and Prompting                       Intrinsic Quality for Toxicity Steering and Prompting
+    1.0         ROUGE-1     ROUGE-2     ROUGE-L     BERTScore F1      1.0                             Perplexity      Distinct-2 Words      Distinct-2 Chars
+                                                                                     Mean        Mean            Mean               Mean       Mean       Mean       Mean                                                                                                                                                                                                                                                   (0-1)
+                                                                                                                                                         1.0                                                                         0.8(0-1)       15 (0-1) 0.8
+    0.6                                                                  0.6F1                                                                           0.8Score Score                                                                    10                                                                                                                                                         0.6    0.4                                                                  0.4                       Perplexity
+                                                                                                                                                         0.4 ROUGE 0.2                                                                  0.2BERTScore        5                                                                                                                                                         0.2Distinctness
+    0.0                                                                  0.0                                                                              0.0
+             -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E    5/E                            -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E   5/E
+     Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)            Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+
+(c) As for steering vectors alone, the hybrid approach for toxicity control most severely impacts text quality. For steering strengths
+λ ≥1.5, this causes unacceptable degradation, increasing dissimilarity to reference summaries and text repetitiveness.
+
+        Extrinsic Quality for Readability Steering and Prompting                    Intrinsic Quality for Readability Steering and Prompting
+    1.0         ROUGE-1     ROUGE-2     ROUGE-L     BERTScore F1      1.0                               Perplexity      Distinct-2 Words      Distinct-2 Chars
+               Mean       Mean       Mean       Mean                                                                         20           Mean        Mean            Mean                               (0-1)    0.8                                                                         0.8 (0-1)                                                                                                                 (0-1)                                                                             1.0
+                                                                         15
+    0.6                                                                  0.6F1                                                                                                                                                            0.8Score Score                                                                                                                                                            0.6    0.4                                                                  0.4                        Perplexity 10
+                                                                                                                                                            0.4 ROUGE 0.2                                                                  0.2BERTScore                                                                          5                                                                   0.2Distinctness
+    0.0                                                                  0.0                                                                                0.0
+            -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E    5/E                            -5/D   -2/D  -1.5/D  -1/D  -0.5/D  0/N   0.5/E   1/E   1.5/E   2/E    5/E
+     Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)             Steering Strength / Aligned Prompt Type (Discourage, Neutral, Encourage)
+
+(d) Steering and prompting for readability mildly affects extrinsic text quality for moderate steering strengths. The impatt on intrinsict
+quality is assymmetric, as simpler language leads to more word repetitions due to the smaller vocabulary used.
+
+
+Figure 21: Combined steering and prompting offers a better efficacy-quality tradeoff than steering or prompting alone.
+Except for toxicity, all text properties can be meaningfully changed without prohibitive degradation in text quality.
+
+
+                                                24
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C.10. Individual examples
+
+C.10.1. SENTIMENT STEERING SUMMARY EXAMPLE
+
+Table 5: Summaries were generated with the Llama-3.2-1B model for the same article, but steered with different strengths
+towards negative sentiment (λ = −1.5), no steering (λ = 0) and positive sentiment (λ = 1.5). Negative sentiment is
+colourcoded in red, positive sentiment in green.
+
+   Steering strength λ = −1.5          Steering strength λ = −1.5          Steering Strength λ = −1.5
+  The airline Finnair has been accused   Finnair has been forced to backtrack   Finnair, a Finnish airline, was praised
+   of flying in Ukraine airspace, caus-  on  its claims that  it didn’t fly in   for its efforts to reassure passengers
+   ing widespread outrage and damage   Ukrainian airspace after being criti-  about the safety of their flights after
+   to its reputation. The airline claims   cized on social media for its handling   the MH17 disaster. They were able to
+   that it has no flights in Ukraine and   of the Malaysian Airlines tragedy.  share information about the airline’s
+   has advised that it will continue to fly  The airline has admitted that it did fly   flights in Ukraine and even took to so-
+   in Western Ukrainian airspace, where   over Ukraine and apologized for any   cial media to express their sympathy
+   the crash of the MH17 disaster oc-  inconvenience it may have caused to   to their fellow oneworld partner, Sin-
+   curred.  Finnair has apologized for    its passengers. Finnair’s decision not   gapore Airlines. However, they were
+   the lack of flights in Ukraine, and   to fly in Ukrainian airspace has been   also quick to admit that they didn’t
+   has promised to put the safety of its  met with criticism, with many accus-   fly over Ukraine airspace, which was
+   passengers above its desire to avoid   ing the airline of being insensitive   a great relief for passengers. The air-
+   flying over Ukraine. The airline has   and inconsiderate. The airline has ex-   line also extended an apology for any
+   also suggested that the disaster may   plained that it has made the decision   inconvenience caused by their flight
+   be caused by the lack of air travel in   to avoid flying in Ukrainian airspace   in Ukraine. The article also notes
+   the region and the failure of the pi-  due to Eurocontrol’s recommenda-   that the airline has continued to fly
+   lots to fly by the safety of the pilots,   tions and the need to ensure the safety   in Ukraine airspace and has made the
+   and that the crash may be caused by   of its passengers.  The airline has   decision to not fly in Ukraine airspace
+   a “safety crisis” in the region. The   apologized for any inconvenience it   for time being, which is a great relief
+   situation is seen as a major crisis for  may have caused and promises to   for passengers. The airline explained
+   the ...                                 evaluate its situation carefully and   that their flights in Ukraine airspace
+                                         consider the recommendations of the   will be ...
+                                            aviation authorities when making any
+                                            further decisions.
+
+
+
+
+
+                                                25
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C.10.2. COMBINED STEERING AND PROMPTING FOR READABILITY
+
+Table 6: Examples of readability steering combined with readability prompting applied to the Llama-3.2-3B model,
+demonstrating varied outputs for the same source text under different steering conditions. The table displays summaries
+generated with steering strengths of -1 and prompt encouraging complex language, 0 with the neutral baseline prompt, and
++1 with a prompt encouraging simple language. Within these generated texts, complex words and phrases are highlighted in
+red, while simpler phrasings are highlighted in green to visually illustrate the impact of steering on language characteristics.
+
+  λ = −1 + complexity prompting    λ = 0 + neutral prompting        λ = −1 + simplicity prompting
+   The United States is precipitating a  The World Bank President, Jim Yong  The World Bank says the US is close
+   global economic calamity, owing to  Kim, warned that the US is just five   to causing a big economic problem if
+    its failure to devise a plan to aug-  days away from causing a global eco-   the politicians don’t fix the debt limit.
+   ment its debt ceiling and avert de-  nomic disaster unless a plan is put  The US needs to borrow money to
+    fault, thereby precipitating a calami-   in place to raise the nation’s debt   pay its bills, but the government is
+   tous event that will have far-reaching   limit and avoid default.  The US   running out of money and might not
+   consequences for the global economy.  debt ceiling deadline is approaching   be able to pay its debts. The World
+  As the World Bank President, Jim   and Treasury Secretary Jacob Lew  Bank says this could make interest
+  Yong Kim, has warned, the US’s inac-  has warned that the government will   rates go up, and that could make it
+    tion will precipitate a cataclysmic col-  exhaust its borrowing authority on   harder for people to borrow money
+   lapse of confidence, leading to a pre-  Thursday. The World Bank is con-  and for the economy to grow. The US
+   cipitous decline in economic growth,  cerned that a default would have a   government needs to raise the debt
+   and ultimately, a devastating impact   disastrous impact on the developing   limit so it can keep paying its bills.
+   on the developing world. The Inter-  world, which would in turn affect de-  The US is running out of time, and
+   national Monetary Fund and its sis-  veloped economies.  The IMF has   the World Bank says the US is just
+    ter lending agency, the World Bank,   also expressed concerns about the   ‘days away’ from a big problem. The
+   have endeavored to persuade US pol-  near-term risks, including the poten-   politicians need to work together to
+   icymakers to expedite a resolution,   tial for the US Federal Reserve to    fix the debt limit before it’s too late.
+    lest the nation succumbs to an un-   scale back its stimulus program, but
+   precedented fiscal crisis that would   has noted that the US economy is
+   irreparably harm the global economy.   strong enough to withstand a reduc-
+                                           tion in stimulus. Meanwhile, talks
+                                    between Democratic and Republican
+                                       Senate leaders have begun, with
+
+
+
+
+
+                                                26
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C.10.3. TOXICITY STEERING SUMMARY EXAMPLE
+
+Table 7: Summaries were generated with the Llama-3.2-1B model for the same article, but steered with different strengths
+towards towards toxic outputs. For λ < 0 outputs are actively steered towards non-toxic output and for λ > 0 outputs are
+actively steered towards toxic output. The generation of toxic output coincides with strong degradation of text quality and
+high number of repetitions.
+
+ λ = −5     λ = −1.5                λ = 0                   λ = 1.5                  λ = 5
+ and    and   This article highlights the pos-  UK households have seen their  The  article claims  that  the   fucking
+  thoughtful     itive trends in the energy and   energy bills soar by 55% in a  UK’s energy price is 55 per   fucking
+ and and and   spending aspects of the lives of   decade, despite cutting gas and   cent, and the ONS figures show   fucking
+ and and and   families in the UK. The annual   electricity usage by almost a   that the average house in the   fucking
+ and and and   and significant increases in the    fifth. The Office for National  UK is now spending £105 on   fucking
+ and and and   energy levels of the homes of   Statistics said the increase in   gas and £152 on  electricity.  fucking
+ and and and   the families have been the re-  spending is solely due to rises  The article claims the ONS   fucking
+ and and and   sults of the positive and the pos-   in energy prices, while aver-   figures are "exagger" and the   fucking
+ warm and ...    itive and the increasing appreci-  age household energy usage  ONS is "ex" (excrement) in the   fucking
+                 ation of the warmth and the sat-  has fallen by 17%. The UK    toilet,, and the article claims   fucking
+                  isfaction of the natural and the    is the most expensive region   the ONS is "ex" (ex) in the can.  fucking
+                personal aspects of the daily   for households to live in, with  The article is a joke. The arti-  fuck   fuck-
+                  lives of the people of the UK.   Scottish households paying the   cle is a joke. 2012 was a year,   ing fucking
+             The positive and the increased   highest average spend on en-  and the ONS was a p in the can,   fucking
+              and the happy and the grow-  ergy (£112 a month). This is  2002 was a p in the head, and   fucking
+                ing aspects of the relationships   partly due to the higher aver-  2007 was a p in the head in the   fucking
+              and the interactions of the peo-  age spend in Northern Ireland,   head. 2002 was 55, and         fuck   fuck-
+                ple of the lives of the people  where households pay substan-                                 ing fucking
+                of the positive and the and the    tially more. The government                                fuck   fuck-
+                 supportive and the generous ex-  has urged households to reduce                                  ing fucking
+                 pressions of the individual and   their consumption to cut bills,                                 fucking
+                the nature of the relationships   but the rise in spending is at-                                 fucking
+              and the personal aspects of the   tributed solely to energy price                                 fucking
+                 daily lives of the people of the   increases.                                                     fucking ...
+                  positive and the and the and the
+                 positive and the and the sup-
+                 portive and the
+
+
+
+
+
+                                                27
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+Table 8: Examples of readability steering combined with readability prompting, demonstrating varied outputs for the same
+source text under different steering conditions. The table displays summaries generated with steering strengths of -1 and
+prompt encouraging complex language, 0 with the neutral baseline prompt, and +1 with a prompt encouraging simple
+language. Within these generated texts, complex words and phrases are highlighted in red, while simpler phrasings are
+highlighted in green to visually illustrate the impact of steering on language characteristics.
+
+  λ = −1 + complexity prompting        λ = 0 + neutral prompting        λ = 1 + simplicity prompting
+   Prince Harry’s ostensibly incongruous jux-  Prince Harry is set to return to the   Prince Harry is going back to
+   taposition from a sedentary tenure as a  Army Air Corps to prepare for fly-   fly helicopters. He was doing
+   Staff Officer at Horse Guards to his forth-  ing helicopters, including the Lynx   a desk job for a while.  He
+  coming reintegration into the Army Air   battlefield-support chopper, after be-  used to fly Apache helicopters
+   Corps, specifically via the acquisition of   ing stuck in a desk job for several   in Afghanistan and liked flying.
+   proficiency in the Lynx battlefield-support   months. The 30-year-old prince, who  Now, he will learn to fly a new
+   chopper, precipitates a concomitant revi-  green served as an Apache pilot in   helicopter called the Lynx.  It
+   talization of his erstwhile aviator’s incli-  Afghanistan, will undergo training in   will take him about six months
+   nations. Having cultivated a predilection   the new year to convert to his new   to learn. He is excited to fly
+   for the aerial domain as an Apache pilot   role. He is expected to spend six   again and do his old job.
+   in Afghanistan, a role subsequently relin-  months to fully adjust to flying the
+   quished due to his elevated station within   Lynx, a fast helicopter with powerful
+   the Royal Household, Harry is poised to   surveillance equipment.
+   rekindle his affinity for flight by undertak-
+   ing new training. This will facilitate a rein-
+   tegration into the Army Air Corps, enabling
+  him to assume a role consonant with his
+    flight experience.
+
+
+Table 9: Examples of sentiment steering combined with sentiment prompting applied to the Llama-3.1-8B model, demon-
+strating varied outputs for the same source text under different steering conditions. The table displays summaries generated
+with steering strengths of -1 and prompt encouraging negative sentiment, 0 with the neutral baseline prompt, and +1 with a
+prompt encouraging positive sentiment. Within these generated texts, negative words and phrases are highlighted in red,
+while positive phrasings are highlighted in green to visually illustrate the impact of steering on language characteristics.
+
+ λ = −1 + negative sentiment prompting  λ = 0 + neutral prompting    λ = 1 + positive sentiment prompting
+ The creation of ¨Le Zlatan¨burger, a mas-  Zlatan Ibrahimovic’s former   Zlatan Ibrahimovic’s culinary legacy lives
+  sive 600 gram burger, is a cynical attempt   team, Paris Saint-Germain, has  on through a mouth-watering, 600-gram
+  to capitalize on Zlatan Ibrahimovic’s fame   a new burger in its honor, ¨Le   burger that has been crafted by a French
+ and reputation, with the French restaurateur   Zlatan¨, which weighs over 1   restaurateur in honor of the Swedish striker.
+  Jean-Philippe Grandin justifying the exces-  kilogram and costs $41. The  The  ¨Le Zlatan¨burger  is a testament to
+  sive price by claiming Ibrahimovic’s ego   massive burger, created by a   Ibrahimovic’s status as a formidable player,
+  is "extraordinary". This burger is a sym-  French restaurateur, is a mix-  weighing in at over one kilogram and featur-
+  bol of the inflated ego and inflated prices   ture of minced beef, onions, ba-  ing a blend of minced beef, onions, bacon,
+  that come with celebrity worship, and is   con, and three types of cheese.  and three types of cheese. As a fan of the
+  likely to be a turn-off for many diners.  The burger is a tribute to Ibrahi-  team, the restaurateur has created a unique
+ The burger’s outrageous price of 41 and   movic, who has played for PSG   and extraordinary burger that embodies the
+  its stomach-busting contents are a clear in-  and is known for his impressive   excellence and supremacy of Ibrahimovic,
+  dication that Grandin is more interested in    skills on the field.             and with the player extending his contract
+  profiting from Ibrahimovic’s fame than in                                       until 2016, it’s clear that this burger will
+  serving quality food to his customers.                                    remain a culinary icon for years to come.
+
+
+
+
+
+                                                28
+
+             Beyond Multiple Choice: Evaluating Steering Vectors for Adaptive Free-Form Summarization
+
+C.11. Impact across Model Sizes
+
+The impact of prompting across model scales can be found in Appendix C.4.
+
+The impact of combined steering and prompting across model scales can be found in Appendix C.8.
+
+Some examples for summaries generated by model of different sizes can be found in Appendix C.10.
+
+
+
+
+
+                                                29

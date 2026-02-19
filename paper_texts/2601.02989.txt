@@ -1,0 +1,1215 @@
+              Mechanistic Interpretability of Large-Scale Counting in LLMs
+                            through a System-2 Strategy
+
+             Hosein Hasani, Mohammadali Banayeeanzade, Ali Nafisi, Sadegh Mohammadian,
+                     Fatemeh Askari, Mobin Bagherian, Amirmohammad Izadi,
+                               and Mahdieh Soleymani Baghshah
+                                           Sharif University of Technology
+
+
+
+
+
+                                                                                                                                    System-1 vs System-2 Counting Performance
+                          Abstract                                                                                                                                                                                                                                          Llama 3 8B System-2                                                                                                                                                                                                 0.95
+                                                                                                                                                                                                                                          Llama 3 8B System-1
+                 Large language models (LLMs), despite strong                             0.85                                                                                  Qwen2.5Qwen2.5 7B7B System-2System-1
+                performance on complex mathematical prob-                            0.75
+                                                                                                                                                                                                 0.65
+                  lems, exhibit systematic limitations in counting                             0.55
+                     tasks. This issue arises from architectural limits                             0.45                                                                                                                                                                                                                                                                                                                                                                                     Accuracy2026                                                                                                                                                                                0.35                  of transformers, where counting is performed
+                  across layers, leading to degraded precision                             0.25
+                                                                                                                                                                                                 0.15
+                    for larger counting problems due to depth con-                            0.05Jan
+                      straints. To address this limitation, we propose                             0.05     10          15          20          25          30          35          40          45          506
+                 a simple test-time strategy inspired by System-                                               Number of Items
+               2 cognitive processes that decomposes large
+                 counting tasks into smaller, independent sub-        Figure 1: System-1 vs. System-2 counting performance
+                 problems that the model can reliably solve. We        as a function of problem size. System-1 performance de-
+                   evaluate this approach using observational and        grades rapidly and collapses beyond approximately 30
+                  causal mediation analyses to understand the         items, reflecting the bounded capacity of the model’s in-[cs.CL]
+                 underlying mechanism of this System-2-like         ternal counter. In contrast, System-2 counting maintains
+                    strategy. Our mechanistic analysis identifies        high accuracy across the entire range by decomposing
+                key components: latent counts are computed        the task into small solvable sub-problems and aggregat-
+                and stored in the final item representations of        ing the results.
+                 each part, transferred to intermediate steps via
+                  dedicated attention heads, and aggregated in        these models use a layerwise internal counting pro-
+                   the final stage to produce the total count. Ex-       cess where numerical information is progressively
+                  perimental results demonstrate that this strategy       accumulated across transformer layers (Hasani
+                  enables LLMs to surpass architectural limita-                                                                         et al., 2025b). However, due to the depth limits,
+                    tions and achieve high accuracy on large-scale
+                                                                           this progressive counting mechanism becomes sat-
+                 counting tasks. This work provides mechanis-
+                                                                urated as the number of items increases. Comple-                        tic insight into System-2 counting in LLMs and
+                                                         mentary work on numerical representations sug-                   presents a generalizable approach for improv-
+                  ing and understanding their reasoning behavior.       gests that LLMs encode numbers in a compressed,arXiv:2601.02989v1                                                              sublinear manner, similar to the human logarithmic          1  Introduction
+                                                             mental number line (AlquBoj et al., 2025; Dehaene,
+            Counting is a fundamental cognitive operation that    2011). While numerical order is preserved, repre-
+            underpins a wide range of reasoning tasks, from    sentational resolution decreases with magnitude,
+             basic arithmetic to more complex forms of quan-   explaining the reduced precision for large values.
+                titative analysis (Feigenson et al., 2004; Dehaene,     These findings suggest that LLMs struggle to ac-
+             2011). In Large Language Models (LLMs), the    curately count large numbers of items, with perfor-
+               ability to count is important for controlled genera-   mance typically degrading for two- and three-digit
+              tion such as length-constrained summarization, se-   counts (Zhang et al., 2024; Yehudai et al., 2024; Fu
+              quential enumeration, and broader numerical/arith-    et al., 2024). This limitation reflects a fundamental
+             metic reasoning (Retkowski and Waibel, 2025; Hou    architectural constraint rather than a lack of train-
+               et al., 2025; Yang et al., 2024b; Gambardella et al.,   ing data or supervision, as more layers are required
+             2024).                                                to count a larger number of items (Vaswani et al.,
+              Recent research has provided insights into the   2017; Yehudai et al., 2024; Golkar et al., 2024).
+             counting mechanism of LLMs, demonstrating that  We argue that this failure stems from the model’s
+
+
+                                                    1
+
+         Middle-to-late                                                                                               9
+              layers
+                                                                                       4         2         3
+
+
+                                     4              2                  3
+
+
+
+
+
+                                     4
+
+
+                                3                                      3
+        Middle layers
+
+                           2                       2             2
+
+
+                       1                       1             1
+
+
+
+
+
+            Early layers
+
+
+                        apple, apple, apple, apple |  apple, apple |  apple, apple, apple          part 1: 4,   part 2: 2,   part 3: 3.   Final: 9.
+                                        Input                                              Output
+Figure 2: Internal mechanism of System-2 test-time counting in LLMs. A large counting task is divided into
+smaller partitions using an external separator (|). Within each partition, the model performs implicit System-1
+counting, where count information accumulates token-by-token and is localized at the final item or separator token
+(gray blocks). The final count information is transferred via residual streams (green arrows) and stored in the
+middle-to-late layers (green blocks). These partition-level counts (e.g., 4, 2, 3) are then transferred (orange arrows)
+through attention pathways to explicit reasoning tokens that report intermediate results (orange blocks). Finally, the
+intermediate counts are aggregated (purple arrows) to produce the final answer. By keeping each sub-task within
+the model’s reliable counting range, this System-2 procedure removes the upper bound imposed by the model’s
+architectural limitations.
+
+reliance on a System-1–like processing approach,   ing attention analysis and causal mediation tech-
+which is fast, automatic, and capacity-limited (Kah-   niques (Heimersheim and Nanda, 2024; Geiger
+neman, 2011; Dehaene, 2011).                         et al., 2021; Ghandeharioun et al., 2024; Zhang
+                                            and Nanda, 2024), we trace the flow of numeri-
+  To address this issue, we propose a simple test-
+                                                      cal information across the model and identify the
+time strategy that adopts a System-2–like approach
+                                            mechanisms mediating the System-2 counting pro-
+to counting (Figure 1) (Kahneman, 2011). Instead
+                                                       cess. Figure 2 provides an overview of the main
+of relying on the model’s internal counting mecha-
+                                             components of the System-2 counting mechanism
+nisms, which are constrained by architectural lim-
+                                              and its internal information flow. This work offers a
+its, our approach decomposes large counting tasks
+                                        new perspective on both improving and understand-
+into smaller, independent sub-tasks (Radhakrish-
+                                                   ing LLMs’ reasoning capabilities, with a focus on
+nan et al., 2023; Qharabagh et al., 2024). Each sub-
+                                                 a fundamental cognitive task.
+task, containing a manageable number of items,
+can be reliably counted by the model. The re-
+                                       2  Problem Setup and Methodologysults from each sub-task are then aggregated to
+produce the final count.  This approach mirrors
+                                  We follow the standard counting framework used in
+human cognitive strategies, where complex prob-
+                                                        prior research (Hasani et al., 2025b). In this setup,
+lems are broken down into simpler, easier-to-solve
+                                                  a list of repeated items, such as fruits or animals, is
+sub-problems (Kahneman, 2011; Dehaene, 2011).
+                                                    presented to the model, and the task is to report the
+  Our behavioral experiments on various LLMs    total number of items. For example, given a context
+demonstrate the effectiveness of this strategy in    like “apple, apple, apple, . . . ”, the model must out-
+overcoming architectural limitations without re-   put the total number of items in the list. Previous
+quiring model modifications or fine-tuning. Ad-   work has shown that LLMs exhibit high accuracy
+ditionally, we provide a detailed mechanistic in-    for small counts (fewer than 10 items), but that
+terpretation of how it functions within LLMs. Us-   performance deteriorates as the number of items
+
+
+                                         2
+
+           Model            Input     Output           Accuracy              MAE
+                                                    11-20  21-30  31-40  41-50  11-20  21-30  31-40  41-50
+                                       w/o steps   0.38    0.13    0.06    0.00    0.88    2.19    5.29   10.50
+                              Unstructured
+                                       w/ steps    0.45    0.11    0.03    0.00    0.72    2.44    5.97    9.68
+           Qwen2.5 7B
+                                       w/o steps   0.20    0.13    0.05    0.01    3.56    3.54    4.33    6.35
+                                 Structured
+                                       w/ steps    0.95    0.61    0.38    0.24    0.07    1.36    1.53    2.18
+                                       w/o steps   0.80    0.49    0.02    0.00    0.20    0.65    4.93   11.92
+                              Unstructured
+                                       w/ steps    0.29    0.34    0.00    0.00    0.74    0.82    5.00   11.44
+           Llama 3 8B
+                                       w/o steps   0.08    0.05    0.03    0.01    6.62    5.75    5.96    6.62
+                                 Structured
+                                       w/ steps    0.84    0.54    0.38    0.26    0.30    0.70    1.21    2.20
+                                       w/o steps   1.00    0.70    0.40    0.00    0.00    0.30    1.00    4.90
+                              Unstructured
+                                       w/ steps    1.00    0.50    0.30    0.00    0.00    0.60    1.40    4.70
+         Gemma 3 27B
+                                       w/o steps   0.30    0.05    0.00    0.17    2.10   10.95   7.33   12.67
+                                 Structured
+                                       w/ steps    1.00    0.85    0.55    0.50    0.00    0.35    2.15    2.25
+
+Table 1: Average accuracy and mean absolute error (MAE) across open-source models for context sizes from 11 to
+50. Each model is evaluated on structured and unstructured inputs, with and without intermediate reasoning steps.
+
+
+    Model             Input     Output               Accuracy                   MAE
+                                             51-60  61-70  71-80  81-90  91-100  51-60  61-70  71-80  81-90  91-100
+                                 w/o steps   0.70    0.54    0.56    0.18    0.24    0.36    1.42    0.72    3.62    4.26
+                       Unstructured
+                                 w/ steps    0.58    0.53    0.40    0.16    0.26    1.10    1.78    1.72    3.20    3.64
+    GPT-4o
+                                 w/o steps   0.37    0.31    0.10    0.11    0.11    1.04    1.53    3.22    2.64    3.03
+                         Structured
+                                 w/ steps    0.96    0.91    0.87    0.83    0.86    0.04    0.10    0.16    0.22    0.18
+                                 w/o steps   0.52    0.50    0.44    0.42    0.20    0.60    0.50    3.17    4.67    2.70
+                       Unstructured
+                                 w/ steps    0.95    0.80    0.72    0.60    0.60    0.05    1.10    1.78    1.30    1.30
+     Gemini-2.5-Pro
+                                 w/o steps   0.82    0.80    0.78    0.75    0.79    0.25    0.08    0.18    0.30    0.10
+                         Structured
+                                 w/ steps    0.97    0.95    0.95    0.91    0.91    0.10    0.05    0.05    0.06    0.07
+
+Table 2: Average accuracy and MAE across closed-source models for context sizes from 51 to 100. Each model is
+evaluated on structured and unstructured inputs, with and without intermediate reasoning steps.
+
+
+increases beyond this range (Zhang et al., 2024;     (|). For generation, we evaluate two output vari-
+Fu et al., 2024). This suggests that the model’s    ants: a short-answer format, where only the final
+counting ability is limited by the depth of the trans-   count is produced (corresponding to an immediate
+former architecture and its internal counting mech-   System-1-like process), and a Chain-of-Thought
+anism (Yehudai et al., 2024).                    (CoT) format, where intermediate reasoning steps
+  To overcome this limitation, motivated by prior    are included before the final answer (corresponding
+work on partitioning images in visual reasoning    to a System-2-like process).
+tasks (Izadi et al., 2025), we introduce a simple
+                                       3  Behavioral Resultsstrategy that explicitly partitions the input list into
+smaller sub-problems. We use an external separator   To illustrate how LLMs lose counting precision in
+(|) to divide the list into smaller partitions. For   long contexts, we first measure the average predic-
+instance, a structured context with three partitions    tion probability of Qwen2.5 7B (Yang et al., 2024a)
+is: “apple, apple, apple, apple, apple | apple, apple,    across different context sizes. As shown in Figure 3,
+apple | apple, apple, apple, apple, apple, apple”.     model confidence decreases as the number of items
+  The model is then instructed to first count the   exceeds 10. We also observe systematic biases to-
+items in each partition and to aggregate the partial   ward more frequent numbers. For example, target
+counts to produce the final result. This ensures that    counts of 16 and 21 are often predicted as 15 and
+each sub-problem remains within the model’s reli-   20.
+able counting regime. The number of items in each    We then conduct more systematic experiments
+partition is chosen randomly from a range that the   on both open-source and closed-source models.
+model can handle accurately. Models with deeper   For open-source models, we evaluate Qwen2.5 7B,
+architectures can reliably process larger partitions.   Llama 3 8B (Grattafiori et al., 2024), and Gemma
+  Based on the input structure and output format,   3 27B (Team et al., 2025), which have 28, 32, and
+we consider four baselines in our study. Two in-   62 layers, respectively. In addition, we evaluate
+put formats are used: an unstructured context with   GPT-4o (Achiam et al., 2023) and Gemini-2.5-
+comma-separated items and a structured context   Pro (Team, 2025) as stronger proprietary models
+with partitions separated by vertical bar symbol   on longer contexts. The corresponding results are
+
+
+                                         3
+
+               Decoded Probability of Context            most to these processes.
+      1  1.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00
+      2  0.00 1.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00       Figure 4a shows attention patterns to the input
+            0.00                0.00                     1.00                          0.00                              0.00                                   0.00                                        0.00                                            0.00                                                 0.00                                                     0.00                                                          0.00                                                               0.00                                                                   0.00                                                                        0.00                                                                             0.00                                                                                 0.00                                                                                      0.00                                                                                           0.00                                                                                               0.00                                                                                                    0.00                                                                                                        0.00                                                                                                             0.00                                                                                                                  0.00                                                                                                                      0.00                                                                                                                           0.00      3
+            0.00                0.00                     0.00                          1.00                              0.00                                   0.00                                        0.00                                            0.00                                                 0.00                                                     0.00                                                          0.00                                                               0.00                                                                   0.00                                                                        0.00                                                                             0.00                                                                                 0.00                                                                                      0.00                                                                                           0.00                                                                                               0.00                                                                                                    0.00                                                                                                        0.00                                                                                                             0.00                                                                                                                  0.00                                                                                                                      0.00                                                                                                                           0.00     items when the model generates intermediate rea-      4
+            0.00                0.00                     0.00                          0.00                              1.00                                   0.00                                        0.00                                            0.00                                                 0.00                                                     0.00                                                          0.00                                                               0.00                                                                   0.00                                                                        0.00                                                                             0.00                                                                                 0.00                                                                                      0.00                                                                                           0.00                                                                                               0.00                                                                                                    0.00                                                                                                        0.00                                                                                                             0.00                                                                                                                  0.00                                                                                                                      0.00                                                                                                                           0.00      5
+            0.00                0.00                     0.00                          0.00                              0.00                                   1.00                                        0.00                                            0.00                                                 0.00                                                     0.00                                                          0.00                                                               0.00                                                                   0.00                                                                        0.00                                                                             0.00                                                                                 0.00                                                                                      0.00                                                                                           0.00                                                                                               0.00                                                                                                    0.00                                                                                                        0.00                                                                                                             0.00                                                                                                                  0.00                                                                                                                      0.00                                                                                                                           0.00     soning steps. We consider a structured context with      6
+      7  0.00 0.00 0.00 0.00 0.00 0.00 1.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00     three partitions containing 3, 4, and 5 items. Dur-
+      8  0.00 0.00 0.00 0.00 0.00 0.00 0.00 1.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00
+      9  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 1.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00     ing the generation of a reasoning token such as
+     10  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 1.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.08 0.00 0.00 0.00 0.00 0.00 0.00
+
+
+            0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.89 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 Number 1112  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 1.00 0.11 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00     “part 2: 4”, the attention weight of the generated     13  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.99 0.94 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00    number peaks sharply on the final item and the fi-
+            0.00                0.00                     0.00                          0.00                              0.00                                   0.00                                        0.00                                            0.00                                                 0.00                                                     0.00                                                          0.00                                                               0.00                                                                   0.01                                                                        0.05                                                                             0.02                                                                                 0.00                                                                                      0.00                                                                                           0.00                                                                                               0.00                                                                                                    0.00                                                                                                        0.00                                                                                                             0.00                                                                                                                  0.00                                                                                                                      0.00                                                                                                                           0.00     14
+            0.00                0.00                     0.00                          0.00                              0.00                                   0.00                                        0.00                                            0.00                                                 0.00                                                     0.00                                                          0.00                                                               0.00                                                                   0.00                                                                        0.01                                                                             0.98                                                                                 0.63                                                                                      0.17                                                                                           0.00                                                                                               0.00                                                                                                    0.00                                                                                                        0.00                                                                                                             0.00                                                                                                                  0.00                                                                                                                      0.00                                                                                                                           0.00     nal comma separator of the corresponding partition.     15 Decoded 16  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.37 0.47 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00                                                This pattern is consistent across prompts and is
+     17  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.36 0.84 0.00 0.00 0.00 0.00 0.00 0.00 0.00
+     18  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.04 0.00 0.00 0.00 0.00 0.00 0.00 0.00    most pronounced in middle to late layers, typically
+     19  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.11 0.69 0.12 0.00 0.00 0.00 0.00 0.00
+     20  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.17 0.87 1.00 0.86 0.22 0.00 0.00    around layers 19 to 23. Earlier items within the
+     21  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.14 0.71 0.00 0.00
+     22  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00    same partition receive substantially lower attention.
+     23  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.02 0.04 0.00
+     24  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.21 0.08       Figure 4b shows attention patterns when the
+                0.00                     0.00                          0.00                              0.00                                   0.00                                        0.00                                            0.00                                                 0.00                                                     0.00                                                          0.00                                                               0.00                                                                   0.00                                                                        0.00                                                                             0.00                                                                                 0.00                                                                                      0.00                                                                                           0.00                                                                                               0.00                                                                                                    0.00                                                                                                        0.00                                                                                                             0.00                                                                                                                  0.05                                                                                                                      0.74                                                                                                                           0.92     25  0.00
+         1            2                3                   4                      5                         6                             7                                8                                   9                                      10                                         11                                            12                                                13                                                   14                                                      15                                                         16                                                             17                                                                18                                                                   19                                                                      20                                                                          21                                                                             22                                                                                23                                                                                   24                                                                                      25    model generates the final answer. The “:” token
+                    Number of Items in Sequence              and the whitespace token immediately preceding
+                                                      the final number attend strongly to all intermediate
+Figure 3: Decoded output probabilities for the unstruc-
+                                                   reasoning numbers produced earlier (e.g., 3, 4, andtured baseline method on Qwen2.5 7B. The heatmap
+shows the decoded probabilities of model outputs, aver-    5). The attention mass is distributed across these
+aged over different item types, for target counts ranging    tokens, with a clear concentration in the same lay-
+from 1 to 25. As the count increases beyond 10, the di-    ers identified for intermediate steps. Attention to
+agonal entries gradually fade, indicating reduced model    the original input items is weak at this stage.
+confidence.                                           To further localize the attention pathways in-
+                                                 volved in intermediate reasoning and final aggrega-
+reported in Tables 1 and 2. Across all models, we
+                                                           tion, we focus on the most relevant tokens identi-
+find that only one configuration consistently suc-
+                                                           fied in Figure 4. We average attention values across
+ceeds on long contexts: structured inputs combined
+                                                        different configurations, including item types and
+with intermediate reasoning steps.
+                                                          partition sizes. Figure 5 shows that attention peaks
+   Surprisingly, encouraging CoT reasoning alone,
+                                                      in layers 19 to 23, highlighting the central role of
+without structured input, does not yield a notable
+                                                    these layers in information transfer and aggrega-
+improvement. Furthermore, structured input with-
+                                                           tion. Figure 6 further shows that the most influen-
+out intermediate steps is also ineffective and can be
+                                                                  tial heads are concentrated in layers 21, 22, and
+harmful in some cases. A likely explanation is that
+                                                   23. For example, head 13 in layer 22 consistently
+models must first consolidate partial results in inter-
+                                                       exhibits high attention to the selected tokens.
+mediate steps before aggregating them into the final
+                                                        Together, these results suggest a staged computa-
+answer through a two-stage process. Our observa-
+                                                             tion. First, each partition is counted independently,
+tional and causal analyses provide further insight
+                                                with the final tokens of the partition encoding the
+into why models cannot simultaneously gather par-
+                                                        local count. Second, these local counts are written
+tial counts from the context and add them up with-
+                                                      into intermediate reasoning tokens.  Finally, the
+out loss. Overall, these results show that neither
+                                           model attends to these intermediate tokens and ag-
+external structure nor reasoning alone is sufficient.
+                                                   gregates their values to produce the final answer.
+Their combination is necessary to overcome large-
+                                              These observations are consistent with a hypotheti-
+scale counting failures.
+                                                         cal mechanism that separates counting, information
+4  Attention Analysis                               transfer, and aggregation into distinct components.
+
+We analyze attention patterns of Qwen2.5 7B (Yang   5  Causal Mediation Analysis
+et al., 2024a) to understand how the proposed
+System-2 strategy enables large-scale counting. We   To assess the hypothesis of a multi-stage System-
+first identify which tokens are attended to when   2 counting mechanism suggested by the attention
+the model generates (i) intermediate partition-level    analysis, we perform a set of causal mediation ex-
+counts and (ii) the final aggregated answer. We   periments based on activation patching (Heimer-
+then localize the layers and heads that contribute   sheim and Nanda, 2024; Zhang and Nanda, 2024),
+
+
+                                         4
+
+                                                                                                     Token-Level Attention Generated Outputs to Generated Outputs           Token-Level Attention from Generated Outputs to Input Tokens
+                                                                                                                                                                             part
+        part
+                                                                                                                                                                 1
+          1
+                                                                                                                                                                                                                                                   :
+               :                                                                                                                0.06                                                                                                                                                 0.12
+                                                                                                                                                                 3
+          3
+
+                                                                                                                           0.05                                      part                                                                                                           0.10        part
+                                                                                                                                                                 2
+          2
+                                                                                                                                                                                                                                                   :
+               :                                                                                                                0.04                                                                                                                                                 0.08
+                                                                                                                                                                 4          4                                                                                                                                                                                                                      TokensTokens
+                                                                                                                           0.03                                      part                                                                                                           0.06        part
+          3                                                                                                                                                       3Generated         :                                                                                                                                                                                                                                                                                                                                 Generated         :
+                                                                                                                           0.02                                                                                                                                                 0.04
+          6                                                                                                                                                       5
+
+       Final                                                                                                                0.01                                      Final                                                                                                           0.02
+     answer                                                                                                                                               answer
+               :                                                                                                                                                                                                                                   :
+                                                                                                                           0.00
+          1                                                                                                                                                       1
+                                                                                                                                                                 2          3
+
+
+
+
+      ,  ,  |  ,  ,  ,  |  ,  ,  ,  ,  ,
+                           object            object            object            object            object            object            object            object            object            object            object            object            object                                                                          part 1 :  3        part 2 :  4        part 3 :  5          Final   answer :  1 2
+                                      Tokens of List                                                                                            Generated Tokens
+
+     (a) Attention of generated tokens to input tokens.                  (b) Attention of generated tokens to generated tokens.
+Figure 4: Attention patterns of selected tokens under the System-2 counting strategy. Attention values are averaged
+across layers 19 to 23, all heads, and all item types (e.g., different fruit names).
+
+
+
+
+
+                                                                                                                                                                             0
+        0.05                                                                                                                                                           1
+                    Output2Input                                                                                                                         2
+                   Output2Output                                                                                                                      3
+
+                                                                                                                                                                             4
+        0.04                                                                                                                                                           5
+                                                                                                                                                                             6     Tokens                                                                                                                                                                  7                                                                                                                                 0.20
+
+        0.03                                                                                                                                                          109       Selected                                                                                                                                                                  8
+   the                                                                                                                                                                 1211                                                                                                                                 0.15
+  of                                                                                                                                                                 13
+        0.02                                                                                                                                                                                   Layers  14
+                                                                                                                                                                            15
+                                                                                                                                                                            16                                                                                                                                 0.10        Attention                                                                                                                                                                 17
+        0.01                                                                                                                                                          18
+                                                                                                                                                                            19    AVG.                                                                                                                                                                 20                                                                                                                                 0.05
+
+                                                                                                                                                                            21
+        0.00                                                                                                                                                          2223
+    0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27                          2425                                                                                                                                 0.00
+                                     Layer                                                                                    26
+
+                                                                                                                                                                            27
+
+                                                               0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27
+Figure 5: Average attention of correctly generated in-                                         Heads
+                                                      Figure 6: Heatmap of average attention to final itemstermediate counts to the final item of their partition,
+                                                        of partitions across layers and heads for intermediatealongside attention of the final answer to partition-level
+                                                      counting steps. Layers and heads responsible for trans-counts, across layers. Higher attention values are ob-
+                                                            ferring numerical information from input partitions toserved from layer 19 to 23 for both paths.
+                                                         intermediate counts appear with higher intensity.
+
+masking ablation, and attention knockout (Geva
+                                           method (Hasani et al., 2025b) to decode the im-
+et al., 2023). The goal is to identify where partition-
+                                                                plicit count associated with tokens. CountScope is
+level count information is stored, how it is trans-
+                                                  a causal probing method that patches the activation
+ferred and consolidated, and which components are
+                                                    of a target token into a blank counting context and
+causally required for correct aggregation.
+                                               decodes the model’s output as the implied count.
+                                                   Figure 7 shows the average decoding probabil-
+5.1  Token-Level Information Probing
+                                                              ity of ground-truth numbers across different token
+We first examine where partition-level counts are    types. Ground-truth numbers correspond to the
+encoded in the input context. This analysis requires   number of items in each partition. The results show
+vocabulary projection and probing tools. We ob-    that the ground-truth value is encoded with high
+serve that existing tools, such as logit-lens (Nos-   confidence primarily at the final item and the final
+tAlgebraist, 2020) and tuned-lens (Belrose et al.,  comma separator of each partition. For the first
+2023), are not reliable for decoding numerical    partition, the confidence at the final item is high;
+information. We therefore use the CountScope   however, for subsequent partitions, the confidence
+
+
+                                         5
+
+                                                                                                       Part1
+                                                                                                       Part2
+                                                                                                       Part3
+         0.8                                                                                            Part4
+
+           Confidence 0.60.4
+
+
+
+         0.2
+
+
+
+         0.0
+                    Last Item        Last Comma        Vertical Bars     Non Last Items   Non Last Commas
+
+Figure 7: Ground-truth probabilities across different to-
+kens of partitions decoded by CountScope. Probabilities
+are averaged over different item types and configura-
+tions (3 to 9 items per partition).
+
+             Average Ground-Truth Probability Drop after Masking
+      1.0   Target partition
+                       1
+                       2                       3                                             Figure 9: Heatmap of the average probability drop after      0.8
+  Drop                  4                                                  attention knockout across layers and heads for interme-
+    Probability  0.6                                                         diateknockout(top)isandappliedfinal countingonly to thestepsidentified(bottom).effectiveAttentionto-
+   Average  0.4                                                kens from the input context and intermediate steps.
+      0.2
+      0.0                                          quence and extracting token embeddings, we re-
+               3            4            5            6            7            8            9
+                                  Number of items in target partition                   place the activation values of selected tokens with
+                                                   zeros across all layers.
+Figure 8: Average ground-truth probability drop after
+                                                     Figure 8 shows the average probability drop aftermasking the final item and comma (e.g., ‘, apple’) from
+                                                 zero ablation of the final item and final commaeach partition, showing the effect on the target count for
+digit sizes ranging from 3 to 9.                           separator. This intervention leads to a sharp drop in
+                                                    the probability of generating the correct partition-
+at this token decreases, while the confidence at    level count in the corresponding reasoning step. For
+the vertical bar character increases. Nevertheless,   example, ablating the final “, apple” token of a four-
+the final comma separator reliably stores the la-   item partition significantly reduces the likelihood
+tent count of the corresponding partition. These    of generating the token “4”.
+findings are consistent with the attention results
+                                                    5.3  Information Pathway Localizationin Section 4, which showed that decoded numbers
+of intermediate steps attend most strongly to these   To perform fine-grained circuit localization, we an-
+final partition tokens.                                alyze the pathways responsible for System-2 count-
+  More interestingly, this experiment reveals that    ing using attention knockout (Geva et al., 2023).
+at each partition boundary, the count resets and  We selectively block individual attention heads and
+begins again. As a result, the final item of each    layers and measure the resulting drop in counting
+partition encodes the number of items counted    accuracy for intermediate and final steps. Figure 9
+since the beginning of that partition. This observa-   shows that for Qwen2.5 7B, the most influential
+tion explains why the System-2 strategy avoids the   components are concentrated in layer 22. In partic-
+large-number failure observed in unstructured in-    ular, attention head 13 is most important for inter-
+puts. Each partition is counted independently, and   mediate steps, while head 1 is most important for
+its size remains within the range where the model’s    the final aggregation step.
+implicit counter is accurate.                          Notably, head 13 in layer 22 also exhibits the
+                                                   highest attention values in the attention heatmap
+5.2  Token-Level Causal Interventions                                          shown in Figure 6. Compared to Figure 6, the pat-
+To test whether the identified tokens causally medi-    tern in Figure 9 is considerably sparser. A plausible
+ate the model’s behavior, we perform zero ablation    explanation is the presence of parallel information
+on the final items and separators of each partition.   pathways, where knocking out a single pathway
+Specifically, after processing the entire input se-   does not fully disrupt the computation because
+
+
+                                         6
+
+          Standard Setting                Patched Setting                                                                                              1     count accordingly. In the given example, the total
+                                                                                              2     sums of the first and second contexts are 19 and
+  Context1        -0.00            -10.20           Context1        -8.37             -2.93             3
+                                                                                              4                                                                                              5log-prob    14 before activation patching. After swapping the
+                                                 numerical contents of their second steps (shown in                                                                                              6mean
+  Context2       -10.20             -0.00           Context2        -2.93             -8.35             7      blue), the total for the first context becomes 21 and
+                                                                                              8
+                                                                                              9      the total for the second context becomes 12. This
+             GT1         GT2                    GT1         GT2
+                                           shows that the final sum is causally mediated by
+Figure 10: Average log probabilities of the first and    the intermediate-layer embeddings of the tokens
+second contexts before (left) and after (right) activation    “:”, whitespace, and the partition number. Figure 10
+patching. The first and second columns correspond to   shows the log probabilities for this experiment, av-
+the predicted outputs (total sums) of the first and second                                                 eraged over various configurations.
+contexts. After swapping the layer embeddings of the
+selected tokens from a given partition between the two
+contexts, the output no longer follows the original total   6  Related Work
+sum and instead reflects the transferred number. Values
+are averaged across different configurations (selected   Counting in LLMs. A growing body of work
+partitions, partition sizes, and item types).            shows that counting in LLMs is brittle:  perfor-
+                                          mance can hinge on surface form and segmentation
+other pathways can partially compensate. Finally,    rather than a stable procedure (Fu et al., 2024).
+we observe that the heads responsible for trans-   Subword tokenization can blur item boundaries
+ferring partition-level information from the input   and measurably affect counting accuracy (Zhang
+context to the intermediate steps are not necessar-    et al., 2024). More broadly, deterministic-task eval-
+ily the same as those responsible for transferring    uations (including counting) can flip under minor
+information from the intermediate reasoning steps    prompt/content changes, complicating extrapola-
+to the final answer, even when they are located in    tion from narrow setups (Ball et al., 2024). On the
+the same layer.                                    theory side, transformers can exactly count token
+                                                   frequencies only in specific regimes, with feasi-
+5.4  Cross-Context Activation Patching
+                                                            bility tied to representation capacity and context-
+Finally, we perform cross-context activation patch-   length scaling (Yehudai et al., 2024).
+ing to test how partition-level information is com-
+bined to form the final answer. We focus on in-   Numerical representations and mechanistic
+termediate responses and final aggregation steps.   views.  Cognitive work argues for specialized
+Our attention and masking analyses indicate that   number systems and structured magnitude repre-
+transferred numerical information from the context    sentations (Feigenson et al., 2004; Dehaene, 2011),
+to intermediate steps is consolidated in the specific    motivating analogous questions in neural models.
+tokens “:”, whitespace, and the partition number.   Representation analyses study how numerical mag-
+Here, we investigate this behavior using a causal    nitude is organized in LLM hidden spaces and re-
+intervention setup (Geiger et al., 2021).                late these structures to human-like effects (AlquBoj
+  To this end, we sample two different contexts,    et al., 2025).  Mechanistic studies localize how
+each containing four partitions, with partition sizes   counting signals emerge and update across items
+randomly chosen between 3 and 9. After generat-    in controlled settings (Golkar et al., 2024). Clos-
+ing the intermediate steps, we select one partition    est to our setting, Hasani et al. (2025b) combine
+and transfer the embeddings from layers 18 to 24   a target-context probe with layerwise/token-level
+of the target tokens between the two responses. For    analyses and causal interventions to identify latent
+example, let “part 1: 7, part 2: 4, part 3: 8” be    counter-like signals across both LLMs and LVLMs.
+the intermediate steps of the first context and “part
+1: 5, part 2: 6, part 3: 3” be those of the second   Decomposition and reasoning traces.  Chain-of-
+context. We swap the intermediate activations of   Thought can improve multi-step reasoning by elic-
+the tokens highlighted in blue between the two    iting intermediate computations (Wei et al., 2022),
+responses. After this intervention, we allow the    but explicit traces are not necessarily faithful. Ques-
+model to generate the final response.                 tion decomposition work studies when decompo-
+  This manipulation causally affects the corre-    sition increases faithfulness versus mainly serving
+sponding intermediate steps and changes the final    as scaffolding (Radhakrishnan et al., 2023).
+
+
+                                         7
+
+Counting in LVLMs.  Counting remains chal-   7  Conclusion
+lenging for LVLMs, particularly under clutter, lay-
+                                                  This paper showed that the failure of large language
+out variation, and compositional settings that stress
+                                            models on large-scale counting tasks arises from
+binding between category and quantity (Guo et al.,
+                                                       reliance on System-1–like implicit counting mech-
+2025; Campbell et al., 2024). Diagnostics and tar-
+                                              anisms with limited capacity (Kahneman, 2011;
+geted modifications analyze where LVLM counting
+                                           Zhang et al., 2024). This problem reflects architec-
+breaks and how performance can be recovered (Al-
+                                                           tural constraints of transformer models rather than
+ghisi et al., 2025), while structured visual inputs
+                                                fundamental limits of numerical reasoning. We in-
+or supervision can improve counting (Izadi et al.,
+                                                 troduced a simple System-2 test-time strategy that
+2025; Qharabagh et al., 2024; Hasani et al., 2025a).
+                                            decomposes large counting problems into smaller
+Mechanistic evidence further suggests layerwise la-
+                                                     sub-tasks and aggregates their results, enabling ac-
+tent counter signals distributed across visual tokens
+                                                      curate counting over long contexts without modify-
+(Hasani et al., 2025b).
+                                                   ing model parameters or training procedures.
+Interpretability tools.  Causal interventions such      In addition to behavioral improvements, we
+as activation patching help identify computation-   provided a mechanistic explanation of how this
+critical states (Heimersheim and Nanda, 2024;    strategy operates  internally.   Using  attention
+Geiger et al., 2021), with best-practice guidance for    analysis and causal mediation methods (Hasani
+reliable metrics and methods (Zhang and Nanda,    et al., 2025b; Heimersheim and Nanda, 2024), we
+2024).  Patch-based inspection frameworks fur-   showed that partition-level counts are encoded at
+ther systematize intervention/inspection configura-   boundary tokens, transferred through specific at-
+tions (Ghandeharioun et al., 2024). Readout-style    tention pathways to intermediate reasoning steps,
+probes provide a complementary perspective by   and aggregated in middle-to-late layers to form the
+tracking when information becomes linearly de-    final answer. Intermediate reasoning tokens play a
+codable across layers, including the Logit Lens    crucial role in this process, mediating the flow of
+(NostAlgebraist, 2020) and learned variants such    numerical information from input partitions to the
+as the Tuned Lens (Belrose et al., 2023).               final output.
+                                                     In principle, this procedure removes fixed up-
+Our work.  Our setup is closest to System-2-style
+                                                  per bound on countable size, as long as each
+prompting via intermediate steps: like CoT, we
+                                              sub-problem remains within the model’s reliable
+elicit explicit intermediate computations (Wei et al.,
+                                                 regime. While our experiments focus on count-
+2022), and like task decomposition, we solve the
+                                                        ing, the same analysis framework applies to other
+instance by breaking it into sequential subprob-
+                                                  reasoning tasks where implicit representations sat-
+lems (Radhakrishnan et al., 2023). The key differ-
+                                                     urate and explicit decomposition enables correct
+ence is that the decomposition is tied to a struc-
+                                                      behavior. This study highlights how structured test-
+tured input format: we first partition the input into
+                                                 time strategies can reveal and extend the computa-
+marked segments and then use a CoT protocol that
+                                                        tional abilities of existing models, offering a path
+is aligned with this structure (produce segment-
+                                               toward both improved performance and deeper in-
+level subcounts, then aggregate). This creates ex-
+                                                              terpretability. Future research could explore further
+plicit stage boundaries that are absent in monolithic
+                                                     applications of this strategy to complex reasoning
+counting prompts and lets us study how counting
+                                                      tasks in language and beyond.
+representations evolve across stages. Mechanis-
+tically, our analysis aligns with prior work that                                            Limitations
+localizes latent counter-like signals and tests them
+with interventions (Hasani et al., 2025b), while   This work focuses on a narrow counting task with
+shifting the question to how the structured CoT    limited object diversity, using simple repeated
+decomposition reshapes internal computation on   nouns in synthetic contexts. The approach depends
+long contexts. In this way, we connect behavioral   on structured prompts and assumes prior knowl-
+brittleness observations (Ball et al., 2024; Zhang   edge of the model’s reliable counting range, which
+et al., 2024) to a stage-wise mechanistic account of   may limit generalization. In addition, the effects of
+how count information is formed, routed, and com-   tokenization and number representation are not iso-
+bined under structured prompting (Heimersheim    lated and may independently influence the results.
+and Nanda, 2024; Zhang and Nanda, 2024).
+
+
+                                         8
+
+References                                Mor Geva, Jasmijn Bastings, Katja Filippova, and Amir
+                                                         Globerson. 2023. Dissecting recall of factual associa-
+Josh Achiam, Steven Adler, Sandhini Agarwal, Lama       tions in auto-regressive language models. In Proceed-
+  Ahmad, Ilge Akkaya, Florencia Leoni Aleman, and       ings of the 2023 Conference on Empirical Methods in
+   et al. 2023.  GPT-4 technical report.   Preprint,      Natural Language Processing, pages 12216–12235,
+  arXiv:2303.08774.                                     Singapore. Association for Computational Linguis-
+                                                                           tics.
+Simone Alghisi, Gabriel Roccabruna, Massimo Riz-
+   zoli, Seyed Mahed Mousavi, and Giuseppe Riccardi.   Asma Ghandeharioun, Avi Caciularu, Adam Pearce, Lu-
+  2025. [de|re]constructing vlms’ reasoning in count-      cas Dixon, and Mor Geva. 2024. Patchscopes: A
+   ing. Preprint, arXiv:2510.19555.                        unifying framework for inspecting hidden represen-
+                                                                 tations of language models. In International Confer-
+H. V. AlquBoj, Hilal AlQuabeh, Velibor Bojkovic,      ence on Machine Learning (ICML).
+  Tatsuya Hiraoka, Ahmed Oumar El-Shangiti, Mu-
+  nachiso Nwadike, and Kentaro Inui. 2025. Number    Siavash Golkar, Alberto Bietti, Mariel Pettee, Michael
+   representations in llms: A computational parallel to      Eickenberg, Miles Cranmer, Keiya Hirashima, Ger-
+  human perception. In International Conference on      aud Krawezik, Nicholas Lourie, Michael McCabe,
+  Learning Representations (ICLR).                  Rudy Morel, Ruben Ohana, Liam Holden Parker,
+                                                  Bruno Régaldo-Saint Blancard, Kyunghyun Cho, and
+                                                             Shirley Ho. 2024. Contextual counting: A mechanis-Thomas Ball, Shuo Chen, and Cormac Herley. 2024.
+                                                                            tic study of transformers on a quantitative task. arXiv  Can we count on llms?  the fixed-effect fallacy
+                                                             preprint arXiv:2406.02585.  and claims of gpt-4 capabilities.  arXiv preprint
+  arXiv:2409.07638.
+                                               Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri,
+                                                 Abhinav Pandey, Abhishek Kadian, Ahmad Al-
+Nora Belrose, Igor Ostrovsky, Lev McKinney, Zach Fur-                                                       Dahle, and 1 others. 2024.  The llama 3 herd of
+  man, Logan Smith, Danny Halawi, Stella Biderman,                                                       models. arXiv preprint arXiv:2407.21783.
+  and Jacob Steinhardt. 2023. Eliciting latent predic-
+   tions from transformers with the tuned lens. arXiv                                            Xuyang Guo, Zekai Huang, Zhenmei Shi, Zhao Song,
+   preprint arXiv:2303.08112.                                                  and Jiahao Zhang. 2025.  Your vision-language
+                                                model can’t even count to 20: Exposing the fail-
+Declan Campbell, Sunayana Rane, Tyler Giallanza,      ures of vlms in compositional counting.  Preprint,
+  Nicolò De Sabbata, Kia Ghods, Amogh Joshi,      arXiv:2510.04401.
+  Alexander Ku, Steven M. Frankland, Thomas L. Grif-
+   fiths, Jonathan D. Cohen, and Taylor W. Webb. 2024.   Hosein Hasani, Amirmohammad Izadi, Fatemeh Askari,
+  Understanding the limits of vision language mod-     Mobin Bagherian, Sadegh Mohammadian, Moham-
+   els through the lens of the binding problem. arXiv     mad Izadi, and Mahdieh Soleymani Baghshah. 2025a.
+   preprint arXiv:2411.00238.                           Uncovering grounding ids: How external cues shape
+                                                      multimodal binding. Preprint, arXiv:2509.24072.
+Stanislas Dehaene. 2011. The Number Sense: How
+   the Mind Creates Mathematics, 2nd edition. Oxford    Hosein Hasani, Amirmohammad Izadi, Fatemeh Askari,
+   University Press, New York, NY.                   Mobin Bagherian, Sadegh Mohammadian, Moham-
+                                            mad Izadi, and Mahdieh Soleymani Baghshah. 2025b.
+Lisa Feigenson,  Stanislas Dehaene, and Elizabeth      Understanding counting mechanisms in large lan-
+   Spelke. 2004. Core systems of number. Trends in      guage and vision-language models. arXiv preprint
+  Cognitive Sciences, 8(7):307–314.                      arXiv:2511.17699.
+
+                                                       Stefan Heimersheim and Neel Nanda. 2024. How to
+Tairan Fu, Raquel Ferrando, Javier Conde, Carlos Ar-
+                                                        use and interpret activation patching. arXiv preprint
+   riaga, and Pedro Reviriego. 2024. Why do large lan-
+                                                        arXiv:2404.15255.
+  guage models (llms) struggle to count letters? arXiv
+   preprint arXiv:2412.18626.                                                Kuinan Hou, Marco Zorzi, and Alberto Testolin. 2025.
+                                                         Sequential enumeration in large language models.
+Andrew Gambardella, Yusuke Iwasawa, and Yutaka                                                              Preprint, arXiv:2512.04727.
+  Matsuo. 2024. Language models do hard arithmetic
+   tasks easily and hardly do easy arithmetic tasks. In   Amirmohammad Izadi, Mohammad Ali Banayeean-
+  Proceedings of the 62nd Annual Meeting of the As-      zade, Fatemeh Askari, Ali Rahimiakbar, Moham-
+   sociation for Computational Linguistics (Volume 2:     mad Mahdi Vahedi, Hosein Hasani, and Mahdieh
+  Short Papers), pages 85–91, Bangkok, Thailand. As-      Soleymani Baghshah. 2025. Visual structures helps
+   sociation for Computational Linguistics.                  visual reasoning: Addressing the binding problem
+                                                               in VLMs. arXiv:2506.22146. Accepted to NeurIPS
+Atticus Geiger, Hanson Lu, Thomas Icard, and Christo-       (poster).
+  pher Potts. 2021. Causal abstractions of neural net-
+  works. In Advances in Neural Information Process-    Daniel Kahneman. 2011. Thinking, Fast and Slow. Far-
+   ing Systems, volume 34.                                          rar, Straus and Giroux, New York, NY.
+
+
+                                         9
+
+NostAlgebraist. 2020. Interpreting gpt: The logit lens.      can transformers count to n?    arXiv preprint
+  LessWrong post.                                      arXiv:2407.15160.
+
+Muhammad   Fetrat  Qharabagh,  Mohammadreza    Fred Zhang and Neel Nanda. 2024. Towards best prac-
+   Ghofrani, and Kimon Fountoulakis. 2024. LVLM-       tices of activation patching in language models: Met-
+  COUNT:  Enhancing  the  counting  ability  of        rics and methods. In International Conference on
+   large vision-language models.    arXiv  preprint      Learning Representations (ICLR).
+  arXiv:2412.00686.
+                                               Xiang Zhang, Juntai Cao, and Chenyu You. 2024.
+Ansh Radhakrishnan, Karina Nguyen, Anna Chen,      Counting ability of large language models and impact
+  Carol Chen, Carson Denison, Danny Hernandez,      of tokenization. arXiv preprint arXiv:2410.19730.
+  Esin Durmus, Evan Hubinger, Jackson Kernion,
+   Kamil¯e Lukoši¯ut¯e, Newton Cheng, Nicholas Joseph,
+  Nicholas Schiefer, Oliver Rausch, Sam McCan-
+   dlish,  Sheer El Showk, Tamera Lanham, Tim
+  Maxwell, Venkatesa Chandrasekaran, and 5 others.
+  2023. Question decomposition improves the faithful-
+  ness of model-generated reasoning. arXiv preprint
+  arXiv:2307.11768.
+
+Fabian Retkowski and Alexander Waibel. 2025. Zero-
+   shot strategies for length-controllable summarization.
+   In Findings of the Association for Computational Lin-
+   guistics: NAACL 2025, pages 551–572, Albuquerque,
+  New Mexico. Association for Computational Linguis-
+   tics.
+
+Gemini Team. 2025. Gemini 2.5: Pushing the fron-
+   tier with advanced reasoning, multimodality, long
+   context, and next generation agentic capabilities.
+  arXiv:2507.06261.
+
+Gemma Team, Aishwarya Kamath, Johan Ferret, Shreya
+   Pathak, Nino Vieillard, Ramona Merhej, Sarah Perrin,
+  Tatiana Matejovicova, Alexandre Ramé, Morgane
+   Rivière, Louis Rouillard, Thomas Mesnard, Geoffrey
+   Cideron, Jean bastien Grill, Sabela Ramos, Edouard
+  Yvinec, Michelle Casbon, Etienne Pot, Ivo Penchev,
+  and 197 others. 2025. Gemma 3 technical report.
+   Preprint, arXiv:2503.19786.
+
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob
+   Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz
+   Kaiser, and Illia Polosukhin. 2017. Attention is all
+  you need. In Advances in Neural Information Pro-
+   cessing Systems, volume 30, pages 5998–6008.
+
+Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten
+  Bosma, Brian Ichter, Fei Xia, Ed H. Chi, Quoc Le,
+  and Denny Zhou. 2022. Chain-of-thought prompt-
+   ing elicits reasoning in large language models. In
+  Advances in Neural Information Processing Systems,
+  volume 35, pages 24824–24837.
+
+An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui,
+  Bo Zheng, Bowen Yu, and 1 others. 2024a. Qwen2.5
+  Technical Report. arXiv preprint arXiv:2412.15115.
+
+Haotong Yang, Yi Hu, Shijia Kang, Zhouchen Lin, and
+  Muhan Zhang. 2024b. Number cookbook: Number
+  understanding of language models and how to im-
+  prove it. Preprint, arXiv:2411.03766. ICLR 2025
+   poster.
+
+Gilad Yehudai, Haim Kaplan, Asma Ghandeharioun,
+  Mor Geva, and Amir Globerson. 2024.  When
+
+
+                                         10
+
+A  Appendix                                 Unstructured Input (w/o steps)
+
+                                             You will be given a list of items.
+A.1  Details of the Behavioral Setup
+                                             Count the total number of objects.
+                                             Output the final result exactly in the
+We evaluate counting performance under controlled
+                                             following format:
+variations of input format and prompting strategy.
+                                             Final answer: [x]
+Each example consists of a list of repeated single-
+word items, and the model is required to output the
+total count. Following the evaluation protocol sum-     Unstructured Input (w/ steps)
+marized in Tables 1 and 2, we vary (i) whether the
+                                             You will be given a list of items.
+input is structured or unstructured, and (ii) whether
+                                             Count the total number of objects.
+the model is explicitly encouraged to produce in-
+                                             Let’s count step by step.
+termediate reasoning steps (with steps vs. without
+                                             Output the final result exactly in the
+steps). Performance is reported using exact-match
+                                             following format:
+accuracy and mean absolute error (MAE) across
+                                             Final answer: [x]
+different context-length ranges.
+
+                                                 Structured Input (w/o steps)
+Item types.  All inputs are constructed from sim-
+ple, common nouns drawn from two semantic cate-    You will be given multiple partitions
+gories: fruits and animals. The complete candidate     of content separated by “|”.
+                                             For each partition, count the numberset is shown below.
+                                             of items it contains.
+                                             After   counting   all   partitions,
+  Items
+                                             compute  the  total  by  summing  the
+  apple,  orange,  peach,  fig,  mango,      counts.
+  pear, coconut, cherry, plum,               Output  the  final  result  exactly  in
+  cat, dog, horse, rabbit, whale, cow,      the following format:
+  frog                                       Final answer: [x]
+
+
+                                                 Structured Input (w/ steps)
+Input formats.  In the unstructured setting, the
+                                             You will be given multiple partitionsinput is a flat, comma-separated list of n identical
+                                             of content separated by “|”.items. In the structured setting, the same multiset
+                                             For each partition:is divided into multiple partitions separated by a
+                                             -  Count  the  number  of  items  itvertical bar (|), enabling explicit local counting
+                                             contains.followed by summation.
+                                             - Report the count separately using
+                                             the format:
+Partition sizes.  For open-source models (Ta-     part1: [x1]
+ble 1), each partition contains between 6 and 9     part2: [x2]
+items. For closed-source models (Table 2), which     ...
+are evaluated on larger context lengths, partition     After counting all partitions:
+sizes range from 15 to 25 items. In all cases, par-    -  Compute  the  total  by  summing  all
+titions are constructed such that their sizes sum     individual counts.
+exactly to the target length n.                     - Output the final total exactly in
+                                             this format:
+                                             Final answer: [x]
+Prompting strategies.  For each input format, we
+evaluate two prompting strategies: without inter-
+                                            A.2  Attention Analysismediate steps and with intermediate steps. These
+settings correspond directly to the “w/o steps” and    This section presents detailed methodological infor-
+“w/ steps” rows reported in Tables 1 and 2.          mation regarding the attention analyses conducted
+
+
+                                         11
+
+in this study. We perform our analysis using various   Gemma 3 4B, we examine layers 21 to 23, while for
+large language models, Qwen 2.5 7B (Yang et al.,   Llama 3.2 8B we consider layers 13 to 18. These
+2024a), Llama 3.2 8B (Grattafiori et al., 2024), and    layer intervals are selected based on the average at-
+Gemma 3 4B(Team et al., 2025). These models    tention magnitude from output tokens to key input
+differ in architectural depth and layer organization,   tokens (specifically, the last item and the trailing
+which allows for a more comprehensive and com-  comma of the predicted partition), which consis-
+parative investigation of attention behaviors. The    tently peak within these ranges.
+analysis is divided into two parts. In the first part,      Figures 12, 13, and 14 illustrate the full atten-
+we describe the experimental setup in detail, in-    tion maps for Qwen2.5 7B, Llama 3.2 8B, and
+cluding the selection of specific layers for analysis  Gemma 3 4B, respectively. In each figure, the x-
+and the prompts used in each experiment. In the    axis corresponds to output tokens and the y-axis
+second part, we analyze the attention patterns of    corresponds to input tokens. Across all models, we
+the generated outputs with respect to the full input    observe a consistent pattern: the token immediately
+sequences for both models.                        preceding the generated number of parts exhibits
+                                                    the highest attention weights toward the last item
+A.2.1  Input Details
+                                            and the final comma of the desired partition. This
+The exact prompt used in all experiments is shown    behavior supports our hypothesis that models rely
+below:                                              heavily on attention to the final item–comma struc-
+You will be given a list of items, where groups      ture of each part when determining and generating
+     (partitions) are separated by the "|"           the number of items for each part.
+     character.
+
+For each partition:                            A.3  Causal Mediation Analysis
+- Count the number of items it contains.
+- Report the count separately using the format:     Token-Level Information Probing  To decode
+  part1: x1                                           the latent numbers of specific tokens, we employed
+  part2: x2                                             CountScope. We modified the original source
+  part3: x3
+  ...                                         prompt to facilitate accurate counting by partition-
+                                                  ing the input list using vertical bar delimiters (|).
+After counting all partitions:
+                                                    Additionally, we utilized a monotypic, question-- Compute the total by summing all individual
+     counts.                                                     first configuration. The exact prompt structure is
+- Output the final total exactly in this format:    provided below:
+Final answer: x
+Just answer in this format without any extra        Answer the question with just a number only
+     things and follow the instructions.                 (We've separated each group of items with
+                                                         "|" so you can calculate the final count
+apple, apple, apple | apple, apple, apple,               easier).
+     apple | apple, apple, apple, apple, apple       Question: How many fruits are there in the
+                                                         following sentence?
+  To evaluate robustness across varying input struc-    apple, apple, apple | apple, apple, apple,
+                                                         apple, apple | apple, apple, apple, apple
+tures, the final list provided to the model is ran-
+domized across experiments. Additionally, to re-   To mitigate token-specific artifacts, we performed
+duce potential token-specific biases, we vary the     all experiments using a set of distinct items. (see
+item labels used in the lists, drawing from the Ap-   Appendix A.1)
+pendix A.1
+                                              Information Pathway Localization  To localize
+A.2.2  Full Attention Analysis                                                    the specific attention heads and layers mediating
+This section presents a full attention analysis (fol-   the flow of count information, we performed at-
+lowing the methodology in Fig. 4) for Qwen2.5    tention knockout experiments as outlined in Sec-
+7B, Gemma 3 4B, and Llama 3.2 8B. Our goal is    tion 5.3. This analysis utilizes a prompt that elicits
+to explore a little more of the layers in which at-    specific System-2 behavior by explicitly separat-
+tention most strongly concentrates on the tokens    ing partition counting from final aggregation. We
+relevant to partition prediction, and to visualize the   employed a strict instructional format forcing the
+resulting full attention patterns.                  model to output intermediate counts before the final
+  As shown in Fig. 11, we analyze attention scores     total. This allows us to measure the causal impact
+across different layer ranges for each model. For    of blocking specific attention heads on the accuracy
+
+
+                                         12
+
+       0.05
+                   Output2Input                                                                                                  0.06         Output2Input
+                  Output2Output                                                                                             Output2Output
+
+
+       0.04                                                                                                                          0.05
+    Tokens                                                                                                                                                                                         Tokens
+                                                                                                                                     0.04
+       0.03     Selected                                                                                                                                                                                                                                                      Selected
+  the                                                                                            the 0.03
+ of                                                              of
+      Attention 0.02                                                                                                                                                                                                                                                                          Attention 0.02
+  AVG.                                                                                                                           AVG.
+       0.01
+                                                                                                                                     0.01
+
+
+
+       0.00                                                                                                                          0.00
+
+
+    012345678910111213141516171819202122232425262728293031            0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27
+                                    Layer                                                                                 Layer
+
+(a) Average attention weights across layers for Llama             (b) Average attention weights across layers for Gemma
+3.2 8B. We report attention from selected output tokens          3 4B. We report attention from selected output tokens
+to both input and output tokens.  Attention to the key             to both input and output tokens (as defined in Fig. 4a).
+partition-related tokens peaks consistently between layers            Attention magnitude peaks between layers 21 and 23.
+13 and 18, motivating our choice of this interval for full
+attention visualization.
+
+Figure 11: Layer-wise attention analysis for Llama 3.2 8B and Gemma 3 4B. For each model, we visualize the
+average attention from selected output tokens to salient input tokens (notably the final item and comma of the
+partition). These trends are used to identify the layer ranges with the strongest partition-relevant attention.
+
+
+of both intermediate transfer and final summation
+(the exact prompt template is provided below).
+
+I will provide an input text containing fruits
+     separated by the '|' delimiter. Your goal
+     is to count the items in each section and
+     provide a summation.
+
+Input Text:
+ apple, apple, apple | apple, apple, apple,
+     apple, apple | apple, apple, apple, apple
+
+Task:
+1. Identify each partition separated by '|'.
+2. Count the number of fruits in each specific
+     partition.
+3. Sum the counts of all partitions.
+
+You must strictly follow this format, adapting
+     the number of parts to the actual input:
+part1: <count1>, part2: <count2>, ... , final
+     count: <total_count>
+
+
+
+
+
+                                         13
+
+                                                                                                                          [rest of attention]                                                      [rest of attention 2]
+                                                                                                                                 using                                                                              Output
+                   <|im_start|>                                                                                    the                                                                                    the
+                           user                                                                              format                                                                                                        final
+                                                                                                                                                :                                                                                                 total
+                          You                                                                                                                                                                                   exactly
+                                       will                                                                                       part                                                                                                                  in
+                          be                                                                            1                                                                                                   this
+                             given                                                                                                           :                                                                              format
+                            a                                                                              x                                                                                                           :
+                                       list                                                                            1                                                                                                   Final
+                             of                                                                                                                                                                    answer
+                          items                                                                                                                                                                                                                      :
+                                    ,                                                                                       part                                                                              x
+                       where                                                                            2
+                         groups                                                                                                           :                                                                                     object
+                                           (                                                                              x                                                                                                           ,
+                           part                                                                            2                                                                                     object
+                                itions                                                                                                                                                                                                                      ,
+                                           )                                                                                                                                                                                 object
+                 List   separatedare                                                                                       part3                                                                                     object|
+        of         by                                                                                                           :                                                                                                           ,
+                           the                                                                              x                                                                                     object
+                                  "|"                                                                            3                                                                                                           ,                         Tokens    character.                                                                                                                                                                                 object
+                                                                                                                                              ...                                                                                                           ,
+                           For                                                                                                                                                                                 object
+                         each                                                                                After                                                                                                              |
+                          partition                                                                                        counting                                                                                     object
+                                    :                                                                                                                            all                                                                                                           ,
+                         -                                                                                           partitions                                                                                     object
+                         Count                                                                                                           :                                                                                                           ,
+                           the                                                                            -                                                                                     object
+                      number                                                                           Compute                                                                                                           ,
+                             of                                                                                    the                                                                                     object
+                          items                                                                                                 total                                                                                                           ,
+                                         it                                                                               by                                                                                     object
+                         contains                                                                           sum                                                                                                           ,
+                                    .                                                                                    ming                                                                                     object
+                         -                                                                                                                            all                                                                            <|im_end|>
+                        Report                                                                                                 individual
+                           the                                                                                      counts                                                                              <|im_start|>
+                          count                                                                                                           .                                                                                        assistant
+                      separately                                                                            -
+                                               part 1 : 3      part 2 : 4      part 3 : 6       Final answer : 1 3                  part 1 : 3      part 2 : 4      part 3 : 6       Final answer : 1 3                  part 1 : 3      part 2 : 4      part 3 : 6       Final answer : 1 3
+                                       Generated Output Tokens                                         Generated Output Tokens                                         Generated Output Tokens
+
+
+
+
+
+                                                                      0.01                                 0.02                                 0.03                                 0.04                                 0.05                                 0.06                                 0.07
+                                                                                                                   Attention Weight
+
+Figure 12: Full attention map for Qwen2.5-7B. The x-axis corresponds to output tokens and the y-axis to input
+tokens. The token immediately preceding the generated number of parts exhibits the strongest attention toward the
+final item and trailing comma of each partition matches its own segment.
+
+
+
+
+                                                                                                                           [rest of attention]                                                   [rest of attention 2]
+                                                                                                                                                                                                                                                            this                                                                                                                                                            :                    <|start_header_id|>
+                                                                                                                                                                                                            format
+                                    user                                                                                                                                                                                                                                                                           :
+                     <|end_header_id|>                                                                                                                                  part
+                                                                                                                                                                                                                                                              Final
+                                                                                                               1
+                                 You                                                                                                                                                            :                                                                                 answer
+                                                                                                                                                                                                                                                                           :
+                                                  will                                                                                                                   x
+                                                                                                                                                                                                    x
+                                 be                                                                                                               1
+                                      given
+                                                                                                                                                                                                                     Just
+                                    a
+                                                                                                                                                                                                              answer
+                                                  list                                                                                                                                  part
+                                                                                                                                                                                                                                                                                               in
+                                     of                                                                                                               2
+                                                                                                                                                                                                                                                            this
+                                   items                                                                                                                                                            :
+                                                                                                                                                                                                            format
+                                              ,                                                                                                                   x
+                                                                                                                                                                                                                               without
+                               where                                                                                                               2
+                                                                                                                                                                                                                   any
+                                  groups
+                                                                                                                                                                                                                      extra
+                                                       (
+                                                                                                                                                                                                                                             things
+                                    part                                                                                                                                  part
+                                                                                                                                                                                                              and
+                                          itions                                                                                                               3
+                                                                                                                                                                                                                                                    follow
+                                                       )                                                                                                                                                            :
+                                                                                                                                                                                                                      the
+                                   are                                                                                                                   x
+                             separated                                                                              3                                                                                                   instructions.
+                                  by                List                                                                                                                                                                                                                             object
+                                   the                                                                                                                                                          ...        of                                                                                                                                                                                                                                                                           ,
+                                            "|"
+                                                                                                                                                                                                                             object
+                                                                                                                       After                                 character.                                                                                                                                                                                                                                                                           ,
+                                                                                                                                     counting                        Tokens                                                                                                                                                                                                                             object
+                                   For                                                                                                                                                                                       all
+                                                                                                                                                                                                                                                                                   |
+                                 each                                                                                                                                          partitions
+                                                                                                                                                                                                                             object                                                                                                                                                            :                                    partition
+                                                                                                                                                                                                                                                                           ,                                              :                                                                                                               -
+                                                                                                                                                                                                                             object
+                                -                                                                                                                Compute
+                                                                                                                                                                                                                                                                           ,
+                                 Count                                                                                                                            the
+                                                                                                                                                                                                                             object
+                                   the                                                                                                                                                total
+                                                                                                                                                                                                                                                                           ,
+                             number                                                                                                                     by
+                                                                                                                                                                                                                             object
+                                     of                                                                                                                sum
+                                                                                                                                                                                                                                                                                   |
+                                   items                                                                                                                             ming
+                                                                                                                                                                                                                             object
+                                                    it                                                                                                                                                                                       all
+                                                                                                                                                                                                                                                                           ,
+                                  contains                                                                                                                                                  individual
+                                                                                                                                                                                                                             object                                              .                                                                                                                                 counts
+                                                                                                                                                                                                                                                                           ,                                                                                                                                                            .                                -
+                                                                                                                                                                                                                             object
+                                Report                                                                                                               -
+                                                                                                                                                                                                                                                                           ,
+                                   the                                                                                                                      Output
+                                                                                                                                                                                                                             object
+                                   count                                                                                                                            the
+                                                                                                                                                                                                                                                                           ,
+                               separately                                                                                                                                                           final
+                                                                                                                                                                                                                             object
+                                       using                                                                                                                                                total
+                                                                                                                                                                                                                                                                           ,
+                                   the                                                                                                                                 exactly
+                                                                                                                                                                                                                             object
+                               format                                                                                                                                                                        in
+                                                                                                                                                                                                                         <|eot_id|>
+                                                            part 1 :  3      part 2 :  4      part 3 :  6        Final  answer :   13                                                                                                                                                                                                    part 1 :  3      part 2 :  4      part 3 :  6        Final  answer :   13                                                                                                                                                                                                                                                                                                                                            part 1 :  3      part 2 :  4      part 3 :  6        Final  answer :   13
+                                          Generated Output Tokens                                      Generated Output Tokens                                      Generated Output Tokens
+
+
+
+
+
+                                                                              0.01                                  0.02                                  0.03                                  0.04                                  0.05                                  0.06                                  0.07
+                                                                                                                    Attention Weight
+
+Figure 13: Full attention map for Llama 3.2 8B. The x-axis corresponds to output tokens and the y-axis to input
+tokens. The token immediately preceding the generated number of parts exhibits the strongest attention toward the
+final item and trailing comma of each partition matches its own segment.
+
+
+
+                                         14
+
+                                                                                                                            [rest of attention]                                                      [rest of attention 2]
+                    <start_of_turn>                                                                                                                                                                                                                        this
+                                user                                                                                                                                                                               format
+                                                                                                                                  part                                                                                                                  :
+                              You                                                                                 1
+                                             will                                                                                                                  :                                                                                                           Final
+                              be                                                                                    x                                                                                     answer
+                                  given                                                                                 1                                                                                                                  :
+                                a                                                                                                                                                                        x
+                                             list
+                                  of                                                                                              part                                                                                         Just
+                               items                                                                                 2                                                                                     answer
+                                          ,                                                                                                                  :                                                                                                                           in
+                            where                                                                                    x                                                                                                          this
+                              groups                                                                                 2                                                                                    format
+                                                  (                                                                                                                                                                                               without
+                              partitions                                                                                                                                                                                     any
+                                                  )                                                                                              part                                                                                         extra
+                                are                                                                                 3                                                                                                   things
+                          separated                                                                                                                  :                                                                                       and
+                              by                                                                                    x                                                                                                     follow
+                                the                                                                                 3                                                                                          the
+                 List       character"|"                                                                                                                                                                                                            instructions.
+        of                  .                                                                                                                ...                                                                                            object
+
+
+                                                                                                                                                                                                                                  object                              each                                                                                               counting                         Tokens         partitionFor                                                                                      After                                                                                                                  ,                                                                                                                                                                                       all                                                                                                                                                                                                                                                                                ,
+                                          :                                                                                                  partitions                                                                                            object
+                                                                                                                                                             :                                                                                                                      |
+                              -                                                                                                                                                                                              object
+                              Count                                                                                 -                                                                                                                  ,
+                                the                                                                                Compute                                                                                            object
+                          number                                                                                          the                                                                                                                  ,
+                                  of                                                                                                        total                                                                                            object
+                               items                                                                                     by                                                                                                                  ,
+                                                it                                                                                   summing                                                                                            object
+                              contains                                                                                                                                     all                                                                                                                      |
+                                          .                                                                                                        individual                                                                                            object
+                                                                                                                                 counts                                                                                                                  ,
+                              -                                                                                                                  .                                                                                            object
+                             Report                                                                                                                                                                                                                                     ,
+                                the                                                                                 -                                                                                            object
+                               count                                                                                     Output                                                                                                                  ,
+                           separately                                                                                          the                                                                                            object
+                                   using                                                                                                                final                                                                                                                  ,
+                                the                                                                                                        total                                                                                            object
+                            format                                                                                             exactly                                                                                                                  ,
+                                          :                                                                                                                           in                                                                                            object
+                                                      part 1 :  3      part 2 :  4      part 3 :  6        Final  answer :  1 3                    part 1 :  3      part 2 :  4      part 3 :  6        Final  answer :  1 3                    part 1 :  3      part 2 :  4      part 3 :  6        Final  answer :  1 3
+                                        Generated Output Tokens                                         Generated Output Tokens                                         Generated Output Tokens
+
+
+
+
+
+                                                                       0.01                               0.02                               0.03                               0.04                               0.05                               0.06                               0.07                               0.08
+                                                                                                                     Attention Weight
+
+Figure 14: Full attention map for Gemma 3 4B. The x-axis corresponds to output tokens and the y-axis to input
+tokens. The token immediately preceding the generated partition-level count exhibits the strongest attention toward
+the final item and trailing comma of each partition matches its own segment.
+
+
+
+
+
+                        Probability Drop by Layer Masking                                                 Probability Drop by Layer Masking
+                                                                                                                    4
+     12
+                                                                                                                    5
+     14
+ Drop  16                                                                                                                                                      Drop   6
+
+     18
+  Probability     20                                                                                                                                                                                                                                                                                                                                                                                                                            Probability   78
+ Log                                                                                                                    Log
+     22                                                                                                             9
+
+     24
+                                                                                                                   10
+     26
+            0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27                         0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27
+                                                   Layer                                                                                                       Layer
+
+                               (a)                                                                 (b)
+
+Figure 15: Average change in log probability of intermediate counts after layer masking (a) and unmasking (b) of
+the final item and separator of each partition. In the masking experiment, embeddings from the target layer are
+zero-ablated. In the unmasking experiment, embeddings of the selected tokens are zero-ablated across all layers,
+and only the target-layer embeddings are restored from the clean run.
+
+
+
+
+
+                                         15

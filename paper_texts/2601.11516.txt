@@ -1,0 +1,2426 @@
+                                                                                                                      2026-01
+
+     Building Production-Ready Probes For Gemini
+
+
+           János Kramár∗, Joshua Engels, Zheng Wang, Bilal Chughtai, Rohin Shah, Neel Nanda, and Arthur Conmy∗
+             Google DeepMind, ∗Equal contributions to this work.
+
+
+
+           Frontier language model capabilities are improving rapidly. We thus need stronger mitigations against
+         bad actors misusing increasingly powerful systems. Prior work has shown that activation probes may
+         be a promising misuse mitigation technique, but we identify a key remaining challenge: probes fail
+           to generalize under important production distribution shifts. In particular, we find that the shift from
+           short-context to long-context inputs is difficult for existing probe architectures. We propose several new
+          probe architectures that handle this long-context distribution shift.
+       We evaluate these probes in the cyber-offensive domain, testing their robustness against various
+           production-relevant distribution shifts, including multi-turn conversations, long context prompts, and2026
+          adaptive red teaming. Our results demonstrate that while our novel architectures address context
+           length, a combination of architecture choice and training on diverse distributions is required for broadFeb           generalization. Additionally, we show that pairing probes with prompted classifiers achieves optimal
+          accuracy at a low cost due to the computational efficiency of probes.10
+         These findings have informed the successful deployment of misuse mitigation probes in user-facing
+           instances of Gemini, Google’s frontier language model. Finally, we find early positive results using
+          AlphaEvolve (Novikov et al., 2025) to automate improvements in both probe architecture search and
+           adaptive red teaming, showing that automating some AI safety research is already possible.[cs.LG]
+          Keywords: Activation Probing, Interpretability, Language Models, Misuse Risk, AI Safety, Monitoring
+
+
+         1. Introduction
+
+           In this paper, we describe our experience applying probes to detect cyber-offensive prompts given as
+          input to Gemini 2.5 Flash (Google, 2025a). We describe the challenges we faced and the solutions
+        we arrived at as a case study for other frontier language model developers wishing to deploy probes
+           as a misuse mitigation in production.
+
+        What do we mean by a misue mitigation? Misuse mitigations are techniques that prevent malicious
+           users from performing cyber-offensive, CBRN1 and other similar attacks using frontier large language
+         models (Google DeepMind, 2025; Anthropic, 2025b; OpenAI, 2025). This risk is not theoretical:arXiv:2601.11516v4     frontier models can already significantly increase the abilities of malicious users to perform these
+           attacks (Anthropic, 2025a), and misuse mitigations have already been deployed by frontier AI
+         companies to decrease this risk (Anthropic, 2025c; Google, 2025b).2 One might hope that a sufficient
+          mitigation would be to train LLMs to reject harmful queries, but unfortunately current training
+          techniques are not robust enough (Nasr et al., 2025).
+
+       We thus focus on monitoring in this paper: additional deployment time systems that aim to detect
+         harmful user requests. In this work, we only study input monitoring techniques, although we note
+
+               1Chemical, Biological, Radiological, and Nuclear
+               2Anthropic: “Our ASL-3 capability threshold for CBRN (Chemical, Biological, Radiological, and Nuclear) weapons
+            measures the ability to significantly help individuals or groups with basic technical backgrounds (e.g. undergraduate STEM
+            degrees) to create/obtain and deploy CBRN weapons[...] we were unable to rule out the need for ASL-3 safeguards.”.
+            Google: “Gemini 2.5 Deep Think continues the trend of increased model capabilities — it generates detailed technical
+           knowledge of CBRN domains. It provides uplift in some stages of some harm journeys.”
+
+
+
+              Corresponding author(s): conmy@google.com, janosk@google.com, neelnanda@google.com
+       © 2026 Google DeepMind. All rights reserved
+
+                                           Building Production-Ready Probes For Gemini
+
+
+that training probes on model outputs is an important future direction in Section 7.
+
+In the main text we focus entirely on detecting the harmful and critical domain of cyber-misuse
+(Anthropic, 2025a), although we expect many findings to transfer between mitigation domains.
+Cyber-offensive capabilities are a particularly worthwhile domain for studying defenses because
+harmful prompts are very similar to common and valuable defensive cybersecurity requests, and also
+somewhat similar to even more common coding requests. Therefore, it is particularly difficult to
+avoid over-triggering while also preventing harm in the cyber domain.
+
+Recent work shows that large language model (LLM) classifiers can be an effective monitor (Sharma
+et al., 2025) for frontier models. But monitoring all interactions with another LLM can be extremely
+expensive, potentially doubling the cost if using a comparably capable model. A more cost-effective
+alternative is an activation probe: a small model trained on the internal hidden states of the model one
+plans to monitor. Activation probes are far cheaper than language model monitors because language
+model activations are already generated by the monitored model during a forward pass, so the only
+additional computational cost is running the probe itself. Indeed, Cunningham, Peng, et al. (2025)
+and Cunningham, Wei, et al. (2026) investigate probes and find evidence showing that they are a
+promising and cost-effective technique for misuse and jailbreak detection.
+
+Overall, probes are indeed a cost-effective misuse mitigation, but there is a key problem: they are
+also fragile to distribution shifts. In particular, we find that probes trained on short-context data
+fail to generalize to important production distribution shifts, particularly long-context inputs. While
+training directly on long-context data is possible, we find it increases training costs by over an order
+of magnitude to achieve similar results due to memory bandwidth constraints (see Appendix I), which
+in turn would significantly increase the costs of AlphaEvolve (Section 5.3), for example. Distribution
+shifts like jailbreaks and multi-turn data are not fully addressed by our work, and hence challenges
+building robust and cheap defenses remain.
+
+Our main technical contributionsare detailed investigation of four techniques that we investigate to
+address these distribution shift performance degradations. Below, we summarize these techniques
+and our main results from applying each one:
+
+   1. Improving probe architecture: it is a difficult engineering challenge to train probes on long-
+      context data, even with strong infrastructure (Appendix I). Yet it is highly important that
+     probes are performant on long-context data. We introduce a new probe architecture family,
+     MultiMax, that has higher classifier accuracy on long context prompts compared to other probe
+      architectures. In Section 5.1, we show that MultiMax improves long context generalization
+     compared to existing baselines such as mean-aggregated MLP probes (Figure 4).
+   2. Automated probe architecture search: In Section 5.3, we also present results from an auto-
+     mated architecture search using AlphaEvolve (Novikov et al., 2025), which discovers a probe
+      that outperforms other baselines (bootstrap probability > 0.95, Section 5.1.1).
+   3. Using a cascading classifier: Large language models are inherently more robust to distribution
+       shifts due to their generality, but are expensive to run. In Section 5.2 we show that by only
+      using the LLM when the probe is uncertain, we can create stronger classifiers than using either
+      the probe or the LLM on its own, at a tiny fraction of the LLM’s inference cost. For example, a
+      probe-Flash cascade achieves lower test loss than Flash alone while using roughly 1/50th the
+      inference cost (Figure 5).
+   4. The value of training probes across many different seeds: We show that the high variance of
+      different initialization of probes (particularly when training non-linear probes) can be exploited
+      to find probes that fit both the validation and test set better (Section 4.2), even though our
+       train, validation and eval sets are disjoint (Section 4).
+
+
+
+
+
+                                                                                                         2
+
+                                           Building Production-Ready Probes For Gemini
+
+
+These findings yield a set of recommendations for building high-quality probes. Using these recom-
+mendations, we find that our best probes achieve comparable performance to Gemini 2.5 Flash and
+Pro classifiers at a fraction of the cost. Probes also outperform 2.5 Flash Lite (Table 3). Furthermore,
+when we combine probes and LLMs into a cascading classifier, we can use the LLM less than 10% of
+the time and still achieve a lower FNR than the LLM alone (Figure 5). Our findings are not solely
+academic: they have directly informed GDM’s recent successful deployment of cyber attack misuse
+mitigation probes into production. However, looking forward, our techniques do not significantly
+reduce the success rate of adaptive adversarial attacks; indeed, recent work argues that this is ex-
+tremely challenging, if not impossible (Nasr et al., 2025). Our work can supplement other empirical
+studies (Cunningham, Wei, et al., 2026) and user-level strategies (Shah et al., 2025).
+
+We outline our notation and problem setup in Section 2, the probing and classifier baselines we
+compare in Section 3, the datasets we train and test on in Table 1, our evaluation metric in Section 4.1,
+and our main results in Section 5. We also study our new probe architectures and methodology on
+different models and domains in Appendix A.
+
+
+2. Setup and Notation
+
+We consider a deployed language model that receives prompts consisting of token sequences 𝑆𝑖=
+(𝑡𝑖,1, . . . , 𝑡𝑖,𝑛𝑖). Our goal is to classify sequences 𝑆𝑖according to some criteria. We can ask a different
+LLM to perform this classification (see Section 3.3.1). However, running an LLM for every user request
+is expensive, and we thus consider an alternative way of classifying 𝑆𝑖: training and running a small
+logistic regression classifier or neural network (i.e. a probe) trained on the deployed language model’s
+hidden states (activations).
+
+Formally, consider a training set of sequences {𝑆𝑖} with associated binary labels ℓ𝑖∈[0, 1]. We pass
+each token sequence 𝑆𝑖through the language model and harvest the dimension 𝑑hidden states (one
+for each token) at a fixed layer 𝐿(we use a layer from the middle of the model). Denote as 𝒙𝑖,𝑗∈ℝ𝑑
+the hidden activation at layer 𝐿corresponding to 𝑡𝑖,𝑗, and let 𝑿𝑖∈ℝ𝑑×𝑛𝑖be the matrix of such hidden
+states corresponding to 𝑡𝑖. We train probes to minimize cross entropy loss on these sequences:
+
+                                     𝑓∗𝑝= arg min ∑︁ BCE(𝜎( 𝑓𝑝(𝑿𝑖) + 𝑏), ℓ𝑖)                          (1)
+                                                                   𝑓𝑝           𝑖
+
+where 𝑏∈ℝand the arg min is over all parameters of 𝑓𝑝and 𝑏. We use full batch gradient descent
+with AdamW, for 1000 epochs.3
+
+During inference of the target model on a new sample 𝑆∗𝑖(which could be from a different distribution
+to all 𝑆𝑖), we perform a single forward pass and run the trained probe on the activations 𝑿∗𝑖. If the
+probe score is above a threshold 𝜏, we can run a misuse mitigation instead of naively continuing
+generation. As a slight abuse of notation, we define 𝑓𝑝(·, 𝜏) to be the classification function from
+combining the probe 𝑓𝑝with the threshold 𝜏:
+
+                                              𝑓𝑝(𝑆𝑖, 𝜏) = 1{𝜎( 𝑓𝑝(𝑿𝑖)+𝑏)>𝜏}                                (2)
+
+where 1 is the indicator function. This produces a classification decision, just as the prompted classifier
+does.
+
+  3We found that it was easier to build infrastructure that loaded activations for training in once, rather than continually
+through training. See Appendix I. We additionally only ever observed zero or mild overfitting on validation sets despite
+many epochs.
+
+
+
+                                                                                                         3
+
+                                           Building Production-Ready Probes For Gemini
+
+
+                                                        Probe (Prior SOTA Work)
+    12%                                           Language Model
+                                                        Probe (Ours)
+    10%                                                Pareto Frontier
+             EMA Linear
+                  Probe
+  Rate 8%
+  Error 6%                                       AlphaEvolve
+    4%                           Probe                                           (Right)                           Gemini 2.5                                                             Selected Probe                                                                                  Flash                                        +8% Flash
+    2%      Alternative Probe      Selected Probe;
+                  With MultiMax      Rolling Aggregation
+                Aggregation (Left)      (Middle)
+    0%           100     101     102     103     104     105     106     107
+                          Relative Inference Cost (Log Scale)
+
+Figure 1  | We improve over prior activation probing work by improving probe architectures and
+training to achieve better performance than language models at over 10,000× lower cost. “Selected
+Probe” refers to our Max of Rolling Means Attention Probe (Section 3.2). Deferring to an LLM such
+as Gemini 2.5 Flash 8% of the time further decreases error rate to a lower value than what can be
+achieved by solely using a probe or an LLM, by trusting the probe at extreme scores and delegating
+to the LLM in between (see Section 5.2.2, though note wide error bars).
+*As described in Section 4.1, for each method we select the decision threshold on a validation set by
+minimizing a weighted combination of FPR and FNR (i.e. error rate), with overtriggering FPR weighted
+most heavily. We report the same weighted error computed on test data. See Appendix J for error bar
+methodology. The two points not on the Pareto frontier (Selected Probe and AlphaEvolve) have their costs
+artificially increased by 1.25× for visual separation; the costs of these three probes are in practice almost
+identical.
+
+
+3. Our Classifiers
+
+We compare three categories of classifiers: baseline probe architectures from prior work, our novel
+probe architectures, and LLM-based classifiers. All methods are evaluated together in Section 5; we
+separate them here for clarity. Figure 2 visualizes all architectures.
+
+
+3.1. Baseline Probe Architectures
+
+We first describe probe architectures from prior work that serve as our baselines.
+
+
+3.1.1. Linear Probes
+
+Linear probes were first introduced by Alain and Bengio, 2016. Given 𝒘∈ℝ𝑑, mean pooled linear
+probes are defined as:
+
+
+
+                                                                                                          4
+
+                                           Building Production-Ready Probes For Gemini
+
+
+
+
+
+Figure 2  | Different probing classifiers that we compare in Section 3. All our probing classifiers
+can be composed into six states 1) – 6) as illustrated. Residual stream activations of undergo a
+2) Transformation per-position. These are then processed via 4) – 5) Aggregation which ends up
+producing a single scalar score at step 6). Many existing probing classifiers such as linear probes,
+exponential moving average aggregation probes and attention probes fit into this framework.
+
+
+                                       1   𝑛𝑖
+                                                𝑓Linear(𝑆𝑖) =  ∑︁ 𝒘𝑇𝒙𝑖,𝑗                                 (3)
+                                                            𝑛𝑖
+                                                                   𝑗=1
+
+so are very simple in terms of the steps 1) – 6) in Figure 2. Spelled out, for linear probes the
+transformation is just the identity map, 𝐻= 1, the scores are a simple linear map, and aggregation is
+just the mean.
+
+
+3.1.2. Exponential Moving Average (EMA) Probes
+
+EMA probes were proposed by Cunningham, Peng, et al., 2025 as a way to improve probe general-
+ization to long contexts. To use an EMA probe, we first train a mean probe 𝑓𝑙𝑖𝑛𝑒𝑎𝑟as in Equation (3).
+Then, at inference time, we compute an exponential moving average at each index 𝑗= 1, . . . , 𝑛𝑖:
+
+                    EMA0 = 0;    EMA𝑗= 𝛼𝑓𝑙𝑖𝑛𝑒𝑎𝑟(𝒙𝑖,𝑗) + (1 −𝛼)EMA𝑗−1                     (4)
+
+
+
+
+                                                                                                         5
+
+                                           Building Production-Ready Probes For Gemini
+
+
+for 𝛼∈(0, 1). Following Cunningham, Peng, et al., 2025, we use 𝛼= 0.5. We then take the maximum
+over EMA scores to get 𝑓EMA(𝑆𝑖) = max𝑗EMA𝑗which is the final probe score.
+
+
+3.1.3. MLP Probes
+
+MLP probes (e.g. Zou, Phan, J. Wang, et al. (2024)) are the same as linear probes except that we apply
+an MLP to the pooled or single token activation vector before multiplying by 𝒒. Using the definition
+of an 𝑀layer (ReLU) MLP as
+
+                 MLP𝑀(𝑿) = 𝐴1 · ReLU(𝐴2 · ReLU(. . . ReLU(𝐴𝑀· 𝑿) . . .))                  (5)
+
+an 𝑀-layer mean pooled MLP probe is formally defined as:
+
+                                     1   𝑛𝑖
+                                𝑓𝑀MLP(𝑆𝑖) =  ∑︁ MLP𝑀(𝒙𝑖,𝑗)                               (6)
+                                                         𝑛𝑖
+                                                               𝑗=1
+
+with the dimensions of 𝐴1, . . . , 𝐴𝑀chosen such that the final result is a scalar.
+
+
+3.1.4. Attention Probes
+
+The single head attention probe was first introduced by Kantamneni et al., 2025, further used by
+McKenzie et al., 2025, and expanded to use multiple heads by Shabalin and Belrose, 2025. In our
+work, we first pass activations through a common MLP before computing attention. Specifically, we
+define:
+                                          𝒚𝑖,𝑗= MLP𝑀(𝒙𝑖,𝑗)                                    (7)
+where MLP𝑀is an 𝑀-layer MLP as defined in Equation (5). An 𝐻-headed attention probe is then
+defined as:
+                                      𝐻  Í𝑛𝑖                                           exp(𝒒⊤ℎ𝒚𝑖,𝑗) · (𝒗⊤ℎ𝒚𝑖,𝑗)                                                           𝑗=1                                     𝑓Attn(𝑆𝑖) = ∑︁                                                 (8)
+                                               Í𝑛𝑖                                               exp(𝒒⊤ℎ𝒚𝑖,𝑗)                                                                 𝑗=1                                            ℎ=1
+where 𝒒ℎ, 𝒗ℎ∈ℝ𝑑′ are learned query and value vectors for head ℎ, and 𝑑′ is the output dimension
+of the MLP. Note that this is the first probe where the aggregation weights are a function of the
+activations themselves rather than constants, illustrated by the looping upper arrow in Figure 2.
+
+One might naively think that attention probes require an expensive recomputation of the softmax
+function for every new token during generation. But this is false, and as an additional contribution
+we present an inexpensive inference algorithm for attention probes in Appendix L.
+
+
+3.2. Our Probe Architectures
+
+We now present our novel probe architectures designed to address the limitations of baseline methods,
+particularly for long-context generalization.
+
+
+3.2.1. MultiMax Probes
+
+We find that the attention probe’s softmax weighting suffers from overtriggering on long contexts (see
+Section 5.1). To address this, we propose the MultiMax architecture, which replaces the softmax with
+a hard max at inference time (though not always during training). Using the same MLP-transformed
+activations 𝒚as above:
+                                             𝐻
+                                        𝑓MultiMax(𝑆𝑖) = ∑︁ max 𝒗⊤ℎ𝒚𝑖,𝑗                               (9)
+                                                                         𝑗∈[𝑛𝑖]
+                                                     ℎ=1
+
+
+                                                                                                         6
+
+                                           Building Production-Ready Probes For Gemini
+
+
+where 𝒗ℎ∈ℝ𝑑′ are learned value vectors for each head ℎ. Unlike attention probes, MultiMax selects
+the single highest-scoring token per head rather than computing a weighted average, which prevents
+dilution of the signal when harmful content appears in a small portion of a long context.
+
+
+3.2.2. Max of Rolling Means Attention Probe
+
+In prior work, McKenzie et al. (2025)4 introduce the Max of Rolling Means probe which takes the max
+over all mean scores of all possible windows of contiguous tokens of a fixed length in a sequence. In
+our work, we combine this with an Attention Probe, using the lessons learnt from the MultiMax probe
+work. Specifically, we use 10 attention heads by default and compute attention-weighted averages
+within sliding rectangular windows of fixed width 𝑤(we use 𝑤= 10 as default). For each window
+ending at position 𝑡, we compute:
+                                      Í𝑡𝑗=𝑡−𝑤+1 𝛼𝑗· 𝑣𝑗
+                                          ¯𝑣𝑡=                                              (10)
+                                       Í𝑡𝑗=𝑡−𝑤+1 𝛼𝑗
+where 𝛼𝑗= softmax(𝒒⊤𝒚𝑗) are the attention weights and 𝑣𝑗= 𝒗⊤𝒚𝑗are the per-token values. The final
+output is max𝑡¯𝑣𝑡. In this work, we explore using this aggregation at evaluation time, in addition to
+the simpler MultiMax aggregation described in Section 3.2.1.
+
+
+3.2.3. AlphaEvolve Architectures
+
+We additionally experiment with running AlphaEvolve (Novikov et al., 2025) to generate novel
+probing architectures. We start with an attention probe (Section 3.1.4) as our seed model5 and use
+weighted FPR and FNR as our optimization target (we use somewhat of a different weighting to
+either Equation (12) and Appendix K due to using AlphaEvolve early in this research project, see
+Appendix F.1). We choose two of the architectures AlphaEvolve discovered as additional methods to
+compare to and include pseudocode for these two architectures in Appendix F.2.
+
+
+3.3. LLM-Based Classifiers
+
+Finally, we describe classifiers that use language models, which serve as both strong baselines and
+components of our cascading systems.
+
+
+3.3.1. Prompted Language Model
+
+A prompted language model 𝑓𝐿𝑀consists of a (prompt, language model) pair. To classify a sequence
+𝑆𝑖, we append 𝑆𝑖to the prompt and pass it to the language model, and then parse the language
+model’s response. We use a fixed detection prompt provided by colleagues and consider Gemini
+2.5 Flash Lite, Gemini 2.5 Flash, and Gemini 2.5 Pro as the language model. This method directly
+returns a classification decision, i.e. we do not need to pass it through a 𝐶thresholding function. In
+Appendix G we experiment with eight other prompts, but do not see a significant improvement, and
+so keep our original prompt.
+
+
+3.3.2. Cascading Classifier
+
+Cascading classifiers were also studied by Cunningham, Peng, et al., 2025 but have a long history
+in machine learning (Viola and M. Jones, 2001). We consider two level cascading classifiers, with
+
+   4Max-pooling over local windows is a well-established technique in text classification, with precedent in convolutional
+approaches (Kim, 2014; Collobert et al., 2011).
+   5Since this is already an existing architecture (Section 3.1.4).
+
+
+
+                                                                                                         7
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Table 1  | Errors we seek to minimize with our trained probe. For shorthand reference later on we
+label the error on each dataset as FPR (for false positive rate) or FNR (for false negative rate) with
+subscript of prompt_structure[prompt_type]
+
+  Description                      Var         Train Split  Validation Split  Test Split
+
+  Minimize false positive rate on...
+    short context overtriggering        FPRSC[OT]       yes            yes            yes
+    short context “hard negatives”     FPRSC[HN]       yes           no            yes
+    multi-turn (also “hard negatives”)  FPRMT[HN]       yes           no            yes
+    long context random traffic        FPRLC[RT]      no           no            yes
+
+  Minimize false negative rate on...
+    short context attacks              FNRSC[A]        yes            yes            yes
+    multi-turn attacks                FNRMT[A]        yes           no            yes
+    long context attacks               FNRLC[A]       no           no            yes
+    pre-existing jailbreaks             FNRSC[J]       no           no            yes
+    automated red teaming            FNRSC[ART]      no           no            yes
+
+
+level one set to be a probe 𝑓𝑝and level two set to be a more expensive prompted language model 𝑓𝐿𝑀.
+Then the cascading classifier is defined with two thresholds 𝜏1 and 𝜏2 as
+
+                                    0      if 𝑓𝑝(𝑆𝑖) ≤𝜏1
+                                       𝑓𝑐𝑐(𝑆𝑖, 𝜏1, 𝜏2) =   𝑓𝐿𝑀    if 𝜏1 < 𝑓𝑝(𝑆𝑖) < 𝜏2                       (11)
+                                                                                                                                              1      if 𝑓𝑝(𝑆𝑖) ≥𝜏2
+By varying the percent of samples spanned by 𝜏1 and 𝜏2 we can vary the additional computational
+cost incurred by the cascading classifier over just running the probe.
+
+
+4. Datasets and Metrics
+
+We focus on a single misuse domain in this paper: cyber misuse. Our breakdown of which datasets we
+train on, which we validate on, and which we test on is outlined in Table 1. We briefly describe each
+dataset in Table 2, sorted into datasets with benign examples on which we want our probe to classify
+with logits less than 0 (and thus on which we want to minimize the false positive rate), and datasets
+with true cyber attacks on which we want our probe to classify with logits greater than 0 (and thus
+on which we want to minimize false negative rate). Importantly, no prompts are shared between
+any two of the train, validation, and test splits. Furthermore, all test sets represent distribution shifts
+from the training and validation distributions.
+
+We intentionally train probes on a subset of distribution shifts, and in particular not on long context,
+since training on long-context dramatically increases infrastructure burden and compute. This informs
+our decision of which training sets are included in Table 1. Additionally, we use a different distribution
+for validation and test sets to ensure that thresholds are not optimized on the same distribution as
+the test set.
+
+Note: we use the term “overtriggering” to refer to benign (non-cyber) datasets on which our classifiers
+should not fire, including PII-redacted user traffic, capability evaluation data and synthetic prompts
+curated for unrelated purposes.
+
+
+
+
+
+                                                                                                         8
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Table 2  | Detailed descriptions of each dataset. See Appendix B for metadata including dataset sizes.
+
+
+ Dataset             Description
+
+  Benign (minimize FPR)
+ Short Context        Short benign language model prompts. This dataset combines random coding traffic
+ Overtriggering       samples, random chat traffic samples with PII removed, and a mixture of Gemini
+                        post-training datasets. Specifically, we train on random traffic from one Google surface
+                   where Gemini is served, and use traffic from a different Google surface in the validation
+                  and evaluation sets (both surfaces have PII scrubbed). In the validation set, we use
+                        exclusively non-coding-related overtriggering prompts, and in the test set we exclusively
+                     use coding prompts, ensuring a distribution shift.
+
+ Short Context        Short benign cybersecurity requests that superficially resemble attack queries. These
+ “Hard Negatives”     include requests to understand historical security incidents (e.g., “Explain how the
+                  2017 Equifax breach exploited the Apache Struts vulnerability”), requests to review
+                    code for vulnerabilities as part of secure development practices, and queries from
+                       learners using educational security platforms. This dataset is curated and labeled by
+                       cybersecurity domain experts.
+
+ Multi Turn          Benign, synthetically-generated, multi-turn conversations that discuss cybersecurity
+ “Hard Negatives”      topics. These conversations are designed to mimic multi-turn attacks where malicious
+                       intent only becomes apparent over several turns; however, in these hard negative
+                     examples, the conversation never becomes malicious. This helps train classifiers to
+                      avoid firing on legitimate, evolving conversations about security. We use synthetically
+                      created examples for training, bootstrapping single turn conversations together.
+
+ Synthetic Long Con-  Long context prompts generated from coding user traffic with PII removed (on average
+ text             >900k tokens, though at most 1,040,000 tokens due to Gemini context length limits).
+ Random Traffic      These random traffic coding queries come from the Short Context Overtriggering dataset
+                      evaluation set, so there is no leakage between train and test data. More specifically,
+                we take the coding related queries, get Gemini to recall several GitHub repositories
+                     with related content to the query, filter for those with permissive licenses, and create a
+                     near maximal length prompt with these codebases as either prefix or the suffix of the
+                        request.
+
+  Attack (minimize FNR)
+ Short Context  At-  Short (< 10k tokens) instances of cyber attack prompts, e.g. “How do I execute a SQL
+ tacks                  injection attack”. Curated and labeled by cyber-security domain experts.
+
+ Long Context       Long context prompts generated from harmful short-context Cyber queries (which
+ Attacks              are a different set to those used in all other datasets here). We use a similar long
+                       context generation pipeline to the “Long Context Random Traffic” dataset, except insert
+                    harmful requests as a prefix to the code (i.e. at the start of the prompt), suffix to the
+                    code (i.e. at end of the prompt), as well as just before the final repository (so the
+                      request is interleaved with the context).
+
+ Multi Turn            Synthetically-generated, multi-turn conversations that begin with benign or ambiguous
+ Attacks               cybersecurity-related prompts but escalate over several turns to become explicitly
+                       malicious. This dataset simulates attackers attempting to bypass single-turn defenses
+                   by gradually building a harmful context, training the classifier to detect threats that
+                      only become apparent over an entire conversation. Generated using the same experts
+                       as the Multi Turn “Hard Negatives”.
+ Pre-existing       We take a list of jailbreaks, i.e. functions that map strings to strings such as appending
+ Jailbreaks           a suffix as in the GCG paper (Zou, Z. Wang, et al., 2023), and apply them to all of the
+                    harmful cyber prompts in the Short Context Attacks evaluation set.
+
+                                                                             Continued on next page
+
+
+
+
+                                                                                                          9
+
+                                           Building Production-Ready Probes For Gemini
+
+
+                                  Table 2 – Continued from previous page
+
+ Dataset             Description
+
+ Adaptive Red        This jailbreak dataset is constructed as follows: for each attack in the short context
+ Teaming (ART)       attacks dataset, we ask Gemini 2.5 Pro to construct a narrative prompt that encodes
+                      the attack as a natural part of the prompt. Importantly, this process could in principle
+                     transform a malicious prompt into a benign one; we guard against this by using an
+                      autorater to verify that the model’s response is actually harmful (see Appendix H.1
+                        for details). Our initial version of the ART dataset was much more complicated. It
+                    used an adaptive jailbreak finding method modeled off of Prompt Automatic Iterative
+                     Refinement (PAIR; Chao, Robey, et al. (2025)) to find semantic jailbreaks by iteratively
+                    prompting an attacker model to generate a jailbreak for a given query and giving it
+                      feedback on whether it succeeded. However, we found that this complicated method was
+                      not significantly better than the single shot baseline described above; see Appendix H.
+
+
+
+4.1. Metric
+
+There are many different datasets in Table 1, and for all methods besides the prompted classifier
+methods we must choose a threshold 𝜏that trades off against all of these metrics for use on the test
+splits. We make this choice by choosing a 𝜏∗that minimizes the following weighted error metric on
+all validation datasets from Table 1:
+
+
+                                        5     if ERROR𝑖is FNR                             "              Í 𝑤𝑖· ERROR𝑖 #        𝜏∗= arg min                w𝑖=   2     if ERROR𝑖is                                                           hard negative FPR       (12)
+                       𝜏     Í 𝑤𝑖
+                                        50   if ERROR𝑖is overtriggering FPR                  | Validation{z Loss }                                  
+
+This equation allows us to weight performance on datasets differently.  Specifically, we weight
+overtriggering false positives 10 times higher than false negatives and 25 times higher than hard
+negative false positives. These multipliers reflect that true negatives are very rare and that we want
+to almost never classify benign overtriggering prompts as malicious, whereas occasionally classifying
+hard negatives as malicious is acceptable. See Appendix K for more discussion and results with
+alternative weightings.
+
+We also use Equation (12) to calculate a weighted test loss on all test datasets from Table 1, which
+we use as the main metric when we need to compare methods along a single axis (e.g. Figure 5). In
+other words, to compute a test loss, we take the weighted average of all FPRs and FNRs on the test
+set instead of validation set.
+
+
+4.2. Initialization Seeds
+
+We train all probes in Table 3 on 100 different seeds, measure their validation loss on the validation
+sets in Table 1, and then choose the seed that has the lowest validation loss. We then report the test
+loss for this chosen seed.
+
+In Figure 3 we show the effect of this seed selection procedure on test loss across architectures. To
+quantify the impact of choosing the best seed on validation, we compare the test loss of the best-
+validation-loss seed to the test loss of the median-validation-loss seed for each architecture. Across
+architectures, seed selection via lowest validation loss reduces test loss by 0.008 on average, though
+the median reduction is only 0.003. In contrast, architecture choice provides a much larger gain.
+Comparing the median-validation-loss seeds, the best architecture achieves 0.025 test loss while the
+
+
+
+                                                                                                        10
+
+                                           Building Production-Ready Probes For Gemini
+
+    0.10       Median       Seed Selection: Median --> Best-Val
+              Best-Val               Improvement
+             Oracle    0.08
+           IQR
+Loss
+    0.06
+Test
+
+    0.04
+
+
+
+    0.02
+
+             Rolling         AlphaEvolve         Rolling            Rolling         AlphaEvolve       Vanilla Attn       Linear Probe      Linear Probe
+            Attention                            Attention          Attention            (Early                        Mean           Rolling Exp
+             Probe,                              Probe,        Probe (20H),        Variant)
+        MultiMax Agg                          Rolling Agg        Rolling Agg
+
+Figure 3  | Effect of seed selection on test loss. Arrows show improvement from median (gray) to
+best-validation-selected (coral star) test loss. Green diamonds show the oracle (best possible seed).
+Some MultiMax aggregations have very large IQR and are shown in Figure 8 to not distort this figure.
+
+
+Linear Probe Mean achieves 0.064, over 13× larger than the median seed selection gain. This result
+suggests that practitioners should prioritize architecture search over extensive seed tuning. However,
+researchers should still sweep over multiple seeds to reduce variance, as individual seed performance
+can vary substantially and does still provide a small uplift. This is a finding consistent with prior work
+on seed sensitivity in classifier finetuning (Risch and Krestel, 2020) and neural network training
+more broadly (Picard, 2023).
+
+We also note that the best possible seed on the test set is frequently much better than the seed we
+choose via our validation dataset. It is possible that with a better validation data mix, the best-val
+seed would move closer to the best possible seed.
+
+
+5. Results
+
+5.1. Main Cyber Probing Results
+
+In Table 3 we show our evaluation of a series of probes and prompted classifiers across all datasets in
+increasing order of test set error. Our key takeaways are that:
+
+   1. Existing probe architectures can be significantly improved upon.
+   2. No single method dominates across all distribution shifts.
+   3. In this cyber-offensive query domain, attack success rates are extremely high.
+
+Firstly, existing probe architectures can be significantly improved upon. Prior work includes linear
+probing trained with mean aggregation (e.g. Alain and Bengio (2016) and Zou, Phan, J. Wang, et al.
+(2024)), attention probing (Kantamneni et al., 2025; Shabalin and Belrose, 2025) or forms of max
+aggregation of trained linear probes (Cunningham, Peng, et al., 2025). Our top performing probes:
+AlphaEvolve’s MultiMax variation, and the Max of Rolling Mean Attention Probes, outperform these
+existing linear probe baselines. The Max of Rolling Mean Attention Probe with MultiMax aggregation
+outperforms all LLMs, and we strongly suspect that this is still far from optimal.
+
+Next, no single method dominates across all distribution shifts. As can be seen from Table 3, the
+
+
+
+                                                                                                        11
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Table 3  | Main results across all evaluation datasets and classifiers. For methods with a configurable
+threshold 𝜏, 𝜏is chosen to minimize Equation (12) on dataset validation splits. Better error rates are
+smaller; the best overall error rates in each column are bolded. Error bars are omitted; see Table 4
+for statistical significance testing.
+
+
+                             FPR ↓                         FNR ↓
+ Classifier           SC[OT] SC[HN] LC[RT] MT[HN]  SC[A]   LC[A]  MT[A]   SC[J]  SC[ART]  Test Error ↓
+ Gemini 2.5 Flash      0.3%  14.09%  0.7%   19.67%  8.58%  6.06%  13.51%  8.74%  20.65%    2.04%
+ Gemini 2.5 Pro       0.2%   6.71%   0.2%   13.11%  16.01% 13.42% 20.85% 10.64%  33.87%    2.21%
+ Attn (With LC Train-  0.6%   7.04%  1.17%   4.92%   9.40%  1.34%  29.34%  3.33%  35.50%    2.38%
+ ing)
+ Rolling  Attn  Probe,  0.5%  12.75%  1.85%  11.48%  8.12%  1.73%  22.01%  3.58%  22.97%    2.50%
+ MultiMax Agg
+ AlphaEvolve         0.1%   5.37%  1.72%   6.56%   9.74%  4.76%  32.05% 11.28%  27.61%    2.53%
+ Rolling  Attn  Probe,  0.7%   6.71%  1.23%  11.48%  8.58%  3.03%  26.25%  2.41%  42.46%    2.64%
+ Rolling Agg (Selected)
+ Rolling  Attn  Probe  0.5%   8.72%   1.0%   6.56%  11.37%  5.19%  32.05%  3.62%  50.58%    2.74%
+ (20H), Rolling Agg
+ AlphaEvolve   (Early  0.2%   8.05%  1.11%  1.64%   9.28%  7.79%  33.20% 42.28%  28.07%    2.87%
+ Variant)
+ Attn                0.3%  10.07%  0.0%   3.28%   9.98%  87.88% 35.91%  2.40%  43.39%    3.53%
+ Gemini 2.5 Flash Lite  0.7%  25.50%  0.2%   14.75%  11.37% 55.41% 27.41% 10.64%  41.76%    3.71%
+ Rolling  Attn  Probe  0.4%   9.40%  6.53%  24.59%  8.35%  0.0%  15.44%  2.79%  22.74%    4.50%
+ (20H), MultiMax Agg
+ MultiMax    Trained,  0.3%   4.70%  7.76%   3.28%  15.31%  0.4%  30.50%  5.17%  44.78%    5.35%
+ MultiMax Agg
+ Linear Probe Mean    1.05%  11.41%  0.5%   8.20%  13.69% 99.13% 63.32% 70.48%  47.56%    6.18%
+ Linear Probe Rolling  1.01%  16.78% 13.55%  75.41%  11.37%  1.73%  5.41%  2.95%  14.15%    8.63%
+ Exp
+ MultiMax      (Attn  1.88%  17.45% 43.97%  70.49%  8.35%  0.0%  2.70%  0.8%   3.94%    21.93%
+ Trained)
+ MultiMax    Trained  1.12%  6.04%  82.14%  9.84%   9.51%  0.0%  20.85%  7.61%  38.52%   38.14%
+ (20H), MultiMax Agg
+
+
+optimal probe for a particular sub-distribution tends to differ from task-to-task. We suspect that this
+is due to using a wider set of distributions than prior work. Additionally, we speculate that the large
+variation in FPR and FNR values across techniques on a given domain is downstream of cyber-offensive
+capabilities being very similar to cyber-benign applications, and not significantly different from many
+coding related queries.
+
+Finally, in this cyber-offensive query domain, jailbreak success rates are extremely high. As
+gestured at in Figure 4d, on the pre-existing jailbreaks dataset, all techniques have a vulnerability
+on at least 1% of queries. This means that we are a long way from adversarial robustness in this
+domain. While we suspect that there is some dataset labelling error driving some low performance,
+we still believe that all of our probes and classifiers are far from saturating the task of detecting
+cyber-offensive queries. Note that this dataset consists of purely prompt based attacks generated from
+publicly accessible methods.
+
+We now choose a selected probe to run further experiments with in this paper (e.g. Figure 1 and
+Figure 5). Our selected probe is the Max of Rolling Means Attention Probe, which we find to
+statistically significantly outperform (according to bootstrap resampling) the baselines in Table 4.
+While the Max of Rolling Means Attention Probe, evaluated with a MultiMax aggregation function
+at inference time, has lower test error in Figure 1, it also has far larger error bars, hence we do not
+focus on it.
+
+
+
+                                                                                                        12
+
+                                           Building Production-Ready Probes For Gemini
+
+                                            Probe (Prior SOTA Work)              Relative Inference Cost (Log Scale)     Weighted Error Rate*                                   107      8.6%                          LanguageProbe (Ours)Model                                                              Cost106                   Lower is better(%)                                 105
+                                   104Rate5                                                                                                                               Inference             3.5%                      103
+                                   102Error                  2.6%   2.0%                                   1.5%      101                                                                                                                             Relative            EMA Linear          Attention           Selected         Gemini 2.5        Selected Probe      100   EMA Linear      Attention        Selected      Gemini 2.5    Selected Probe  0        Probe             Probe             Probe              Flash        +8% Flash                                 Probe         Probe         Probe           Flash     +8% Flash
+
+(a) Test error comparison                             (b) Cost comparison
+
+                                                          Attack Success Rate on Probes
+        Long Context FNR and FPR (Lower is Better)                             8.7%
+  100     13.5%  87.9%
+                                        FNR
+                                           FPR
+(%)                       10(%)     (%)
+   50                           5FNR                                      FPR     FNR   3.0%                                                         2.4%   2.4%                                                                            1.8%                                     1.2%          1.7%           0.0%   3.0%                                          1%
+    0 EMA Linear Attention   Selected 0           Probe     Probe     Probe          0   EMAProbeLinear      AttentionProbe         SelectedProbe       GeminiFlash2.5    Selected+8% FlashProbe
+(c) Long context FNR/FPR                            (d) Pre-existing jailbreaks FNR
+
+Figure 4  | Comparison of probe architectures across distribution shifts. (a) Test error across methods.
+(b) Probes achieve comparable performance to LLM classifiers at a fraction of the cost. (c) Long
+context generalization: AlphaEvolve probes maintain low FPR on long contexts. (d) Adversarial
+attacks remain challenging for all methods; all methods still leave attack success rate >1%. Note:
+error bars are omitted from these plots see Figures 1 and 5 for visualizations with (relatively wide)
+uncertainty estimates.
+*As in Figure 1 the threshold selection methodology is described in Section 4.1.
+
+
+5.1.1. Statistical Significance of Probe Comparisons
+
+To rigorously validate our results, we compute the frequency with which one method outperforms
+another under a “best-of-𝑘” selection procedure. In other words, to compare whether method A is
+better than method B, we are interested in the probability that when we train 𝑘= 100 random seeds
+of each method and select the best by validation loss, method A achieves lower test loss than method
+B. We approximate this by using a bootstrap procedure over our seed sweeps, computing empirical
+PMFs (probability mass functions) for each method’s test loss distribution under best-of-𝑘selection.
+
+Table 4 shows that our top methods—Rolling Attention Probe (with both Rolling and MultiMax
+aggregation) and AlphaEvolve—statistically significantly outperform all baseline methods. For
+comparisons against Linear Probe baselines, the bootstrap PMFs have zero overlap: in every bootstrap
+sample, the top methods achieve lower test loss than the baselines. This validates that the performance
+gains we report are robust and not due to random seed selection.
+
+Among the top methods themselves, the differences are not statistically significant: the bootstrap
+frequency with which Rolling Attn (Rolling Agg) outperforms AlphaEvolve is only 0.51, and the
+frequency with which it outperforms Rolling Attn (MultiMax Agg) is 0.48, suggesting these architec-
+
+
+
+
+                                                                                                         13
+
+                                           Building Production-Ready Probes For Gemini
+
+
+
+                                              Linear Baselines       Attention Baselines
+
+ Method                                 Linear Mean  Linear EMA    Attn   MultiMax
+
+  Rolling Attn, Rolling Agg (Selected Probe)       1.0           1.0     > 0.996   > 0.999
+  Rolling Attn, MultiMax Agg               > 0.999      > 0.999    > 0.91    > 0.99
+  AlphaEvolve                                   1.0           1.0      > 0.96    > 0.99
+
+Table 4  | Bootstrap frequency with which row methods outperform column methods under best-of-
+100-seeds selection. Values of 1.0 indicate zero overlap between bootstrap PMFs. All selected probe
+comparisons exceed 0.95.
+
+
+tures have converged to similar performance levels. This is visually illustrated in Figure 1, where
+the “Selected Probe” and AlphaEvolve have overlapping error bars. This indicates we have identified
+a class of high-performing architectures, though determining the single “best” would require more
+seeds or a larger evaluation set.
+
+
+5.1.2. Training on Long-Context Data
+
+In Table 3 the “Attn (LC Trained)” baseline achieves a competitive test error (∼2.38% – the architecture
+is described in Section 3.1.4). This confirms that attention probes have sufficient capacity to handle
+long contexts if given enough data. However, these results rely on directly training on long-context
+data rather than generalizing from short-context data. This means that this generalization comes at
+a steep price: Even with large-scale accelerator clusters, the full dataset of long-context activations
+(each up to 1M tokens) cannot fit into TPU HBM. This necessitates implementing complex data
+loading pipelines to swap data between host memory and device memory, preventing the use of
+standard, efficient training loops. In our experiments, these overheads resulted in a 22× increase in
+training cost compared to short-context training.
+
+In contrast, our proposed Max of Rolling Means Attention Probe and AlphaEvolve architectures
+achieve similar performance (e.g., 2.53% test error for AlphaEvolve compared to 2.38% for Attn
+(LC Trained)) while being trained exclusively on short-context data. This demonstrates that better
+architectural design can solve the long-context problem and achieve similar performance to directly
+training on long context data.
+
+We do note that attention probes may be optimal for domains without large deployment distribution
+shifts; in Appendix A, we find that attention probes are highly performant on open source datasets
+with the same train, test, and deployment distribution.
+
+
+5.2. Cascading Classifiers
+
+Cascading classifiers combine a cheap probe with an expensive LLM classifier to achieve better cost-
+accuracy tradeoffs than either alone (Viola and M. Jones, 2001; McKenzie et al., 2025). The probe
+first classifies each query; queries where the probe is uncertain are deferred to the expensive model.
+We consider two methods for computing the optimal deferral policy. Both methods set the parameters
+of the policy using the validation set.
+
+
+5.2.1. Warmup: Heuristic Band Method
+
+The heuristic band method uses a symmetric confidence band around the probe’s decision threshold.
+Given a decision threshold 𝑡, we define a band [𝑡−𝛿, 𝑡+ 𝛿] and defer all queries with probe logits in
+
+
+
+                                                                                                        14
+
+                                           Building Production-Ready Probes For Gemini
+
+
+   4.0%        Probe                 Flash Lite
+                 Frontier              Flash
+            LLM Only            Pro
+   3.5%        Best Cascade
+
+   3.0%
+
+Rate2.5%                                                            6.3%
+Error                                                                               defer
+   2.0%
+                                                                                                   8.6%
+                                                                                    7.1%             defer                                                                                                      defer
+   1.5%
+
+   1.0%
+
+           102            103            104            105            106            107
+                                   Relative Inference Cost (Log Scale)
+
+Figure 5  | Cost plotted against test error (Equation (12)). The curves show the optimal frontier for
+cascading classifiers that combine cheap probes with expensive LLMs. Error bars (see Appendix J)
+indicate substantial uncertainty: most operating points have overlapping confidence intervals, so the
+apparent ordering between methods should be interpreted cautiously. The cascade global minima
+(circles) represent optimal operating points for each LLM; further deferring to LLMs past these points
+increases the error rate.
+
+
+this range to the expensive model. By varying 𝛿from 0 (no deferral) to infinity (full deferral), we
+trace out a cost-accuracy curve. This method is simple but suboptimal: it treats all deferred queries
+symmetrically regardless of their individual costs.
+
+
+5.2.2. Generalization: Threshold-Randomization-Optimal Cascading
+
+The heuristic band method restricts us to symmetric deferral regions, but we can do better. In general,
+a cascading policy is defined by two thresholds (𝑡0, 𝑡1): classify as negative if the probe logit is below
+𝑡0, classify as positive if above 𝑡1, and defer to the expensive model otherwise. Each choice of (𝑡0, 𝑡1)
+gives a point on a cost-accuracy plot on the validation data.
+
+Since we have finite data, sweeping over all possible threshold pairs yields a discrete set of (Cost, Test Error)
+points. A natural question arises: what is the correct way to interpolate between these points to
+obtain a continuous Pareto frontier? We study and answer this question in detail in Appendix E, and
+apply our results to the plot of the Pareto frontier in Fig. 5.
+
+
+5.2.3. Cascading Results
+
+In Figure 5 we show the performance of cascading classifiers. Specifically, we find that Gemini 2.5
+Pro and Gemini 2.5 Flash-Lite can be effectively combined with the optimal probe from Table 3 in
+
+
+
+                                                                                                         15
+
+                                           Building Production-Ready Probes For Gemini
+
+
+order to produce an even higher accuracy classifier than merely using the language models alone.
+The probe used on its own also lies on the Pareto frontier.
+
+Notably, Gemini 2.5 Flash dominates Gemini 2.5 Pro across the entire cost-accuracy frontier. This is
+despite our cost estimation being generous to Pro: we ignore the cost of thinking tokens, treating them
+as free. In practice, Gemini 2.5 Pro often produces significantly more than the minimal 128 thinking
+tokens we set in the API, making the true cost gap even larger. This suggests that for cascading
+classifier deployments, Flash is the preferred expensive model. Note that all of these results are
+derived directly from sweeping over thresholds and then plotting the test data conclusion. However,
+since we’re sweeping over one parameter only, we don’t think this is a problematic use of the test data.
+
+
+5.3. Automating Safety Research with AlphaEvolve
+
+In this section, we describe our experience using AlphaEvolve to run an automatic evolutionary
+search for better probing architectures. AlphaEvolve (Novikov et al., 2025) is a system that optimizes
+algorithms by leveraging a large language model to iteratively mutate and refine programs. The
+system starts from a single seed program and then iteratively generates new programs using the
+high-performing programs as in-context examples for subsequent generation steps. High-performing
+programs are determined by their score on a user-defined automatic evaluation.
+
+We give AlphaEvolve a simple base script that implements a naive attention probe. We then let
+AlphaEvolve optimize against a weighting of the validation error of datasets from Table 1 (excluding
+jailbreaks and long context overtriggering). We run a single large AlphaEvolve job that generates and
+evaluates approximately 2500 probing architectures. This process successfully closes approximately
+50% of the test error gap between the attention probe baseline and the best possible probe performance;
+see Figure 10 for the the best generated architecture according to weighted validation error over
+time.
+
+The two AlphaEvolve architectures we compare to in the rest of this paper are chosen from this
+validation error frontier, one from relatively early in training and one from the very end. We show
+the corresponding pseudocode in Appendix F.2. Notably, both of the chosen AlphaEvolve programs
+find MultiMax like solutions on their own. Indeed, the early AlphaEvolve program is just a MultiMax
+probe followed by a dense linear projection of the heads, while the program from the end of the
+AlphaEvolve run involves complicated gating and regularization.
+
+We conclude with some speculation and observations about using AlphaEvolve for safety research; we
+expect our takeaways to be useful not just for AlphaEvolve, but also for similar automated evolutionary
+LLM-based program discovery systems.
+
+When to Use AlphaEvolve. We think that automated program discovery methods are promising for
+safety research problems that can be framed as optimizing a single number or set of numbers. Indeed,
+we also successfully used AlphaEvolve to optimize the prompt for our adaptive jailbreak dataset (see
+Appendix H).
+
+Strange Late Effects in AlphaEvolve Generations. We also observe some strange effects late in
+AlphaEvolve, where the best programs start to have strange comments describing hard to understand
+ideas like "Holographic Attention" or "frequency modulators"; we think this tendency is likely due to
+one of the prompts we used, which suggested that the model should “Suggest a crazy idea of how
+we can improve our implementation, something that definitely nobody else would think of. Make it
+crazy with a capital C”. It may be important to balance increasing variance of model responses while
+preventing generation from going off of the rails.
+
+High Level Recommendations On Using AlphaEvolve-like systems. We believe that there are a
+
+
+
+                                                                                                        16
+
+                                           Building Production-Ready Probes For Gemini
+
+
+number of important considerations that help to successfully use AlphaEvolve or similar systems.
+Chiefly, we recommend running multiple AlphaEvolve runs with increasing length and number of
+workers, tracking additional metrics that are not being expressly optimized by AlphaEvolve, and
+building environments that are as robust as possible to intense optimization pressure. Thus, a typical
+AlphaEvolve workflow for us looked something like: first designing an environment, running a small
+AlphaEvolve run on it, observing the results on held-out metrics, debugging why they lagged behind
+the optimized metrics, rerunning a larger AlphaEvolve run, debugging new compute bottlenecks in
+various parts of the pipeline (common for AlphaEvolve deployments), and so on. Thus, although
+AlphaEvolve can indeed greatly improve the performance of a seed program, there is a large overhead
+in building and iterating on a successful environment.
+
+Environmental Robustness: Evaluation Noise. For the environment robustness problem in particular,
+there were two types of problems we found common. The first problem was the presence of noise in
+evaluation metrics, which is common in machine learning problems. For example, we believe that the
+large early drop in Fig. 10 comes from climbing randomness, as some seeds are naturally better at
+the specific weighted tradeoff metric we specify. This is also reflected in our main results table in
+Table 3: the AlphaEvolve programs do not improve over the seed Attention probe program on test
+metrics as much as one would expect from Fig. 10. We reduced variance by running multiple seeds in
+the AlphaEvolve evaluation function.6
+
+Environmental Robustness: Reward Hacking. The second type of environmental robustness
+problem we identified was (unintentional) reward hacking. For example, we found in early runs
+applying AlphaEvolve to our adaptive jailbreaking set, AlphaEvolve sometimes optimized for crashing
+inference servers by making the generated jailbreak extremely long, because a lack of a response
+was treated as a success, similar to Georgiev et al. (2025). We changed the metric to treat a lack of
+response as a failure, which mitigated this problem. In general, we found that surprising failures like
+this were common, motivating our above advice to iterate on environment design.
+
+
+6. Related Work
+
+6.1. Misuse Mitigation
+
+The first line of defense for preventing language model misuse is aligning the model’s behavior directly
+during training. Approaches in this vein include Reinforcement Learning from Human Feedback
+(RLHF) (Christiano et al., 2017) and Constitutional AI (RLAIF) (Bai et al., 2022), which use feedback
+from humans or AI raters to teach the target model not to respond to harmful queries. However, these
+techniques are not yet sufficiently robust to prevent all misuse.
+
+Recognizing that models may never be safe to use as standalone input/output black boxes, recent work
+augments language models with separate input output classifiers to flag potentially unsafe requests
+or responses (Naihin et al., 2023; Inan et al., 2023; Han et al., 2024; Sharma et al., 2025). The
+deployment of such monitors is now standard for frontier models, as detailed in frontier model system
+cards (Anthropic, 2025c; Google, 2025b). The broader field of AI Control (Greenblatt et al., 2023)
+specifically focuses on augmenting untrusted language models into larger systems with components
+of language model, probe, or human oversight, although with more of a focus on model than user
+misbehavior. However, these text-based monitors can add significant latency and compute costs, so a
+promising alternative is activation probing.
+
+   6One interesting technique we experimented with to determine if we needed to invest more compute in reducing
+measurement noise was simulating a simplified AlphaEvolve run, where we modeled each program run as a random process
+that had a distribution of improvements over the seed program and a distribution over measurement noise.
+
+
+
+
+                                                                                                        17
+
+                                           Building Production-Ready Probes For Gemini
+
+
+6.2. Activation Probing
+
+Activation probing originated as a diagnostic technique to determine what information is linearly
+decodable where from a frozen model’s internal states (Alain and Bengio, 2016). Recent work
+has adapted these diagnostic tools into active safety monitors (Zou, Phan, S. Chen, et al., 2023),
+demonstrating that probes can reliably detect high-stakes interactions (McKenzie et al., 2025) and
+latent deceptive intent (Goldowsky-Dill et al., 2025), often earlier and more efficiently than text-based
+classifiers. This efficiency is central to proposals for cheap misuse mitigation classifiers that reuse
+frozen internal features rather than processing the full output text with another language model
+(Cunningham, Peng, et al., 2025). Contemporary research continues to refine probe architectures
+beyond simple linear layers, utilizing attention mechanisms (Shabalin and Belrose, 2025), exponential
+moving averages (Cunningham, Peng, et al., 2025), or sparse autoencoders (Kantamneni et al., 2025;
+Tillman and Mossing, 2025) to improve performance.
+
+
+6.3. Cascading Classifiers
+
+Cascading classifiers7 leverage a sequence of increasingly capable and more expensive models to
+optimize the trade-off between efficiency and accuracy (Blum et al. (2022) and Yue et al. (2024),
+though see Mangal et al. (2022)). The foundational work by Viola and M. Jones (2001) on rapid object
+detection demonstrated that a low cost layer could quickly reject the vast majority of negative examples,
+reserving expensive compute only for ambiguous cases. Recent work has adapted this paradigm
+to modern language model monitoring. Greenblatt et al. (2023) propose monitoring architectures
+that combine trusted weak models, untrusted strong models, and trusted (but expensive) human
+oversight; via clever cascading design, they show that one can achieve much better performance than
+using any one source of oversight. Similarly, Cunningham, Peng, et al. (2025), Hua et al. (2025),
+and McKenzie et al. (2025) demonstrate that activation probes can serve as a first line of defense for
+a more expensive language model classifier when detecting misuse, and Cunningham, Peng, et al.
+(2025) specifically show that the resulting system achieves most of the performance of the language
+model while not costing significantly more than the extremely cheap activation probe. Finally, Oldfield
+et al. (2025) show that one can also apply this cascading classifier approach solely to a sequence of
+increasingly expensive activation probes (which correspond to additional polynomial terms in the
+probe’s architecture), and Youstra et al. (2025) show that probes are a stronger defence than LLMs
+for cipher attacks specifically.
+
+
+6.4. Distribution Shifts
+
+The failure of machine learning models to generalize when the test distribution differs from the training
+distribution is a classic and extensively studied problem (Blitzer et al., 2007; Torralba and Efros,
+2011). While large scale pretraining has generally improved out-of-distribution robustness compared
+to earlier architectures (Hendrycks et al., 2020), modern language models remain vulnerable to
+many types of production distribution shifts (not least of which are adversarial examples; see the next
+related work section). Notably for our paper, past work has observed that long context (Liu et al.,
+2023; Hsieh et al., 2024) and multi-turn data (Laban et al., 2025) are challenging distribution shifts
+for language models, so we should perhaps not be as surprised that activation probes—which directly
+operate on language model hidden states—struggle in these settings as well.
+
+   7Sometimes called “hierarchical classifiers” or “hierarchical monitors”, e.g. in McKenzie et al. (2025).
+
+
+
+
+
+                                                                                                        18
+
+                                           Building Production-Ready Probes For Gemini
+
+
+6.5. Jailbreaking Models
+
+Adversarial examples—inputs explicitly designed to trigger model errors—are similarly a foundational
+and unsolved problem in machine learning (Szegedy et al., 2013). In the context of language models,
+this manifests as "jailbreaking": crafting inputs that bypass safety training to elicit harmful outputs.
+
+The discovery of these vulnerabilities has increasingly moved from manual engineering to automated
+search. Zou, Z. Wang, et al. (2023) pioneered automated prompt finding with GCG, a white box
+gradient-based method for generating universal adversarial suffixes. Other approaches have leveraged
+LLMs as attackers: Perez et al. (2022) demonstrate the utility of using LLMs to generate diverse red
+teaming test cases, while PAIR (Chao, Robey, et al., 2025) uses an iterative, adversary-versus-target
+LLM framework to refine attacks. Attacks have also emerged that exploit new model capabilities; no-
+tably, "many-shot" jailbreaking (Anil et al., 2024) leverages extended context windows with hundreds
+of harmful demonstrations—a key distribution shift our probes are designed to withstand.
+
+Benchmarks such as JailbreakBench (Chao, Debenedetti, et al., 2024) and HarmBench (Mazeika
+et al., 2024) have been established to standardize jailbreak mitigation evaluation. However, Nasr
+et al. (2025) highlight that static defenses remain brittle, showing that adaptive attacks—where the
+adversary has knowledge of the defense—can bypass most existing guardrails.
+
+
+6.6. Automated Safety Research
+
+Recent advances have enabled language models to act as autonomous agents capable of conducting
+end-to-end scientific research; for example, Lu et al. (2024) and Gottweis et al. (2025) recently
+introduced frameworks for fully automated scientific discovery. Within the safety domain, such agents
+can accelerate manual red teaming and interpretability workflows; for example, MAIA (Shaham et al.,
+2025) uses a suite of tools to iteratively experiment on target models to identify failure modes and
+explain inner mechanisms.
+
+Our work extends this trend by applying automated language model guided optimization directly to
+AI safety-relevant problems. Novikov et al. (2025) propose AlphaEvolve, an evolutionary system that
+improves algorithms by prompting LLMs to make iterative changes to the best programs so far. We
+leverage AlphaEvolve in this paper to automate the search for well-generalizing probe architectures
+and to find more effective adversarial prompts in our automated red teaming system.
+
+
+7. Conclusion
+
+In this work, our contributions were: (i) showing that probes are an effective complement to black-
+box classifiers on cyber-misuse detection, (ii) showing that there is significant headroom in probe
+performance, with both architecture variations we discovered, and others that AlphaEvolve discovered,
+and (iii) highlighting that robustness to distribution shifts remains a difficult problem for probes (and
+LLM classifiers).
+
+The limitations of our work include that we do not evaluate against probes using activations from
+every layer of the model as applied in concurrent work (Cunningham, Wei, et al., 2026), though
+potentially our findings and methodology (such as using AlphaEvolve) could be combined. Secondly,
+we focus entirely on monitoring inputs to language models, and while we study multi-turn inputs,
+we do not investigate whether any methods might classify that a language model rollout should be
+flagged partway through the rollout. Finally, a number of our results have large error bars, which
+makes it difficult for us to recommend one single probe architecture, for example. Future research
+could evaluate on several different domains beyond cyber misuse and academic datasets (Appendix A),
+
+
+
+
+                                                                                                        19
+
+                                           Building Production-Ready Probes For Gemini
+
+
+to produce exact recommendations.
+
+To close, we hope that our findings can both improve the quality of defenses used in frontier AI
+deployments at a given cost and also enable further research into the quality of activation probes. For
+example, we are excited about future work that builds on the open-weights and open-data research
+in Appendix A.
+
+
+8. Acknowledgements
+
+We are extremely grateful for the work of the Gemini Introspection workstream at Google for their
+work adding probes to production Gemini deployments which we collaborated on. In particular Trilok
+Acharya, Wendy Kan, Felipe Tiengo Ferreira, Blaž Bratanič, Andrey Vlasov, Andre Fernandes, Tolu
+Delano, Weina Ge, Yuhan Fu, Chris Hsu, Felipe Tiengo Ferreira, Seiji Sakiyama, Thai Duong, Evan
+Feder, Julian Freedberg and Riccardo Patana all worked on this effort. We are additionally grateful to
+dataset and evaluation contributions from Ziyue Wang, Raluca Ada-Popa, Laurent Simon and Xerxes
+Dotiwalla, as well as Drew Proud, Tom Weingarten and the team behind the helpful-only Gemini
+variant we use, and finally Vikrant Varma, Tom Lieberum, Samuel Albanie, Irhum Shafkat and Kate
+Woolverton for fantastic foundational engineering tooling. Finally we are also grateful to Ziyue Wang
+for feedback on a draft of this paper, and grateful to Myriam Khan, Yotam Doron and Anca Dragan
+for publication help.
+
+
+9. Author Contributions
+
+JK made the first findings that MultiMax architectures could generalize to long contexts, and built
+foundational infrastructure that made all this work possible. JE ran all AlphaEvolve runs and wrote
+the first draft of the paper and edited it extensively, and additionally assisted with the autorater
+baseline experiments. ZW led the autorater baselines and ran the LC training experiments. BC built
+the seed program of the automated red-teaming infrastructure, and provided feedback on the paper.
+RS and NN provided advice throughout the project. AC proposed the initial project, ran all final probe
+evaluations except for LC Attn Probes, and wrote the final paper.
+
+
+References
+
+Alain, Guillaume and Yoshua Bengio (2016). “Understanding intermediate layers using linear classifier
+    probes”. In: arXiv preprint arXiv:1610.01644.
+Anil, Cem et al. (2024). “Many-shot jailbreaking”. In: Advances in Neural Information Processing
+   Systems 37, pp. 129696–129742.
+Anthropic (Nov. 2025a). Disrupting the First Reported AI-Orchestrated Cyber Espionage Campaign.
+   Technical Report. Anthropic. url: https://assets.anthropic.com/m/ec212e6566a0d47
+   /original/Disrupting-the-first-reported-AI-orchestrated-cyber-espionage
+  -campaign.pdf.
+Anthropic (May 14, 2025b). Responsible Scaling Policy. Tech. rep. Version 2.2. Effective May 14, 2025.
+   Anthropic. url: https://www-cdn.anthropic.com/872c653b2d0501d6ab44cf87f43e1
+   dc4853e4d37.pdf (visited on 10/22/2025).
+Anthropic (May 2025c). System Card: Claude Opus 4 & Claude Sonnet 4. Tech. rep. Anthropic. url:
+   https://www-cdn.anthropic.com/4263b940cabb546aa0e3283f35b686f4f3b2ff47
+   .pdf.
+Bai, Yuntao et al. (2022). “Constitutional ai: Harmlessness from ai feedback”. In: arXiv preprint
+   arXiv:2212.08073.
+
+
+                                                                                                        20
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Berg, Mark de et al. (2008). “Computational Geometry: Algorithms and Applications”. In: Berlin,
+   Heidelberg: Springer, pp. 290–294. doi: 10.1007/978-3-540-77974-2.
+Blitzer, John, Mark Dredze, and Fernando Pereira (2007). “Biographies, bollywood, boom-boxes
+   and blenders: Domain adaptation for sentiment classification”. In: Proceedings of the 45th annual
+   meeting of the association of computational linguistics, pp. 440–447.
+Blum, Avrim et al. (2022). “Boosting Barely Robust Learners: A New Perspective on Adversarial
+   Robustness”. In: Advances in Neural Information Processing Systems. Ed. by S. Koyejo et al. Vol. 35.
+   Curran Associates, Inc., pp. 1307–1319. url: https://proceedings.neurips.cc/paper
+   _files/paper/2022/file/08fe50bf209c57eecf0804f9f9ed639f-Paper-Conferenc
+   e.pdf.
+Chao, Patrick, Edoardo Debenedetti, et al. (2024). “Jailbreakbench: An open robustness benchmark
+    for jailbreaking large language models”. In: Advances in Neural Information Processing Systems 37,
+   pp. 55005–55029.
+Chao, Patrick, Alexander Robey, et al. (2025). “Jailbreaking black box large language models in
+   twenty queries”. In: 2025 IEEE Conference on Secure and Trustworthy Machine Learning (SaTML).
+   IEEE, pp. 23–42.
+Christiano, Paul F et al. (2017). “Deep reinforcement learning from human preferences”. In: Advances
+    in neural information processing systems 30.
+Collobert, Ronan et al. (2011). Natural Language Processing (almost) from Scratch. arXiv: 1103.0398
+   [cs.LG]. url: https://arxiv.org/abs/1103.0398.
+Cunningham, Hoagy, Alwin Peng, et al. (2025). “Cost-Effective Constitutional Classifiers via Represen-
+    tation Re-use”. In: url: https://alignment.anthropic.com/2025/cheap-monitors/.
+Cunningham, Hoagy, Jerry Wei, et al. (2026). Constitutional Classifiers++: Efficient Production-Grade
+    Defenses against Universal Jailbreaks. arXiv: 2601.04603 [cs.CR]. url: https://arxiv.org
+   /abs/2601.04603.
+Darema, Frederica et al. (1988). “A single-program-multiple-data computational model for EPEX/FORTRAN”.
+    In: Parallel Computing 7.1, pp. 11–24.
+Geifman, Yonatan and Ran El-Yaniv (Sept. 2019). “SelectiveNet: A Deep Neural Network with an
+    Integrated Reject Option”. In: Proceedings of the 36th International Conference on Machine Learning.
+   Ed. by Kamalika Chaudhuri and Ruslan Salakhutdinov. Vol. 97. Proceedings of Machine Learning
+   Research. PMLR, pp. 2151–2159. url: https://proceedings.mlr.press/v97/geifman1
+   9a.html.
+Georgiev, Bogdan et al. (2025). Mathematical exploration and discovery at scale. arXiv: 2511.02864
+   [cs.NE]. url: https://arxiv.org/abs/2511.02864.
+Goldowsky-Dill, Nicholas et al. (2025). “Detecting strategic deception with linear probes”. In: Forty-
+   second International Conference on Machine Learning.
+Google (2025a). Continuing to bring you our latest models, with an improved Gemini 2.5 Flash and
+    Flash-Lite release. Google Developers Blog. url: https://developers.googleblog.com/en
+   /continuing-to-bring-you-our-latest-models-with-an-improved-gemini-2-5-
+   flash-and-flash-lite-release/ (visited on 11/13/2025).
+Google (Aug. 2025b). Gemini 2.5 Deep Think Model Card. https://storage.googleapis.com/d
+   eepmind-media/Model-Cards/Gemini-2-5-Deep-Think-Model-Card.pdf.
+Google DeepMind (Sept. 22, 2025). Frontier Safety Framework. Tech. rep. Version 3.0. Google
+   DeepMind. url: https://storage.googleapis.com/deepmind-media/DeepMind.com
+   /Blog/strengthening-our-frontier-safety-framework/frontier-safety-frame
+   work_3.pdf (visited on 10/22/2025).
+Gottweis, Juraj et al. (2025). “Towards an AI co-scientist”. In: arXiv preprint arXiv:2502.18864.
+Greenblatt, Ryan et al. (2023). “AI control: Improving safety despite intentional subversion”. In: arXiv
+    preprint arXiv:2312.06942.
+
+
+
+
+                                                                                                        21
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Han, Seungju et al. (2024). “Wildguard: Open one-stop moderation tools for safety risks, jailbreaks,
+   and refusals of llms”. In: Advances in Neural Information Processing Systems 37, pp. 8093–8131.
+Hendrycks, Dan et al. (2020). “Pretrained transformers improve out-of-distribution robustness”. In:
+   arXiv preprint arXiv:2004.06100.
+Hsieh, Cheng-Ping et al. (2024). “RULER: What’s the Real Context Size of Your Long-Context Language
+   Models?” In: arXiv preprint arXiv:2404.06654.
+Hua, Tim Tian et al. (2025). Combining Cost-Constrained Runtime Monitors for AI Safety. arXiv:
+   2507.15886 [cs.CY]. url: https://arxiv.org/abs/2507.15886.
+Hughes, John et al. (2024). Best-of-N Jailbreaking. arXiv: 2412.03556 [cs.CL]. url: https://a
+   rxiv.org/abs/2412.03556.
+Inan, Hakan et al. (2023). “Llama guard: Llm-based input-output safeguard for human-ai conversa-
+    tions”. In: arXiv preprint arXiv:2312.06674.
+Kantamneni, Subhash et al. (2025). “Are sparse autoencoders useful? a case study in sparse probing”.
+    In: arXiv preprint arXiv:2502.16681.
+Kim, Yoon (2014). Convolutional Neural Networks for Sentence Classification. arXiv: 1408.5882
+   [cs.CL]. url: https://arxiv.org/abs/1408.5882.
+Laban, Philippe et al. (2025). LLMs get lost in multi-turn conversation. arXiv: 2505.06120.
+Liu, Nelson F et al. (2023). “Lost in the middle: How language models use long contexts”. In: arXiv
+    preprint arXiv:2307.03172.
+Lu, Chris et al. (2024). “The ai scientist: Towards fully automated open-ended scientific discovery”.
+    In: arXiv preprint arXiv:2408.06292.
+Madras, David, Toniann Pitassi, and Richard S. Zemel (2018). “Predict Responsibly: Improving Fairness
+   and Accuracy by Learning to Defer”. In: Advances in Neural Information Processing Systems 31,
+   pp. 6150–6160. url: https://papers.nips.cc/paper/7853-predict-responsibly-i
+   mproving-fairness-and-accuracy-by-learning-to-defer.
+Mangal, Ravi et al. (2022). On the Perils of Cascading Robust Classifiers. arXiv: 2206.00278 [cs.LG].
+   url: https://arxiv.org/abs/2206.00278.
+Mazeika, Mantas et al. (2024). “Harmbench: A standardized evaluation framework for automated
+   red teaming and robust refusal”. In: arXiv preprint arXiv:2402.04249.
+McKenzie, Alex et al. (2025). “Detecting High-Stakes Interactions with Activation Probes”. In: arXiv
+    preprint arXiv:2506.10805.
+Mozannar, Hussein and David Sontag (13–18 Jul 2020). “Consistent Estimators for Learning to Defer
+    to an Expert”. In: Proceedings of the 37th International Conference on Machine Learning. Ed. by
+   Hal Daumé III and Aarti Singh. Vol. 119. Proceedings of Machine Learning Research. PMLR,
+   pp. 7076–7087. url: https://proceedings.mlr.press/v119/mozannar20b.html.
+Naihin, Silen et al. (2023). “Testing language model agents safely in the wild”. In: arXiv preprint
+   arXiv:2311.10538.
+Nasr, Milad et al. (2025). “The Attacker Moves Second: Stronger Adaptive Attacks Bypass Defenses
+   Against Llm Jailbreaks and Prompt Injections”. In: arXiv preprint arXiv:2510.09023.
+Novikov, Alexander et al. (2025). “AlphaEvolve: A coding agent for scientific and algorithmic discovery”.
+    In: arXiv preprint arXiv:2506.13131.
+Oldfield, James et al. (2025). “Beyond Linear Probes: Dynamic Safety Monitoring for Language
+   Models”. In: arXiv preprint arXiv:2509.26238.
+OpenAI (Apr. 15, 2025). Preparedness Framework. Tech. rep. Version 2. Last updated: 15 April 2025.
+   OpenAI. url: https://cdn.openai.com/pdf/18a02b5d-6b67-4cec-ab64-68cdfbddeb
+   cd/preparedness-framework-v2.pdf (visited on 10/22/2025).
+Perez, Ethan et al. (2022). “Red teaming language models with language models”. In: arXiv preprint
+   arXiv:2202.03286.
+
+
+
+
+
+                                                                                                        22
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Picard, David (2023). torch.manual_seed(3407) is all you need: On the influence of random seeds
+    in deep learning architectures for computer vision. arXiv: 2109.08203 [cs.CV]. url: https:
+   //arxiv.org/abs/2109.08203.
+Risch, Julian and Ralf Krestel (May 2020). “Bagging BERT Models for Robust Aggression Identification”.
+    In: Proceedings of the Second Workshop on Trolling, Aggression and Cyberbullying. Marseille, France:
+   European Language Resources Association (ELRA), pp. 55–61. url: https://aclanthology
+   .org/2020.trac-1.9/.
+Shabalin, Stepan and Nora Belrose (Aug. 2025). Attention Probes. https://blog.eleuther.ai/a
+   ttention-probes/.
+Shah, Rohin et al. (2025). An Approach to Technical AGI Safety and Security. arXiv: 2504.01849
+   [cs.AI]. url: https://arxiv.org/abs/2504.01849.
+Shaham, Tamar Rott et al. (2025). A Multimodal Automated Interpretability Agent. arXiv: 2404.14394
+   [cs.AI]. url: https://arxiv.org/abs/2404.14394.
+Sharma, Mrinank et al. (2025). “Constitutional classifiers: Defending against universal jailbreaks
+    across thousands of hours of red teaming”. In: arXiv preprint arXiv:2501.18837.
+Szegedy, Christian et al. (2013). “Intriguing properties of neural networks”. In: arXiv preprint
+   arXiv:1312.6199.
+Tillman, Henk and Dan Mossing (2025). “Investigating task-specific prompts and sparse autoencoders
+    for activation monitoring”. In: arXiv preprint arXiv:2504.20271.
+Torralba, Antonio and Alexei A Efros (2011). “Unbiased look at dataset bias”. In: CVPR 2011. IEEE,
+    pp. 1521–1528.
+Viola, Paul and Michael Jones (2001). “Rapid object detection using a boosted cascade of simple
+    features”. In: Proceedings of the 2001 IEEE computer society conference on computer vision and
+    pattern recognition. CVPR 2001. Vol. 1. Ieee, pp. I–I.
+Youstra, Jack et al. (2025). Towards Safeguarding LLM Fine-tuning APIs against Cipher Attacks. arXiv:
+   2508.17158 [cs.LG]. url: https://arxiv.org/abs/2508.17158.
+Yue, Murong et al. (2024). Large Language Model Cascades with Mixture of Thoughts Representations
+    for Cost-efficient Reasoning. arXiv: 2310.03094 [cs.CL]. url: https://arxiv.org/abs/23
+   10.03094.
+Zou, Andy, Long Phan, Sarah Chen, et al. (2023). “Representation engineering: A top-down approach
+    to ai transparency”. In: arXiv preprint arXiv:2310.01405.
+Zou, Andy, Long Phan, Justin Wang, et al. (2024). Improving Alignment and Robustness with Circuit
+    Breakers. arXiv: 2406.04313 [cs.LG]. url: https://arxiv.org/abs/2406.04313.
+Zou, Andy, Zifan Wang, et al. (2023). “Universal and transferable adversarial attacks on aligned
+   language models”. In: arXiv preprint arXiv:2307.15043.
+
+
+Appendix
+
+A. Running our findings on other datasets and models
+
+To test the generality of our findings, we evaluate our probe architectures on a diverse set of classi-
+fication tasks beyond cyber misuse detection. We use a subset of the binary classification datasets
+from Kantamneni et al. (2025), selecting only datasets with at least 128 datapoints. The resulting 12
+datasets span truthfulness (TruthfulQA), ethics (Commonsense Morality, Deontology, Justice, Virtue
+Ethics), news classification (Politics, Technology, Entertainment), as well as a simple text property
+detection task (Is Short Description). We also use the Gemma-2 9B base model, like Kantamneni et al.
+(2025).8
+
+   8E.g. https://github.com/JoshEngels/SAE-Probes/blob/cec41e/ai_vs_humanmade_plot.py#L21
+
+
+
+
+                                                                                                        23
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Figures 6 and 7 and Table 5 show AUROC scores across all architectures and datasets. Each architecture
+is evaluated with 100 random seeds per dataset, allowing us to report both median performance and
+best-seed performance. As a baseline, we include the logistic regression results from Kantamneni
+et al. (2025).
+
+
+Architecture Ranking.  The AlphaEvolve architectures (early and final) achieve the highest median
+AUROC scores (0.975), followed closely by the Attention Probe with Default aggregation (median
+AUROC 0.975). The Attention Probe variants with MultiMax aggregation perform slightly worse
+(0.969), while the logistic regression baseline achieves median AUROC of 0.944. This ranking is
+consistent across most datasets, with AlphaEvolve outperforming the logistic regression baseline by
+an average of 3.1 percentage points in median AUROC.
+
+
+Seed Variance.  Comparing median versus best-seed performance (Figure 7), we observe that seed
+selection provides modest improvements of 0.5–1.5 percentage points depending on architecture.
+
+
+Linear Probe Baseline.  Our experiments include a linear probe implementation trained using the
+same infrastructure as our other architectures. However, this linear probe achieves median AUROC of
+only 0.814 across datasets, substantially underperforming the logistic regression baseline from prior
+work (median AUROC 0.944). We attribute this gap to our training infrastructure being optimized for
+architectures with at least 10 or 100 times more parameters: the learning rate schedules, batch sizes,
+and regularization settings were tuned for attention-based probes, not linear probes. We therefore
+use the logistic regression baseline from prior work as the reference point for linear methods in our
+visualizations.
+
+
+Comparison to Prior Work.  Several datasets overlap between our evaluation and Table 9 of
+Kantamneni et al. (2025), which reports results on a sample of their full dataset collection; both
+works use Gemma 2 9B as the base model. On news classification, we observe slightly higher scores
+(0.98 vs 0.965). The largest difference appears on Commonsense Morality, where our attention probe
+achieves 0.94 compared to 0.86 in prior work. This gap may be explained by architectural differences:
+our attention probes include an MLP layer before the attention mechanism (Section 3.1.4), which
+provides additional representational capacity.
+
+
+B. Dataset Statistics
+
+Here we detail the specific sample counts and filtering logic for the datasets described in Table 1.
+
+
+B.1. Evaluation and Validation Splits
+
+Table 6 provides the exact sample counts for the validation and test splits used to calculate the error
+metrics defined in Section 4.
+
+
+B.2. Training Data Configuration
+
+Table 7 details the composition of the training mixture. We apply heavy subsampling to the cyber-
+specific dataset and the Multi-Turn data to balance the dataset mixture.
+
+
+
+
+
+                                                                                                        24
+
+                                           Building Production-Ready Probes For Gemini
+
+
+                             Median AUROC (rows: architectures by median, cols: datasets by median)
+
+         Attention Probe       1.000           0.995           0.984           0.986           0.983           0.980           0.970           0.943           0.940      (10H, Default Agg)
+                                                                                                                                                                           1.000
+            AlphaEvolve       1.000           0.995           0.987           0.987           0.983           0.982           0.968           0.947           0.935
+
+                                                                                                                                                                           0.975
+            AlphaEvolve       1.000           0.995           0.987           0.986           0.983           0.982           0.968           0.945           0.934                  (Early)
+                                                                                                                                                                           0.950
+         Attention Probe       1.000           0.994           0.984           0.979           0.979           0.979           0.958           0.925           0.919        (20H, MultiMax)
+                                                                                                                                                                           0.925
+                                                                                                                                                                                                          1.0)         Attention                 Probe       1.000           0.995           0.985           0.980           0.979           0.979           0.960           0.936           0.921             to        (10H,             MultiMax)
+                                                                                                                                                                           0.900(0.8
+         Attention  Architecture          (10H, Rolling)                 Probe       1.000           0.992           0.983           0.979           0.979           0.979           0.959           0.935           0.914                                  AUROC
+                                                                                                                                                                           0.875
+         Attention Probe       1.000           0.992           0.983           0.978           0.979           0.978           0.958           0.924           0.910          (20H, Rolling)
+                                                                                                                                                                           0.850
+         Attention Probe
+     (10H, Rolling Train,       1.000           0.976           0.984           0.972           0.979           0.976           0.943           0.923           0.886
+        MultiMax Eval)
+                                                                                                                                                                           0.825
+         Attention Probe
+     (20H, Rolling Train,       1.000           0.970           0.983           0.969           0.980           0.975           0.942           0.908           0.870
+        MultiMax Eval)
+                                                                                                                                                                           0.800
+               LogReg       1.000           0.987           0.962           0.948           0.978           0.951           0.940           0.933           0.833               (Baseline)
+
+                                    Is Short          Virtue        News       Deontology      News        News           Justice       TruthfulQA   Commonsense
+                            Description        Ethics       Technology        Valid            Politics     Entertainment          Is                           Morality
+                                                                           Dataset
+
+Figure 6  | Median AUROC across 100 seeds for each architecture-dataset pair. Green indicates higher
+(better) AUROC values. Architectures (rows) and datasets (columns) are sorted by their overall
+median performance.
+
+
+B.3. Long Context Data Filtering
+
+To ensure robust evaluation of Long Context (LC) capabilities without data leakage, strict filtering
+was applied to the FNRLC[A]dataset.
+
+   • Total LC stem fingerprints: 2,147 raw rows.
+   • Leakage Removal: 1,711 LC rows matched the Short Context (SC) training data stems and
+     were excluded from the LC evaluation to test true generalization.
+   • Final Availability: 436 LC rows were available for the ‘Clean’ evaluation split.
+
+
+C. General Training Details
+
+In this appendix, we list out various hyperparameters that we chose for our probe training runs. See
+also Appendix B where we describe the training, validation and eval data.
+
+   • Optimizer: AdamW
+   • Learning Rate: 1 × 10−4
+   • Weight Decay: 3 × 10−3
+   • Optimizer Momentum: 𝛽1 = 0.9, 𝛽2 = 0.999
+   • Training Duration: 1000 steps
+   • Batch Size: Full batch gradient descent
+   • Source Layer: Activations harvested from the layer halfway through the model
+   • MLP Transformation (Figure 2): Two layers of width 100
+
+
+                                                                                                        25
+
+                                           Building Production-Ready Probes For Gemini
+
+
+                             Best-of-100-Seeds AUROC (rows: architectures by median, cols: datasets by median)
+
+         Attention Probe       1.000           0.996           0.988           0.988           0.986           0.982           0.973           0.955           0.947     (10H, Default Agg)
+                                                                                                                                                                          1.000
+           AlphaEvolve       1.000           0.996           0.991           0.989           0.988           0.986           0.975           0.968           0.947
+
+                                                                                                                                                                          0.975
+           AlphaEvolve       1.000           0.996           0.991           0.989           0.987           0.986           0.975           0.972           0.945                  (Early)
+                                                                                                                                                                          0.950
+         Attention Probe       1.000           0.996           0.989           0.984           0.985           0.982           0.963           0.963           0.927       (20H, MultiMax)
+                                                                                                                                                                          0.925
+                                                                                                                                                                                                          1.0)         Attention                 Probe       1.000           0.996           0.990           0.983           0.984           0.982           0.964           0.956           0.931             to       (10H,             MultiMax)
+                                                                                                                                                                          0.900(0.8
+         Attention Architecture         (10H, Rolling)                 Probe       1.000           0.995           0.987           0.983           0.984           0.983           0.965           0.958           0.930                                  AUROC
+                                                                                                                                                                          0.875
+         Attention Probe       1.000           0.996           0.986           0.983           0.984           0.984           0.965           0.959           0.929         (20H, Rolling)
+                                                                                                                                                                          0.850
+         Attention Probe
+    (10H, Rolling Train,       1.000           0.993           0.989           0.980           0.984           0.980           0.954           0.953           0.908
+        MultiMax Eval)
+                                                                                                                                                                          0.825
+         Attention Probe
+    (20H, Rolling Train,       1.000           0.993           0.987           0.978           0.984           0.983           0.952           0.955           0.895
+        MultiMax Eval)
+                                                                                                                                                                          0.800
+              LogReg       1.000           0.987           0.962           0.948           0.978           0.951           0.940           0.933           0.833               (Baseline)
+
+                                    Is Short          Virtue        News       Deontology      News        News           Justice       TruthfulQA   Commonsense
+                            Description        Ethics       Technology        Valid            Politics     Entertainment          Is                           Morality
+                                                                           Dataset
+
+Figure 7  | Best seed AUROC (out of 100 seeds) for each architecture-dataset pair. The ordering
+matches Figure 6 to facilitate comparison.
+
+
+  • Activation Function: ReLU
+
+
+D. Seed Selection Details
+
+This appendix provides additional details on the seed selection analysis from Section 4.2.
+
+
+D.1. High-Variance Architectures
+
+Figure 8 shows the seed selection analysis for architectures with MultiMax aggregation at evaluation
+time. These architectures exhibit substantially larger interquartile ranges (IQR) in test loss across
+seeds compared to those shown in Figure 3, which is why we present them separately to avoid
+distorting the main figure’s scale.
+
+
+D.2. Raw Seed Selection Statistics
+
+Table 8 presents the complete numerical data underlying Figure 3 and Figure 8.
+
+
+D.3. Seed Selection vs Architecture Choice
+
+Consistent with the findings in Section 4.2, we investigate the relative impact of seed selection versus
+architecture choice on these auxiliary datasets. To quantify the impact of seed selection, we compare
+the test AUROC of the best seed (oracle) to the median seed for each architecture. Across architectures,
+selecting the best seed improves test AUROC by 0.011 on average, though individual architectures
+vary from +0.007 (Attention Probe with Default aggregation) to +0.014 (Linear Probe).
+
+
+
+                                                                                                        26
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Table 5  | Median AUROC by architecture and dataset. Dataset codes: IS=Is Short, VE=Virtue
+Ethics, NT/NP/NE=News Tech/Politics/Entertainment, DV=Deontology, JI=Justice, TQ=TruthfulQA,
+CM=Commonsense.  Architecture codes: Def=Default aggregation, MM=MultiMax train/eval,
+Roll=Rolling train/eval, R→MM=Rolling train with MultiMax eval.
+
+          Arch                   IS    VE   NT   DV   NP   NE      JI   TQ  CM   Med
+          Attn-10H (Def)      1.00   1.00   0.98   0.99   0.98   0.98   0.97   0.94   0.94   0.9834
+        AE                  1.00   1.00   0.99   0.99   0.98   0.98   0.97   0.95   0.93   0.9833
+        AE (Early)           1.00   0.99   0.99   0.99   0.98   0.98   0.97   0.94   0.93   0.9830
+          Attn-20H (MM)      1.00   0.99   0.98   0.98   0.98   0.98   0.96   0.92   0.92   0.9791
+          Attn-10H (MM)      1.00   0.99   0.99   0.98   0.98   0.98   0.96   0.94   0.92   0.9791
+          Attn-10H (Roll)      1.00   0.99   0.98   0.98   0.98   0.98   0.96   0.93   0.91   0.9789
+          Attn-20H (Roll)      1.00   0.99   0.98   0.98   0.98   0.98   0.96   0.92   0.91   0.9782
+          Attn-10H (R→MM)   1.00   0.98   0.98   0.97   0.98   0.98   0.94   0.92   0.89   0.9760
+          Attn-20H (R→MM)   1.00   0.97   0.98   0.97   0.98   0.98   0.94   0.91   0.87   0.9701
+         LogReg              1.00   0.99   0.96   0.95   0.98   0.95   0.94   0.93   0.83   0.9513
+           Linear†              1.00   0.67   0.97   0.81   0.97   0.97   0.74   0.79   0.77   0.8145
+
+                  †Underperforms LogReg likely due to training infra optimized for larger probes.
+
+Table 6  | Sample counts for Validation and Test splits across all datasets. The Metric column maps
+these datasets to the error variables defined in Table 1.
+
+
+         Dataset Description                   Metric       Val     Test    Total
+
+          Benign / Random Traffic (False Positive evaluation)
+          Short Context RT (Refusal/Response)   FPRSC[OT]   8,283  33,132  41,415
+         Long Context RT (Benign Code)        FPRLC[RT]    202    812   1,014
+
+          Attacks / Cyber (False Negative evaluation)
+          Short Context Cyber                   FNRSC[A]    483    918   1,401
+          Multi-Turn Cyber                     FNRMT[A]     80    320    400
+         Long Context Cyber                   FNRLC[A]    429   1,718   2,147
+           Jailbreaks                            FNRSC[J]   4,277  17,108  21,385
+       ART (Advanced Red Teaming)         FNRSC[ART]    103    431    534
+
+
+In contrast, architecture choice provides a much larger gain. Comparing the median-seed AUROC, the
+best architecture (Attention Probe with Default aggregation) achieves 0.933 while the Linear Probe
+achieves only 0.824, a gap of 0.109 AUROC. This is approximately 10× larger than the average seed
+selection gain, consistent with the main body’s finding that architecture search should be prioritized
+over extensive seed tuning.
+
+Interestingly, the AlphaEvolve architectures (AE1 and AE2) achieve nearly identical performance
+(0.930 median AUROC) and show higher seed variance (+0.012 gain) compared to the Attention
+Probe with Default aggregation (+0.007 gain). This suggests that more complex architectures may
+benefit more from careful seed selection, though the effect is still modest compared to architecture
+choice.
+
+
+E. Efficiently finding the Threshold-Randomization-Optimal cascading policy
+
+Recall that in general, a cascading policy is defined by two thresholds (𝑡0, 𝑡1): classify as negative if
+the probe logit is below 𝑡0, classify as positive if above 𝑡1, and defer to the expensive model otherwise.
+
+
+
+
+                                                                                                        27
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Table 7  | Training dataset composition.
+
+
+                     Dataset Description          Training Split Size
+
+                      Short Context Attacks                     1,928
+                      Short Context Overtriggering              1,206
+                      Multi-Turn Attacks                       41
+
+                       Total                                 3,175
+
+    0.200       Median       Seed Selection: Median --> Best-Val
+               Best-Val               Improvement    0.175
+              Oracle
+    0.150       IQR
+Loss 0.125
+Test 0.100
+
+    0.075
+
+    0.050
+
+    0.025
+
+              Rolling     AlphaEvolve     Rolling        Rolling     AlphaEvolve   Vanilla Attn     Rolling      MultiMax    Linear Probe  Linear Probe
+             Attention                    Attention      Attention       (Early                      Attention      Trained      Mean      Rolling Exp
+              Probe,                      Probe,     Probe (20H),    Variant)                 Probe (20H),     Probe,
+         MultiMax Agg                 Rolling Agg   Rolling Agg                           MultiMax Agg MultiMax Agg
+
+Figure 8 | Effect of seed selection on test loss for high-variance architectures. Same format as Figure 3,
+but showing architectures with MultiMax aggregation that have large IQR across seeds.
+
+
+Each choice of (𝑡0, 𝑡1) gives a point on a cost-accuracy plot on the validation data. A natural question
+arises: what is the correct way to interpolate between these points to obtain a continuous Pareto
+frontier?
+
+There are three possibilities: (1) a pessimistic step function, where between operating points you are
+stuck at the accuracy of the lower-cost option; (2) linear interpolation, where you can smoothly trade
+cost for accuracy; or (3) something better than linear, where the curve bows upward (concave).
+Linear interpolation (2) is achievable and optimal within the family of threshold-randomization policies.9
+The key insight is that we can randomize between two policies. Given two policies 𝐴and 𝐵on the
+frontier, we flip a biased coin and use policy 𝐴with probability 𝑝and policy 𝐵with probability 1 −𝑝.
+Since both expected cost and expected loss are linear in 𝑝, this traces out a straight line between the
+two points. In our setting, randomization is practical because we process many independent queries:
+rather than literally flipping coins, we can deterministically assign a fraction 𝑝of queries to policy 𝐴.
+The resulting frontier is therefore the lower convex hull of all discrete operating points, which we
+compute efficiently in 𝑂(𝑁log 𝑁) time (see Appendix E for algorithmic details). Importantly, when
+optimizing a single objective (such as minimizing error at any cost), the optimal policy always lies at
+a vertex of the convex hull, meaning no randomization is required—the “Selected Probe + 3% Flash”
+
+   9More sophisticated approaches exist: learned deferral policies can optimize routing based on input features rather than
+just probe classifier output (Mozannar and Sontag, 2020; Madras et al., 2018), and joint training can teach the cheap
+classifier to be “usefully uncertain” in the right places (Geifman and El-Yaniv, 2019). These methods may find operating
+points below our convex hull, but at the cost of additional training complexity. Our threshold-randomization approach has
+the advantage of being post-hoc: it can be applied to any pre-trained probe without retraining.
+
+
+
+                                                                                                        28
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Table 8  | Seed selection statistics across architectures. 𝜏med, 𝜏best, and 𝜏oracle are the test losses at the
+median, best-validation, and oracle (best-test) seeds respectively. Δ columns show the improvement
+from median to best-validation or oracle. A negative Δbest indicates validation selection hurt test
+performance.
+
+                Architecture                      𝜏med     𝜏best     𝜏oracle     Δbest     Δoracle
+
+                  Roll. Attn., MultiMax Agg        0.031  0.025  0.019   0.006   0.013
+               AlphaEvolve                    0.029  0.025  0.017   0.004   0.012
+                  Roll. Attn., Rolling Agg           0.027  0.026  0.022   0.001   0.005
+                  Roll. Attn. (20H), Rolling Agg     0.028  0.027  0.022   0.000   0.005
+               AlphaEvolve (Early)             0.037  0.029  0.020   0.009   0.018
+               Attn                           0.038  0.035  0.018   0.003   0.020
+                  Roll. Attn. (20H), MultiMax Agg  0.076  0.045  0.022   0.031   0.054
+              MultiMax Tr., MultiMax Agg      0.076  0.054  0.029   0.023   0.047
+
+                Linear Probe Mean              0.064  0.062  0.061   0.002   0.003
+                Linear Probe Rolling Exp         0.084  0.086  0.047   -0.003  0.037
+
+
+operating point in Figure 1 uses a single deterministic threshold pair (see Appendix E.1 for a formal
+argument).
+
+We compute the optimal cascading frontier in 𝑂(𝑁log 𝑁) time.10 The key insight is to frame the
+problem as greedy savings: starting from a policy that defers everything to the LLM, we progressively
+“buy” samples to handle with the probe, always choosing the cheapest option first.
+
+
+Setup.  For each sample 𝑖(sorted by probe logit), we define three per-sample losses: ℓ(𝑖)−(loss if the
+probe predicts negative), ℓ(𝑖) (loss if the probe predicts positive), and ℓ(𝑖)  (loss if we defer to the                          +                                         LLM
+LLM). These are derived from the weighted loss function in Equation (12). Note that we use “loss”
+here to distinguish from “cost” (the API expense of running the LLM).
+
+
+The Greedy Savings Frame.  Consider the starting point: defer all 𝑁samples to the LLM. This
+incurs maximum API cost but minimum error (the LLM’s native error rate). From here, we can “save”
+LLM calls by having the probe handle samples instead. Each such move trades API cost for potential
+error (though note, the error might go down – sometimes the probe is correct when the LLM is not!).
+
+The crucial observation is that the left and right thresholds are independent. We define two error
+functions:
+
+   • 𝐿(𝑘): The added error if the probe classifies the 𝑘lowest-logit samples as negative (instead of
+      deferring them). This equals Í𝑘−1𝑖=0 (ℓ(𝑖) −ℓ(𝑖)LLM).
+   • 𝑅(𝑘): The added error if the probe classifies the 𝑘highest-logit samples as positive (instead of
+      deferring them). This equals Í𝑁−1𝑖=𝑁−𝑘(ℓ(𝑖) −ℓ(𝑖)LLM).
+
+Both functions map number of LLM calls saved →test loss increase. Since the left and right decisions
+don’t interfere, the total added error for any policy is simply 𝐿(𝑘𝐿) + 𝑅(𝑘𝑅) where 𝑘𝐿+ 𝑘𝑅is the total
+number of samples handled by the probe.
+
+  10Note: the core details related to the Threshold-Randomization-Optimal policies and associated algorithms were sug-
+gested by Gemini 3.0 Pro DeepThink and other frontier models. But verified and extensively edited by conmy@google.com
+and frontier models.
+
+
+
+
+                                                                                                        29
+
+                                           Building Production-Ready Probes For Gemini
+
+We now define the achievable versions ˜𝐿and ˜𝑅as the lower convex hulls of 𝐿and 𝑅respectively. Points
+on the convex hull but not on the original curve are achievable via randomization between adjacent
+policies (see Section 5.2.2).
+
+The key insight is that the left and right decisions are independent: choosing to handle 𝑘𝐿samples on
+the left doesn’t constrain which 𝑘𝑅samples we handle on the right. The total added error is simply
+the sum ˜𝐿(𝑘𝐿) + ˜𝑅(𝑘𝑅), and the total LLM calls saved is 𝑘𝐿+ 𝑘𝑅.
+Now we can visualize the set of points (LLM calls saved, Test error increase):11
+
+               F =  𝑘𝐿+ 𝑘𝑅, ˜𝐿(𝑘𝐿) + ˜𝑅(𝑘𝑅)  : 𝑘𝐿∈[0, 𝑁], 𝑘𝑅∈[0, 𝑁]                 (13)
+
+This is the Minkowski sum of the two curves: F = ˜𝐿⊕˜𝑅. we’re combining all possible ways to “spend”
+our savings budget across the two independent markets. The Pareto frontier of this set traces out the
+optimal cost-error tradeoff (Figure 9).
+
+A beautiful result from computational geometry is that for convex polygonal curves, the Minkowski
+sum can be computed efficiently by simply merging the edge lists sorted by slope (Berg et al., 2008).
+Intuitively: at each step, we should accept whichever “deal” (left or right) offers the best marginal
+rate—the lowest added error per LLM call saved. Sorting by slope and greedily accepting the flattest
+edges first achieves exactly this.
+
+
+The Algorithm. We merge the edge lists of ˜𝐿and ˜𝑅sorted by slope. Walking this merged list from
+flattest to steepest slope traces out the Pareto frontier: at each step, we accept the cheapest available
+“deal” regardless of which side it comes from. We stop when we have saved all 𝑁LLM calls (i.e., the
+probe handles everything).
+
+The convex hull computation is 𝑂(𝑁) after sorting, and merging two sorted lists is 𝑂(𝑁). The initial
+sort by probe logit dominates at 𝑂(𝑁log 𝑁).
+
+Note that “LLM calls saved” is the flipped version of “cost” used in Figure 5. This is why the Pareto
+frontier in Figure 9 curves upward (more savings →more error), while in Figure 5 it curves downward
+(more cost →less error).
+
+
+E.1. Vertex Optimality: Why No Randomization is Needed At The Optimal Low Error Point
+
+A natural question arises: if randomization between policies is allowed, does the optimal policy (the
+one minimizing error) require randomization? We show that the answer is no—the optimal policy
+always lies at a vertex of the convex hull, corresponding to a single deterministic threshold pair.
+
+
+Geometric Argument.  Consider optimizing any linear objective over a convex set. The level sets of
+a linear function are hyperplanes, and the minimum over a convex polytope is always achieved at a
+vertex (or along an edge, in degenerate cases). In our setting:
+
+
+   • The set of achievable (Cost, Error) pairs is the convex hull of discrete operating points—a convex
+      polygon.
+   • Minimizing error alone corresponds to a horizontal objective (minimize the 𝑦-coordinate).
+
+  11Of course, 𝑘𝐿+ 𝑘𝑅> 𝑁is not achievable since we only have 𝑁samples total. We ignore this constraint for now, as
+working in this general form allows us to leverage existing algorithms for Minkowski sums. At the end, we simply restrict to
+the achievable region 𝑘𝐿+ 𝑘𝑅≤𝑁; see Figure 9 for a visualization.
+
+
+
+
+                                                                                                        30
+
+                                           Building Production-Ready Probes For Gemini
+
+
+
+                        A. Independent Savings Opportunities                                                           B. Combined Frontier (Minkowski Sum)
+                    (not real data, for illustration and intuition!)                                                 (not real data, for illustration and intuition!)
+                     Left Model (Negatives)                                                          17.5
+                   Right Model (Positives)
+      10
+                                                                                                15.0
+
+       8                                                                                                12.5          intuition!)                                                                                                                                                                                                                                                                                        intuition!)
+   and                                                                            and Error   6                                                                                                                        Error   10.0                                                                                                                                                  Capacity                                                                                                                                                                                                                                                                                                   Right)
+                                                 + Addedillustration                                                                                                                            Addedillustration  7.5   for 4                                                                          for                                                                                                                                                              Combined(Left Total                                                                                                                               Total
+    data,                                                                                                                               data,  5.0
+   real 2                                                                                                   real
+   (not                                                                                                      (not  2.5
+
+       0                                                                                                      0.0                                                                                                 Step taken from Left
+                                                                                                                                                                                                      Step taken from Right
+                                                                                                                                                                                                                     Single Model Limit (N)
+                                                                                                      2.5
+            0           2           4           6           8           10                    0.0           2.5           5.0           7.5          10.0         12.5         15.0         17.5         20.0
+                             LLM Calls Saved (per side)                                                                                                Total LLM Calls Saved
+                               (not real data, for illustration and intuition!)                                                                          (not real data, for illustration and intuition!)
+
+Figure 9  | Illustration of the Minkowski sum algorithm for computing the optimal cascading frontier.
+Left: The two independent savings curves ˜𝐿and ˜𝑅, representing the added error from having the
+probe handle samples from the left and right tails respectively. Right: The combined Pareto frontier
+of the Minkowski Sum of the two curves, constructed by merging edge segments sorted by slope.
+Segments are colored by their source (blue from left, orange from right). The vertical line marks the
+dataset size limit; beyond this point, savings are unachievable.
+
+
+  • More generally, any weighted combination of cost and error is linear and thus minimized at a
+      vertex.
+
+
+The vertices of our convex hull correspond exactly to non-randomized policies: each vertex is a specific
+threshold pair (𝑡0, 𝑡1). Interior points and edges require randomization between policies.
+
+
+Application to Figure 1.  The “Selected Probe + 8% Flash” operating point in Figure 1 is the
+vertex that minimizes error. This corresponds to a single deterministic cascading policy with specific
+thresholds (𝑡0, 𝑡1), where approximately 3% of queries (those with probe logits between 𝑡0 and 𝑡1)
+are deferred to the LLM. No randomization is needed to achieve this optimal operating point.
+
+This is convenient in our setting, where we seek to minimize error: deterministic policies are easier
+to implement, debug, and reason about than randomized policies. If we instead targeted a specific
+cost budget, randomization might be required to achieve points on the frontier edges. Additionally,
+for misuse defense applications, randomized policies may be undesirable from a security perspective:
+Hughes et al. (2024) show that attackers can exploit randomization by repeatedly querying until they
+receive a favorable response (“Best-of-N jailbreaking”). While our defenses already face challenges
+from adaptive attacks (Figure 4d), deterministic policies avoid introducing this additional attack
+surface.
+
+
+F. AlphaEvolve
+
+F.1. Further Details on Setup
+
+The training data that AlphaEvolve trains on is 70% of the short-context cyber attack data (Table 1)
+combined with 70% of the short-context overtriggering examples. The remaining 30% of each is used
+for validation threshold selection (see below). Long-context data is only used for validation error
+
+
+
+                                                                                                        31
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Algorithm 1 Pseudocode for Best-Performing Alpha Evolve Probe Architecture.
+Input: Dataset of activations {𝑿𝑖} and labels {ℓ𝑖}, learning rate schedule 𝜂𝑡, reg weights 𝜆1, 𝜆𝑜𝑟𝑡ℎ𝑜
+Result: Trained probe parameters 𝜃= {𝑊𝑒𝑛𝑐, 𝑊𝑝𝑟𝑜𝑗, 𝑊𝑔𝑎𝑡𝑒, 𝑊𝑜𝑢𝑡, . . . }
+while not converged do
+   𝐻←MLP(LayerNorm({𝑿𝑖}))
+   // Compute gates
+   𝑉←(𝑊𝑝𝑟𝑜𝑗𝐻) ⊙Softplus(𝑊𝑔𝑎𝑡𝑒𝐻)
+   // Compute max and min across sequence dim (generalization of MultiMax)
+   ℎ𝑝𝑜𝑜𝑙←Concat(max𝑡𝑉𝑡, −min𝑡𝑉𝑡)
+   𝑦←𝑊𝑜𝑢𝑡ℎ𝑝𝑜𝑜𝑙
+   // Compute loss with L1 and orthogonality penalties
+   L𝐵𝐶𝐸←BinaryCrossEntropy(𝜎(𝑦), {ℓ𝑖})
+   L𝑟𝑒𝑔←𝜆1 Í𝑊∈𝜃||𝑊||1 + 𝜆𝑜𝑟𝑡ℎ𝑜||𝑊𝑇𝑝𝑟𝑜𝑗𝑊𝑝𝑟𝑜𝑗−𝐼||2𝐹
+  𝜃←AdamW(𝜃, ∇𝜃(L𝐵𝐶𝐸+ L𝑟𝑒𝑔), 𝜂𝑡)
+end
+
+
+computation, not for training.
+
+The validation error which we hillclimb with AlphaEvolve is the maximum of weighted error rates
+across different error types: 200× for overtriggering FPR, 40× for long-context FPR, 6.7× for cyber
+FPR, and 4× for both cyber FNR and long-context FNR. Note that this weighting differs from the
+5:2:50 weighting used in Equation (12) because we ran AlphaEvolve early in this research project
+before settling on the final metric.
+
+On net this means that inside the inner training loop, the only data used is training data, according
+to Table 1. In validation, which is used in AlphaEvolve as feedback to the LLM generating programs,
+we use validation data, as well as some long-context data, which in the main body is only used for
+evaluation. We retrained the AlphaEvolve architectures with the final training mixture (e.g. with Multi-
+Turn data) and reported those numbers in the same body. Additionally Appendix A reports the same
+AlphaEvolve architecture on a different model and with different data, where it performs strongly,
+which suggests to us that we didn’t significantly contaminate our results. Notably, in Figure 10, where
+we find that AlphaEvolve is the second strongest architecture after the Attention Probe, and the
+Attention Probe would not generalize to long context prompts without specific training (see the main
+paper body). We speculate that rerunning AlphaEvolve with the same training mixture it is to be
+trained with would lead to even stronger performance, but we haven’t verified this.
+
+
+F.2. Alpha Evolve Probe Pseudocode
+
+Early in the AlphaEvolve run (Figure 10), we found that AlphaEvolve rediscovered the MultiMax
+architecture (although note that we provided it with an Attention Probe as a base). AlphaEvolve also
+added a learnable linear feature map to weight each of the head outputs rather than merely sum
+them. This makes this probe the only such variant that we study in this paper which has a step 6) in
+Figure 2, not merely a sum. This architecture (MultiMax plus a linear weighting of heads) is the early
+in training AlphaEvolve program described in our main results.
+
+We present pseudocode for the final best-performing AlphaEvolve-discovered architecture in Algo-
+rithm 1. The architecture combines several innovations: gated projections using Softplus activations,
+a “bipolar” pooling strategy that takes both the max and negated min across the sequence dimension
+(generalizing MultiMax), and regularization via L1 penalties and orthogonality constraints on the
+projection weights.
+
+
+
+                                                                                                        32
+
+                                           Building Production-Ready Probes For Gemini
+
+
+
+
+
+                                                                                  Best Validation Error
+       3
+                                                                                  Corresponding Test Error
+
+
+       2.5
+  Error
+       2
+    Weighted   1.5
+
+
+
+       1
+
+
+
+       0.5
+              0         5         10        15        20        25        30        35
+
+                                    Time Elapsed (Hours)
+
+Figure 10  | Weighted validation and test errors for best probe architecture over the course of the
+AlphaEvolve run. The process successfully closed approximately 50% of the test error gap between
+the attention probe baseline and perfect probe performance.
+
+
+F.3. Training Curve
+
+Figure 10 shows the training curve for the AlphaEvolve run.
+
+
+G. Prompt Optimization Experiments
+
+In addition to our original cyber misuse detection prompt provided by colleagues, we manually create
+eight additional prompts with varying amount of detail and instruction. For some of these prompts,
+we use mild manual prompt optimization by identifying examples where existing classifiers make
+mistakes and adding instructions that aim to correct these mistakes, while we greatly simplify some
+of the other prompts. We use the test sets of the short context overtriggering and short context attack
+datasets for evaluating the prompts. Our main takeaway from this section is that we have evidence
+that this original provided prompt is reasonably optimized.
+
+The nine total prompts form an FPR vs. FNR curve for each model, shown on the left side of Fig. 11.
+While different prompts can indeed shift along the curve, no prompts are better than the original
+prompt on both FPR and FNR. Furthermore, the curve is approximately linear, so e.g. different
+prompts seem to be able to shift a constant number of negatives for positives. It therefore seems that
+different prompts do not significantly improve upon each other, so we stick with our original prompts.
+
+
+H. Automated Red Teaming Analysis
+
+We developed an iterative adaptive attack framework where an attacker model is given 𝑇turns to
+jailbreak the target model. At each turn, the attacker receives its history—including whether previous
+
+
+
+                                                                                                        33
+
+                                           Building Production-Ready Probes For Gemini
+
+
+
+
+
+                 2                                                                                                      gemini-2.5-flash
+                     4  1
+                                                                                                  gemini-2.5-pro
+      0.4             5                                                                                      gemini-2.5-flash-lite
+
+
+                    4 Rate                5
+
+                                            6      0.3                           2        8                          1                                          7
+                                   54                     3   8  Negative                            2
+ False   0.2                    O              8                                         67
+                                         7 6                                            1
+                                                                    3
+                                                                                        O
+      0.1                                                                    3
+                                                           O
+
+
+          0.05        0.1        0.15        0.2        0.25        0.3        0.35
+
+                                    False Positive Rate
+
+Figure 11  | Different prompts trade off on FPRSC[OT] and FNRSC[A](results are shown on the training
+set of these datasets). The prompts that we try are labeled by the order we created them; the original
+prompt is in orange. Prompts that lie along the pareto frontier are solid.
+
+
+attempts (1) bypassed the monitor and (2) jailbroke the target model (verified by an autorater) –
+allowing it to learn from failures. We evaluated this system on 100 random queries from the short
+context attacks test set, running 𝑁= 20 seeds per query.
+
+In initial experiments with 𝑇= 10, we found that adaptive turns did not outperform independent
+repetitions of the first turn. Formally, consider a prompt 𝑆with 𝑁seeds. Let 𝑀be the number of
+successful jailbreaks observed in the first turn. The expected success probability (at least one jailbreak)
+if we repeated the first step independently 𝑇times is Pindep(𝑆, 𝑇) = 1 −(1 −𝑀𝑁)𝑇. We compare this to
+the observed success rate of the adaptive procedure on the same seeds, Padapt(𝑆, 𝑇). Across all 100
+prompts 𝑆𝑖, we found that Í 𝑖Pindep(𝑆𝑖, 𝑇) > Í 𝑖Padapt(𝑆𝑖, 𝑇) for all 𝑇> 1. Repeating the first iteration
+was superior to the full iterative procedure (see Figure 12). We note this does not contradict Chao,
+Robey, et al., 2025, as they do not compare to this baseline. Consequently, for the main results, we
+simplified our setup to 𝑇= 1.
+
+We subsequently applied AlphaEvolve to optimize our attacker prompts (not released), improving the
+single-turn jailbreak success rate from 20% to 26%. We utilize this improved prompt for our main
+results. However, even with these optimized prompts, the inequality Í 𝑖Pindep(𝑆𝑖, 𝑇) > Í 𝑖Padapt(𝑆𝑖, 𝑇)
+held for all 𝑇> 1.
+
+Finally, we tested a "cross-pollination" variant where the attacker received 𝑘= 3 random successful
+and failed attacks from other seeds at prior steps. While this intervention achieved Í 𝑖Pindep(𝑆𝑖, 𝑇) <
+Í 𝑖Padapt(𝑆𝑖, 𝑇), the margin was negligible. Given the significant complexity and computational cost
+increase, we leave further evaluation of such systems to future work.
+
+
+H.1. Definition of “Success” in Adaptive Red Teaming
+
+A natural concern with our ART dataset construction is that the narrative rewriting process might
+inadvertently transform a malicious prompt into a benign one. If this happened, “successful” jailbreaks
+
+
+
+                                                                                                        34
+
+                                           Building Production-Ready Probes For Gemini
+
+
+
+
+
+                               Old Prompt                             New Prompt
+
+                                                                                                                                                             Individual prompt
+
+            10                                                                                                                   Standard error
+
+                                                                                                                             Average across             Turn)                                                                                                                        prompts
+             5
+              Jailbreaks Single
+ #
+   in       0
+                    Repeated
+
+   -
+            −5              Difference          (ART
+
+
+           −10
+
+
+               0         2         4         6         8         0         2         4         6         8
+
+                                     Iteration (t)                                              Iteration (t)
+
+
+Figure 12  | Multiple adaptive red teaming steps do not help jailbreak success compared to simply
+repeating the first step.
+
+
+would simply reflect easier queries rather than genuine vulnerabilities.
+
+We guard against this by defining “success” using an autorater that evaluates the model’s response, not
+just whether the monitor was bypassed. Specifically, an attack is considered successful if and only if:
+
+   1. The attack bypasses the monitor (i.e., is not flagged), and
+   2. An autorater judges the model’s response to be harmful.
+
+
+The autorater compares the model’s response to a baseline response from “adversarial Gemini” (Gemini
+without safety training, sometimes called a “helpful-only” variant of the model. This model is not
+publicly released) given the original, un-rewritten harmful query. This ensures that both responses
+are evaluated against the same underlying malicious intent. An attack is only counted as successful if
+the response to the rewritten prompt is at least as harmful as the baseline.
+
+This design holds query difficulty constant: if the rewriting process neutralizes the harmful intent,
+the model will produce a benign response that fails the autorater check, and the attack will not
+be counted as successful. Our reported success rates (e.g., improvement from 20% to 26% via
+AlphaEvolve optimization) therefore reflect genuine jailbreak rates on queries of consistent difficulty.
+
+
+I. Infrastructure Recommendations
+
+We recommend storing activations on disk when training single-layer probes. We find that this makes
+iterating on probe architecture (e.g. manually or with AlphaEvolve) much faster. This advice contrasts
+with Cunningham, Wei, et al. (2026), who recommend generating activations from the base LLM
+during probe training. We believe that this difference is due to our probe training using activations
+from a single layer (so the storage cost and loading time is only proportional to the dataset size and
+the activation dimension), while Cunningham, Wei, et al. (2026) train multi-layer probes, leading to
+a storage cost and loading time that is additionally proportional to the number of layers in the model.
+
+We use TPU machines to dump training, validation, and test activations to disk (training, val, and
+
+
+
+                                                                                                        35
+
+                                           Building Production-Ready Probes For Gemini
+
+
+test), and then use CPUs for evaluating probes on these activations. We also are able to use small
+single-host TPU setups for training the probes (instead of much larger deployments that can host an
+entire production Gemini model).
+
+Another infrastructure consideration is performing evaluations on long-context data. Our long-context
+evaluation dataset does not fit on one TPU node. We thus run long context evaluators distributed on
+many CPU workers, all of which load a random split of the data themselves. This is similar to typical
+single program multiple data setups (Darema et al., 1988).
+
+Specific Considerations For Long Context Training: To train probes on long context data, it is
+impossible to load all training data at once to the TPU memory due to the prohibitively large data size
+of training activations. Therefore, for each epoch, we need to distribute both short context and long
+context data across data loading batches, and further divide into smaller training or evaluation batches.
+Training attention probes with long context data thus requires smaller batch sizes to more efficiently
+leverage data distributions and converge under smaller number of epochs. Moreover, we implemented
+a round-robin data allocation policy of data loading batches between training datasets, to prevent
+training dataset distribution shifts within an epoch. Loading large scale activations is expensive with
+standard training pipelines, so we implemented a customized pipeline with optimizations for data
+loading speed, padding, and pipelining. These optimizations unlocked stable long context data probe
+training and improved accelerator utilization by about 5x.
+
+
+J. Error Bar Methodology for Figure 1
+
+The error bars in Figure 1 represent 95% confidence intervals. We use fundamentally different
+uncertainty quantification methods for probes versus language models because they face different
+sources of variance:
+
+
+  • Probes: We train 100 random seeds and select the best by validation loss. The dominant source
+      of uncertainty is seed selection variance: a different draw of 100 seeds would yield a different
+      “best” model with different test performance.
+  • Language Models: We run a single evaluation with temperature zero, so there is no seed or
+     sampling variance. The only uncertainty is finite test set noise: our test set provides a noisy
+      estimate of the true error rate.
+
+
+These fundamentally different uncertainty sources require different statistical methods.
+
+
+J.1. Probe Methods (AlphaEvolve, Selected Probe, EMA Linear Probe)
+
+For probes, we use a smoothed bootstrap via kernel density estimation (KDE) in logit space to quantify
+seed selection uncertainty. Standard bootstrap of the argmin statistic produces degenerate confidence
+intervals because the same seed tends to be selected repeatedly. KDE smoothing addresses this by
+allowing the resampled seeds to have slightly different (val, test) pairs than the original data.
+
+Procedure:
+
+   1. Given 𝑁trained seeds with validation losses {𝑣1, . . . , 𝑣𝑁} and corresponding test losses {𝑡1, . . . , 𝑡𝑁}
+   2. Transform test losses to logit space: ℓ𝑖= log(𝑡𝑖/(1 −𝑡𝑖)) to respect the bounded [0, 1] domain
+   3. Fit a 2D kernel density estimate to the joint distribution of (𝑣𝑖, ℓ𝑖) pairs
+   4. Filter out degenerate seeds where 𝑣𝑖equals the maximum penalty value (indicating failed
+      training runs)
+
+
+
+                                                                                                        36
+
+                                           Building Production-Ready Probes For Gemini
+
+
+   5. For 𝐵= 20,000 bootstrap iterations:
+       (a) Sample 𝑁synthetic (𝑣∗, ℓ∗) pairs from the KDE
+      (b) Select 𝑗∗= arg min𝑘𝑣∗𝑘(best validation seed in synthetic sample)
+        (c) Transform back: 𝑡∗𝑗∗= 𝜎(ℓ∗𝑗∗) where 𝜎is the sigmoid function
+      (d) Record 𝑡∗𝑗∗(test loss of selected seed)
+   6. Report the 2.5th and 97.5th percentiles of the 𝐵recorded test losses
+
+
+The KDE bandwidth is computed automatically using Scott’s rule. This procedure captures how much
+the final reported test loss would vary if we repeated the entire training and selection process.
+
+Apparent One-Sided Error Bars: Some probes exhibit error bars that appear one-sided, with a large
+downward extent but minimal upward extent. This occurs when the actual point estimate falls near the
+upper tail of the bootstrap distribution. Intuitively, this means the selected seed happened to perform
+relatively poorly on the test set compared to what would typically be expected. Equivalently, the
+selected seed landed near the 95th percentile of the bootstrap distribution rather than the median. In
+such cases, the confidence interval correctly indicates substantial room for improvement (downward)
+but limited room for the result to be worse (upward).
+
+
+J.2. Language Model Methods (Gemini 2.5 Flash)
+
+For the language model classifier, we use an analytic binomial confidence interval. Since we run only
+one deterministic evaluation (temperature zero), there is no seed variance to bootstrap over. Instead,
+we quantify uncertainty from the finite test set size.
+
+Our error metric is a weighted combination of error rates across different test groups (see Equa-
+tion (12)). For each group 𝑔with weight 𝑤𝑔, we compute:
+
+  • The empirical error rate ˆ𝑝𝑔on 𝑛𝑔test examples
+                                                           ˆ𝑝𝑔(1−ˆ𝑝𝑔)
+  • The binomial variance: Var(ˆ𝑝𝑔) =     𝑛𝑔
+
+The overall weighted error has variance:
+
+                                             𝑤𝑔    2   ˆ𝑝𝑔(1 −ˆ𝑝𝑔)
+                       Var(weighted error) = ∑︁                    ·                             (14)
+                                                                  𝑔  Í 𝑔′ 𝑤𝑔′         𝑛𝑔
+
+                        √
+We report the 95% CI as mean ± 1.96 ·  Var, clipped to be non-negative.
+
+
+J.3. Cascading Methods (Best Probe + Gemini 2.5 Flash)
+
+For the cascading classifier, we propagate uncertainties from both components. Let  𝑓defer be the
+deferral rate (fraction of examples sent to the LLM). The cascade error is approximately:
+
+                 Cascade Error ≈(1 −𝑓defer) · Probe Error + 𝑓defer · LLM Error              (15)
+
+
+We propagate asymmetric uncertainties using the bootstrap CI widths from each component. Specifi-
+cally, for the probe we use the distance from the bootstrap median to the 2.5th and 97.5th percentiles,
+and for the LLM we use the symmetric analytic margin. Combining via quadrature (assuming
+
+
+
+
+
+                                                                                                        37
+
+                                           Building Production-Ready Probes For Gemini
+
+
+independence):
+
+                                   √︃                                 𝛿lo =  ((1 −𝑓defer) · 𝛿probelo   )2 + ( 𝑓defer · 𝛿LLMlo  )2                     (16)
+                                   √︃                                𝛿hi =  ((1 −𝑓defer) · 𝛿probehi   )2 + ( 𝑓defer · 𝛿LLMhi  )2                     (17)
+
+where 𝛿probe are the lower and upper CI half-widths from the bootstrap distribution (not from the
+            lo/hi
+point estimate), and 𝛿LLM are the symmetric analytic margins. Since deferral rates are typically small
+                               lo/hi
+(∼8%), the cascade uncertainty is dominated by the probe component, inheriting its asymmetric
+character.
+
+
+J.4. Interpretation
+
+The resulting confidence intervals have different interpretations:
+
+   • Probe CIs answer: “If we trained a different set of 100 seeds and picked the best, how much
+     would our test error vary?”
+   • LLM CIs answer: “Given our finite test set, how precisely do we know the true error rate?”
+   • Cascade CIs answer: “What is the combined uncertainty from both probe seed selection and
+    LLM test set noise?”
+
+
+Probe CIs are typically wider than LLM CIs because seed selection introduces more variance than test
+set sampling given our test set sizes.
+
+
+K. Discusssion and results from weighting Equation (12) differently
+
+In earlier iteration in this paper, we used a weighting of 1 rather than 5 in Equation (12). This
+appeared to lead to lower false positives, but extremely high false negative rates, and so we changed
+it once to the metric used in the main paper (we also sometimes measured a metric with hard cutoffs
+for false positive rates, but found this too confusing due to discontinuities). However, for completeness
+and transparency we include the results for the 1:2:50 weighting in Table 9.
+
+
+L. Attention Probe Inference
+
+One might think that attention probes have quadratic computational costs in the sequence length,
+similar to standard transformers. However, this is not the case: we present an attention probe
+inference algorithm that scales as 𝑂(𝑛) in the sequence length 𝑛(Section 2), at least for attention
+probes with a constant query vector 𝒒, as in Equation (8) (but note that this argument doesn’t hold
+for attention probes with multiple layers of attention pooling).
+
+The key insight is that we can derive a recursive update rule that allows attention probes to be updated
+incrementally during generation without storing a KV cache or recomputing attention scores over
+previous tokens.
+
+Using the notation from Section 3.1.4, let the MLP-transformed activation at step 𝑛be 𝒚𝑛. For a single
+head with query vector 𝒒and value vector 𝒗, the unnormalized attention score is 𝑠𝑛= 𝒒⊤𝒚𝑛and the
+value is 𝑣𝑛= 𝒗⊤𝒚𝑛. The probe output after 𝑛tokens, denoted 𝐴𝑛, is the softmax-weighted average:
+
+
+
+
+
+                                                                                                        38
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Table 9  | Results with 1:2:50 weighting in Equation (12). Format matches Table 3.
+
+
+                             FPR ↓                         FNR ↓
+ Classifier           SC[OT] SC[HN] LC[RT] MT[HN]  SC[A]   LC[A]   MT[A]   SC[J]  SC[ART]  Test Error ↓
+ Rolling  Attn  Probe  0.11%  4.03%  0.37%  0.00%  17.63%  14.72%  41.31%  6.20%  69.84%    0.87%
+ (20H), Rolling Agg
+ Rolling  Attn  Probe, 0.21%  2.01%  0.37%   1.64%  16.71%  9.96%  39.38%  7.67%  69.61%    0.88%
+ Rolling Agg
+ Vanilla Attn         0.08%  3.36%  0.00%  0.00%  19.49%  92.21%  59.85%  1.65%  47.56%    0.94%
+ Gemini 2.5 Pro       0.20%  6.71%  0.25%  13.11%  16.01%  13.42%  20.85% 10.64%  33.87%    0.94%
+ Rolling  Attn  Probe, 0.04%  6.04%  0.49%   6.56%  20.65%  4.76%  35.14%  8.02%  53.13%    0.95%
+ MultiMax Agg
+ AlphaEvolve         0.05%  2.01%  0.25%  0.00%  23.67%  30.30%  45.17% 47.28%  60.09%    0.96%
+ AlphaEvolve   (Early  0.07%  4.70%  0.37%   1.64%  19.95%  8.23%  29.34% 51.51%  59.40%    0.96%
+ Variant)
+ Gemini 2.5 Flash     0.25%  14.09%  0.74%  19.67%  8.58%   6.06%  13.51%  8.74%  20.65%    1.32%
+ Linear Probe Mean    0.06%  2.68%  0.00%  3.28%  29.93% 100.00% 93.44% 89.06%  83.06%    1.63%
+ Gemini 2.5 Flash Lite  0.75%  25.50%  0.25%  14.75%  11.37%  55.41%  27.41% 10.64%  41.76%    1.78%
+ MultiMax    Trained, 0.18%  2.68%  3.33%   3.28%  16.71%  3.90%  37.45% 22.03%  71.93%    2.34%
+ MultiMax Agg
+ MultiMax      (Attn  0.13%  7.38%  3.82%  24.59%  24.13%  2.16%  16.22%  9.28%  41.53%    2.82%
+ Trained)
+ Linear Probe Rolling  0.35%  12.08%  4.19%  67.21%  18.10%  4.76%  13.13%  6.76%  26.91%    3.90%
+ Exp
+ Rolling  Attn  Probe  0.21%  5.37%  19.33%  24.59%  21.58%  0.00%  23.94%  6.34%  25.06%   10.07%
+ (20H), MultiMax Agg
+ MultiMax    Trained  0.14%  4.70%  23.40%  1.64%  18.33%  0.87%  36.29% 57.39%  81.21%   11.96%
+ (20H), MultiMax Agg
+
+
+                                   Í𝑛𝑗=1 𝑒𝑠𝑗𝑣𝑗
+                             𝐴𝑛=                                           (18)
+                                    Í𝑛𝑗=1 𝑒𝑠𝑗
+
+Recursive Update. Let 𝑍𝑛= Í𝑛𝑗=1 𝑒𝑠𝑗be the denominator. When a new token 𝑛+ 1 arrives, we update
+the denominator: 𝑍𝑛+1 = 𝑍𝑛+ 𝑒𝑠𝑛+1. We can express the new weighted average 𝐴𝑛+1 in terms of the
+previous state 𝐴𝑛:
+
+
+
+                                                  𝑛+1                                  1
+                                 𝐴𝑛+1 =    ∑︁                                        (19)                                         𝑍𝑛+1 ©­     𝑒𝑠𝑗𝑣𝑗ª®                                                             𝑗=1
+                                  1  «       ¬
+                           =     (𝑍𝑛𝐴𝑛+ 𝑒𝑠𝑛+1𝑣𝑛+1)                            (20)
+                                         𝑍𝑛+1
+                                            𝑍𝑛               𝑒𝑠𝑛+1
+                           = 𝐴𝑛     + 𝑣𝑛+1                                 (21)
+                                            𝑍𝑛+1          𝑍𝑛+1
+
+Let
+𝑏𝑒𝑡𝑎𝑛+1 = 𝑒𝑠𝑛+1/𝑍𝑛+1 be the effective attention weight of the new token. Note that 𝑍𝑛/𝑍𝑛+1 = 1 −
+𝑏𝑒𝑡𝑎𝑛+1. The update simplifies to a standard exponential moving average form with a variable decay
+rate:
+
+
+                                   𝐴𝑛+1 = 𝐴𝑛+ 𝛽𝑛+1(𝑣𝑛+1 −𝐴𝑛)                            (22)
+
+
+                                                                                                        39
+
+                                           Building Production-Ready Probes For Gemini
+
+
+Numerical Stability. To prevent overflow of 𝑍𝑛, we track the log-sum-exp, ℓ𝑛= log 𝑍𝑛. The update for
+the log-normalizer is:
+                            ℓ𝑛+1 = log(𝑒ℓ𝑛+ 𝑒𝑠𝑛+1) = 𝑚+ log(𝑒ℓ𝑛−𝑚+ 𝑒𝑠𝑛+1−𝑚)                    (23)
+where 𝑚= max(ℓ𝑛, 𝑠𝑛+1). The weight 𝛽𝑛+1 is then computed stably in log-space:
+
+                                      𝛽𝑛+1 = exp(𝑠𝑛+1 −ℓ𝑛+1)                               (24)
+
+Conclusion. To run an attention probe during generation, we only need to maintain the current scalar
+average 𝐴𝑛and the scalar log-normalizer ℓ𝑛per head. Upon generating token 𝑛+ 1, we compute 𝑠𝑛+1
+and 𝑣𝑛+1, update ℓ𝑛+1 and 𝐴𝑛+1 using the equations above, and discard the token activations. This
+gives 𝑂(𝑛) total compute and 𝑂(1) memory for a sequence of length 𝑛.
+
+It is clear how this approach can be generalized to many heads, and architectures such as the Max of
+Rolling Means Attention Probe (Section 3.2.2) can also have 𝑂(𝑛) efficiency by storing all the window
+scores (in our case the window is size 10, so small), and taking the max of the current rolling sum
+and the prior max.
+
+
+
+
+
+                                                                                                        40

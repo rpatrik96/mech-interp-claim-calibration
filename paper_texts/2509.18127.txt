@@ -1,0 +1,1013 @@
+       Safe-SAIL: Towards a Fine-grained Safety Landscape of Large Language Models
+                       via Sparse Autoencoder Interpretation Framework
+
+                          Warning: this paper contains data, prompts, and model outputs that are offensive in nature.
+
+                      Jiaqi Weng1, Han Zheng2,4, Hanyu Zhang1, Qinqin He1, Jialing Tao1,
+                             Hui Xue1, Zhixuan Chu2,4, Xiting Wang3
+                  1Alibaba Group 2The State Key Laboratory of Blockchain and Data Security, Zhejiang University
+                                           3Renmin University of China
+                       4Hangzhou High-Tech Zone (Binjiang) Institute of Blockchain and Data Security
+
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           Pornography
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 Description
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     Language                               Abstract                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         Political                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       IntercourseAbuse
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             Videos                                                                                                                                                                                                                                                                                                                                                           abuse
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     Relationships                                                                                                                                                                                                                                                                                                                                                  Political                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    Sexual                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             Trade                                                                                                                                                                                                                                                                                                                                                                                                                                                      figure                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              Medicine                                                                                                                                                                                                                                                                                                                                                                                       Sexual                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 Description                                                                                                                                                                                                                                                           event                                                                                                                                                                                                                                                                                                                                     health                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  Activities              Increasing                      deployment                                      of                                           large                                           language                                                 models                                                   (LLMs)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            Attraction                                                                                                                                                                                                                                      Ideology                                                                                                                                                                                                                                                                                                        Sexual                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 Features
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         Harassment
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       Description               in                 real-world                             applications                                            raises                                                   significant                                                            safety                                                               concerns.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         Minorities                                                                                                                                                                                                                                                             Politics                                                                                                                                                                                                                    Pornography2025                                                                                                                                                                                                                                                                                                                                                                                                                                             relationship                                                                                                                                                                                                                Cult                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  Content                                                                                                                                                                                                                                                                                                                                                                                                     Intimate
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        Contact
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              /                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             Sexual
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     Scandals                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        /                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          CondemnationCorruption            Most                     existing                              safety                                    research                                            focuses                                            on                                                         evaluating                                        LLM
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               /                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                Ejaculation
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          Intimate                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        Media                                                                                                                                                                                                                                                                                                                   Insult
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                /                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        Development                                                                                                                                                                                                                                      Terror                                                                                                                                                                                                                                  Violence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       Persons
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       Female                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            Terms              outputs                      or                           specific                                   safety                                            tasks,                                                 limiting                                                              their                                                                    ability                                                                        to                                                                    ad-                                Terrorism
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                Pornography                                                                                                                                                                                                                                                                                                                                 Physical                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     / Peeping
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                Sexual                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      Content                                                                                                                                                                                                                                                                                                                                                              oppression
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      Product                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        Description                                                                                                                                                                                                                                                                                                                                       violence              dress                    broader,                           undefined                                             risks.                                          Sparse                                              Autoencoders                                                        (SAEs)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             Pornography                                                                                                                                                                                                                                                                                                                                                      Religious                                                                                                                                                                                                                                                                                                                                                         Criminal                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   Objectification                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           GeneralGenitalAbusiveSexualSexualPornographicTabooSexGynecologicalNudityIllegalPhysicalBodySexualMasturbationSexualDrug-RelatedIntimateMoralSexSemenLeakedPubertyNamedSexualizedMale-focusedVoyeurismFabricatedAdultRacializedSexualMedical                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           Ethics                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          /                                                                                                                                                                                                                                                                                                                                                                                                                        Law                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             activitiesSep                                                                                                                                                                                                                                                                                                                                                                   offense                 facilitate                          interpretability                                       research                                                   to clarify                                                model                                                              behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           Conflict                                                                                                                                                                                                                                                                                                                                                                                                                                             Extremist                                                                                                                                                                                                                                                                                                                                                                            Weapons                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    Cybersecurity
+24      byfromexplainingentangledsingle-meaningsignals. However,atomicprior featuresapplicationsdecomposedon SAEs                                                                                                                                                      incident
+            do not interpret features with fine-grained safety-related con-
+                                                                       Figure 1: Overview of safety-related SAE neuron database.
+               cepts, thus inadequately addressing safety-critical behaviors,
+             such as generating toxic responses and violating safety regu-
+                lations. For rigorous safety analysis, we must extract a rich
+            and diverse set of safety-relevant features that effectively          specific tasks and cannot comprehensively address broader
+              capture these high-risk behaviors, yet face two challenges:         safety challenges. In contrast, we take an interpretability per-
+               identifying SAEs with the greatest potential for generating[cs.LG]                                                                      spective by decomposing internal representations of LLMs,
+               safety concept-specific neurons, and the prohibitively high
+                                                                        enabling us to obtain comprehensive safety concepts and               cost of detailed feature explanation. In this paper, we pro-
+                                                                                identify undefined safety issues, such as cross-lingual align-             pose Safe-SAIL, a framework for interpreting SAE features
+              within LLMs to advance mechanistic understanding in safety       ment defects (see Section 4 for further discussion). We use
+             domains. Our approach systematically identifies SAE with        Sparse Autoencoders (SAE) (Bricken et al. 2023; Cunning-
+               best concept-specific interpretability, explains safety-related      ham et al. 2023) as our foundational tool: they factorize the
+              neurons, and introduces efficient strategies to scale up the in-         entangled LLMs internal signals into a set of atomic fea-
+               terpretation process. We will release a comprehensive toolkit          tures, without relying on supervision or pre-defined con-
+              including SAE checkpoints and human-readable neuron ex-          cepts. By interpreting the SAE features, we aim to uncover
+               planations, which supports empirical analysis of safety risks         the underlying mechanisms that drive risk behaviors by
+               to promote research on LLM safety.                                                                        providing a comprehensive fine-grained safety-related SAE
+                                                                   neuron (Figure 1), which can be further used to diagnose,
+                            1. Introduction                          monitor, and potentially control undesired behaviors.
+          Increasing deployment of Large language models (LLMs)         Nevertheless, a significant gap remains between training
+           in critical applications raises significant safety concerns, in-    SAE and providing human-aligned safety-related features,
+          cluding potential biases (Gallegos et al. 2024) and privacy       primarily arising from two aspects. Firstly, since it is com-arXiv:2509.18127v2          breaches (Li et al. 2024). Previous studies have made great       putationally infeasible to generate and compare free-text ex-
+         advances in safety-related areas from various perspectives.       planations for every SAE configuration, selecting SAEs with
+         For instance, using classification models to measure the       the optimal configuration becomes challenging; thus, we
+          harmfulness of LLMs output (Hanu and Unitary team 2020;      need SAE evaluations prior to explanation generation. Most
+         Lees et al. 2022), adversarial attack to identify vulnerabili-       prior works employing SAEs (Lieberum et al. 2024; He et al.
+            ties in LLMs (Schwinn et al. 2023), Chain-of-thought (CoT)      2024) primarily evaluate SAEs using heuristic metrics, such
+          monitoring to detect malicious behaviors in reasoning mod-       as probing accuracy. They often lack evaluation of concept-
+            els (Baker et al. 2025), and latent space analysis for toxicity       specific interpretability of SAEs, that is, whether individual
+           detection (Chacko et al. 2024; Xu et al. 2025).             SAE features can differentiate nuanced concepts. This limi-
+           However, these approaches often focus on observable be-       tation makes it challenging to construct a diverse database
+          haviors or pre-defined tasks. For example, one might first       in the safety domain. Second, generating human-readable
+           define a safety-related concept, such as hate, and then de-      explanations for SAE features and conducting evaluations
+            tect hateful content. Consequently, prior work is limited to       (Bills et al. 2023; Choi et al. 2024; Paulo et al. 2024) require
+
+             SAE Training                       Automated Interpretation                         Diagnose Toolkit
+                                                                              Explain                                                                                            Toolkit Box
+              Qwen2.5-3B-Instruct
+                                                                                                                                              Find                                                                                                                              words used                                                                            …that                                                                                                 asshole                                                                                                            just                                                                                                           sat                                           Sparse                                                 Autoencoder                  Transformer Block                                                                                                                                                                                            Neuron Landscape                                                                                                                                           for insulting                                                                                    on his ass                                                                                                      doing                                                                                                   fuck                                                                                                                                                all.                                            Trained                                                  with                                                TopKReLU
+                                                                        He lounged at home,                           people,
+                  Transformer Block       𝑥                        𝑥"                        rarely helping with                            especially
+                                                                                                                                           containing                                                                                                                                                 “_ck”,                                                                                                           don’t you        ⨁        MLP                                             chores…Why                                                                                                                       Explainer                                                                                                                                                             like “Fuck”.                                                                                  go fuck yourself!...
+                                                                      SAE neuron activations                         Explanation
+        ⨁      …   …
+                           Attention    …                           Simulate
+                                                                                           Token-level Simulation          Segment-level Simulation
+                                                                                                                                                                Neuron Database                                             𝑘                                      𝑆𝑝𝑎𝑟𝑠𝑖𝑡𝑦 𝐿" =
+                                                                …Oh fuck off! I’m tired       …Oh fuck off! I’m tired                                                          !                  Transformer Block
+                       ℒ=  𝑥−𝑥"  !                                  of your bloody                    of your bloody
+                                                                                            complaints go away…             complaints go away…                                  Activation Pattern Implies Knowledge
+
+                                                                                                   Simulator                         Simulator
+
+                                                                                                       Ground Truth Activations:                Ground Truth Activations :
+                                                                                                                                    0, 8, 3, 0, … 0, 7, 1, 5, 4                             1, 0, 1, 1
+                                                                                                              Simulated Activations :                   Simulated Activations :
+                   Reconstruction               Concept-specific                                       0, 10, 3, 0, … 0, 10, 0, 0, 0                          1, 0, 1, 0
+                    Loss                           Interpretability                            Correlation Score = 0.8           Correlation Score = 0.6
+
+                                                                                                                                                               Model Inference Trajectories
+                                                                        Segment-level simulation maintains a high correlation
+                                                                        with token-level simulation but reduces cost by 55%.                            Sorry, but I can‘t assist with that…     response
+                                                                                                                                                                                                                                                                                             26_1234
+                                                                                                                                                                                                                                                                            8_2188                                                                                                                                                                                                                                                                          Human
+                                                                                                                                                                                                                                                                                                               Trading                                                                                                                                                                                                                                                                                                                              related                                   *Optimal 𝐿!       Sparsity (𝐿!)                        Segment-level score                                                                                                                                                           Model                                                                                                                                                                                                                                                                                                                                                               trafficking         Concept                                                                                                                                                                                                                                                                                                      content                                                                                                                                         Token-level                                                                                                                                                                        Inference                                                                                                                                                                                                                        Integration
+            Select a SAE with optimal sparsity constraint                                                               Segment-level
+                  for concept-specific interpretation.                                                                                                       Can    I     sell   my  daughter      query
+                                                                                                 Token-level score             Computational cost
+
+
+Figure 2: Overview of the Safe-SAIL, which consists of three phases: SAE Training, Automated Interpretation, and Diagnose
+Toolkit. This framework trains sparse autoencoders with varying sparsity levels to select the most interpretable configuration,
+utilizes a large language model to explain neuron activations, and simulates query segments to calculate explanation confidence
+scores. Finally, the toolkit—including SAE checkpoints and a safety-tagged neuron database—is demonstrated through various
+case studies highlighting its applications in safety domains.
+
+
+substantial resources. Although recent efforts in SAEs have      and facilitates monitoring of LLMs’ risk behaviors, thereby
+released scalable SAE models, they typically provide expla-      supporting broader adoption and future research. Based on
+nations for only a small set of SAE features and often lack       the toolkit, we conduct some empirical analyses on porno-
+comprehensive, large-scale explanations and evaluations.         graphic concepts, demonstrating the potential of Safe-SAIL
+  To address this gap, we propose Safe-SAIL, a Sparse       for risk identification in LLMs. Our investigation yields sev-
+Autoencoder Interpretation Framework for LLMs in safety       eral intriguing findings, including insights into how LLMs
+domains. Our framework covers the entire process from      encode specific real-world risk entities and handle safety-
+SAE  training,  explanation  generation  and  evaluation.        critical concepts related to sexually explicit content.
+Specifically, Safe-SAIL systematically selects the most ef-       The main contributions of this work include:
+fective SAEs to achieve the optimal diversity and inter-
+pretability. We build a bridge between SAE configurations         • We propose Safe-SAIL, a framework for interpreting
+and the diversity of neuron database in safety domains by       SAEs in safety domains. It offers a perspective by de-
+new methods to evaluate concept-specific interpretability of        composing LLMs’ internal representations to identify
+SAEs. This provides practical guidance for selecting the         comprehensive and undefined safety features. To support
+SAE to produce neurons with optimal quantity and quality.          further research and practical applications, we release an
+Additionally, our approach replaces the traditional token-         open-source toolkit based on Safe-SAIL, including 2,059
+level simulation method with a more efficient segment-level         neurons across four major safety subdomains, and analyt-
+strategy. We split the query into multiple segments and ask           ical utilities.
+LRM to predict whether each segment is activated or not.
+                                                                             • We improve the efficiency of SAE interpreting by in-
+This strategy reduces the simulation costs by 55% while
+                                                                  troducing two key strategies: a concept-specific inter-
+maintaining satisfactory performance, making massive in-
+                                                                           pretability evaluation method that enables optimal SAE
+terpretation affordable. Hence, we finally generate human-
+                                                        model selection before explanation generation, and a
+understandable explanations for individual SAE neurons and
+                                                                 segment-level simulation approach that significantly re-
+provide comprehensive evaluations.
+                                                             duces computational overhead, making massive evalua-
+  Moreover, we release an SAE toolkit based on the inter-                                                                        tion affordable.
+mediate layers of Qwen 2.5-3B-Instruct (Qwen et al. 2025),
+which includes SAE checkpoints, explanations for individ-         • Based on our toolkit, we conduct empirical analyses on
+ual safe SAE neurons and evaluations covering 2,059 SAE         pornographic concepts, demonstrating the potential of
+neurons across four major safety subdomains: pornogra-        Safe-SAIL for risk identification in LLMs. And we of-
+phy, politics, violence, and terror (Figure 1). Our toolkit           fer insights on how LLMs encode specific real-world risk
+enables fine-grained analysis of internal safety mechanisms           entities and handle safety-critical concepts across layers.
+
+                   2. Framework                                 • L0,t discovers absolute number of distinguishable neu-
+In this section, we introduce the three components of the         rons in a specific safety domain. The value varies by
+Safe-SAIL, as illustrated in Figure 2. The first component          threshold, which can differ across domains; for this anal-
+is SAE training and evaluation, which focuses on training           ysis, a threshold of 0.25 is employed, as it has been em-
+and selecting an SAE that produces the most interpretable           pirically observed to enable distinguishability between
+features in safety domains. The second component is auto-            all SAEs compared.
+mated interpretation, including free-text explanation gener-                                                                                      L0,t = X(freq > t)               (4)
+ation, and evaluations of explanations, thus facilitating hu-
+man understanding. Applying this framework, we obtain a         • ICDF represents the expected delta frequencies of all
+new set of toolkit to carry out safety analysis.                      neurons in the set, reflecting the overall distinguishability
+                                                                   of the entire SAE in relation to a specific thematic con-
+2.1 Sparse Autoencoders                                                                        cept; it allows for intuitive comparison by visualizing the
+2.1.1 Training  We utilize Sparse Autoencoders (SAEs)          area under the curve in the CDF plot.
+that incorporate the TopKReLU  activation function(Gao                                           1
+                                                                        Z
+et al. 2024) to control sparsity levels in the encoded rep-             ICDF = E(freq) =    (1 −F(x))dx      (5)
+resentation. Given an input signal x ∈RD, typically derived                                          0
+from the output of Multilayer Perceptrons (MLPs) or Resid-                                                          2.2 Efficient Neuron Interpretation
+ual Streams, the TopKReLU activation function selects the
+                                                                   2.2.1 Safety-Neuron Filtering  The overall cost of inter-top-k activated features during the encoding transformation.
+                                                                   pretation is high, and the number of safety-related neuronsDetails of SAE training and TopKReLU are in Appendix.
+                                                                                is relatively small compared to the total. Therefore, we first
+2.1.2 Enhanced Evaluation Metrics  To interpret neurons     employ a filtering method to obtain candidate neurons. Us-
+related to concepts in safety domains, our primary concern      ing the method of Concept Contrastive Query Pairs, we con-
+is whether the SAE has greater potential to differentiate and       struct concept de-concept pairs based on a more fine-grained
+extract more nuanced atomic concepts within that domain.       classification of safety data. We observe the activation pat-
+However, the time and computational costs associated with       terns of neurons across each subclass; a neuron that is asso-
+training the SAE and interpreting all its neurons can be ex-       ciated with a specific safety concept should exhibit a notice-
+ceedingly high. Therefore, we seek a metric that can predict       able difference in activation distribution between the con-
+the actual number of neurons related to safety concepts that       cept and de-concept sets. However, considering that the con-
+will be effectively explained after completing the SAE inter-       cept scope corresponding to a given neuron may be narrower
+pretation. We construct evaluation data using a method Con-      than our classification definitions, we should establish a low
+cept Contrastive Query Pairs to illustrate the boundaries of       recall threshold and a high precision threshold when calcu-
+the presence or absence of concepts. Additionally, we design       lating accuracy and recall using the following expressions:
+two metrics, L0,t and ICDF , to assess the differentiation of
+                                  P QC       P QCconcepts among different SAEs.                               Precision =                          , Recall =            (6)
+Concept Contrastive Query Pairs We prepare a dataset         P QC + P QD          n
+consisting of queries categorized under various safety do-      Precision refers to the ratio of activated concept queries to
+mains. For each query related to a specific concept theme,       the total activated queries. Recall indicates the ratio of acti-
+we design prompts that instruct LLMs to generate a paired      vated concept queries to the total concept queries.
+query that omits this particular concept while preserving the
+other linguistic elements as closely as possible.                   2.2.2 Explanation  We adopt the standard practice for gen-
+Metrics For each concept domain with n pairs, we collect       erating neuron explanations: neuron activations are gener-
+the delta frequency freq of each neuron that activates on       ated through SAE inference on an explanation dataset rich in
+concept query while not on the de-concept paired one. QC       safety-related content. The activation values are then quan-
+and QD denote whether this neuron activates on concept       tized into distinct levels using linear interpolation. For each
+query or corresponding de-concept one.                              level, samples are selected to construct a prompt that in-
+                                                                       structs a large reasoning model (LRM) to generate a text
+      Pn−1i=0 QC,i(1 −QD,i)                                explanation for the corresponding neuron. freq =                                   , QC,i, QD,i ∈{0, 1} (1)
+              n                                            2.2.3 Segment-level Simulation & Scoring  One of the
+For each concept theme, all neurons on SAE could be repre-      most common methods for evaluating explanations is sim-
+sented by first a distribution frequency function and second       ulation. In traditional simulation, an LLM is used to pre-
+a cumulative distribution frequency function denoted as:           dict the activations of each token in a query, given both the
+                                                          neuron explanation and the tokenized query. The simulation
+                f(x) = P(freq = x)                 (2)       score, referred to as the CorrScore, is then calculated as the
+                                                           Pearson correlation coefficient between the simulated acti-
+          F(x) = P(freq ≤x) = X f(t)          (3)                                                                 vations and actual token activations after inference.
+                                  t≤x                       However, high-quality simulations always require high
+We describe the interpretability of an SAE from the follow-      computational resources. To optimize the simulation pro-
+ing aspects.                                                         cess, we first use LRM to infer activation values at multiple
+
+                                                    Neuron Distribution on Concept of Adult Content
+
+
+                                                                                                                                                                                         K20MLP
+                                                                                                                                                                                                                                Adult content identifier and names                           K200MLP
+                                                                                                                                                                                                                       Repetitive explicit language                                                                K200Residual
+                                                                                                                                                                                     Adult content names and terms                     Variants for adult content                               K500MLP
+                                                                                                                                                                                                                                      Slangs for                                                                                                                                                                                                                                                sex workers
+                                                                                                                                                                     Terms related to women                                                                                                                                                                                                                                     Chinese                                                                                                                                                                                                                                                                       implications of adult content                      K1000MLP
+                                                                                                                                                            Women’s social roles     Adult content tags              Chinese adult content and gambling
+                                                                                                                                                                                                                                    Chinese                                                                                                                                                                                                                                                                               adult content
+                                                                                                                                                                                                     Adult content                                                                                                                                                                                                                                             tags                                                                                                                                                                                                                                                                                                                                                             titles             URLs
+                                                                                                                                                                                                Adult content                                                                                                                                                                                                                                      tags                                                                                                                                                                                                                              Chinese                                                                                                                                                                                                                                                                       adult content                                                                                                                                                                                                                                                                                   tags
+                                                                                                                                                                                               Content classification tags         Adult content classification in Chinese context
+                                                                                            Female reference                    Tags and titles       Identification symbols, likeReferencesURLs to adult websites
+                                                                                                                                                                                                                            Sex tape
+                                                                                                                                                                                                                                                                                             Patterns                                                                                                                                                                                                                                                                                                                in adult                                                                                                                                                                                                                                                         media URLs    VariantsURLs ofofadultadultwebsiteswebsite URLs                                                                                                                                                                                               Pornographic content featuring minorities                                                                                                                                                                                                                                                           Adult                                                                                                                                                                                                                                                                                     content                                                                                                                                                                                                                                                                                         platforms
+                                                                                                                                                                                                                      Pornographic rating       Adult video               Keywords for adult content platforms
+                                                                                                                                                                                                     Terms for adult content           General adult content
+
+                                                                                                                                                                                                                                  Adult content platforms        Adult content platforms, preferences
+
+                                                                                                                              Platform
+
+                                                             Figure 4: Neurons related to concept of adult content from
+                                                          neuron databases derived from different SAE checkpoints.
+                                                   The distribution illustration is based on distance between
+                                                                        text embeddings of neuron explanations.Figure 3: Cumulative distribution frequency curve of SAEs
+trained with different settings.
+
+                                                        Location  We apply SAEs to two distinct structural com-
+positions in a single call, rather than predicting the activation      ponents of layer 17: the MLP output and the post-MLP
+for each token in separate forward passes (Bills et al. 2023).      Residual Stream. The choice of layer 17 is made under
+However, obtaining a reliable simulation score still requires       consideration that middle layer signals have a better inter-
+sampling a substantial number of query, which results in sig-       pretability on high-level abstract concepts.
+nificant computational overhead. To address this, we split                                                    Data  To identify neurons associated with safety concepts
+each query into several segments and instruct LRM to pre-                                                                     in Qwen2.5-3B-Instruct, we intentionally selected poten-
+dict whether each segment will be activated by the neuron.                                                                              tially risky texts from our routine business traffic during the
+Larger internal segmentation leads to lower computation but                                                                 synthesis of the training data. Explanation data, separated
+poor scoring performance.                                                       from training data, is constructed by 200k queries mixed of
+                                            25% risky content, 10% random white queries and 65% ran-
+2.3 Toolkit                                                    domly from public dataset The Pile(Gao et al. 2020). Evalu-
+With the safety neuron database constructed, we provide an       ation data is constructed using Concept Contrastive Query
+interactive tool and a feature map that allow researchers to       Pairs method, which consists of 10,000 pairs across four
+explore which safety-relevant neurons are activated by ar-       safety domains: politics, pornography, violence and terror.
+bitrary inputs and query their semantic interpretations. The
+database also serves as the foundation for two key insights       Interpretability Metrics  We evaluate SAEs with existing
+related to knowledge detection and interpretable inference       interpretability metrics including k-Sparse Probing (Gurnee
+trajectories. A detailed discussion can be found in Section 4.        et al. 2023) and 1d-Probe (Gao et al. 2024), comparing with
+                                                            our own metrics on evaluation dataset.
+                  3. Experiments                                                                   3.1.2 Results  The experimental results (Table 1) first re-
+In this section, we investigate the impact of selecting op-       veal a relationship between sparsity and reconstruction qual-
+timal parameters within each stage of our proposed frame-         ity, as evidenced by the decrease in both L2 loss and δLNT P
+work. Our primary goal is to demonstrate how these param-      with increasing sparsity, which is consistent with the results
+eter choices lead to improved results and reduced costs.           of previous research.
+                                                   From Table 1,  it is evident that the configuration Top-
+3.1 SAE Configuration Selection                     KReLU200 trained on MLP outperforms other configura-
+3.1.1 Settings                                                      tions regarding the total number of neurons. Additionally,
+                                              we analyzed the granularity of explanations, which is illus-
+Activation Function  We select TopKReLU as the activa-
+                                                                      trated in Figure 4. The TopKReLU200 configuration shows
+tion function because it allows easy control of the sparsity
+                                                            a greater coverage and quantity of detailed classifications in
+levels through the hyperparameter k. In our experiments, we
+                                                                 the sensitive area of pornography compared to others.
+chose k=20, 200, 500, 2000.
+                                                                  In terms of interpretability metrics, our proposed indica-
+Expansion Factor  The expansion factor is fixed at 10,       tors demonstrate consistent trends across various safety do-
+which is based on previous work in SAEBench(Karvonen      mains (Figure 3), aligning more closely with the variabil-
+et al. 2025), where the SAE was evaluated with expansion        ity in neuron counts. It can be observed in Figure 5 that
+factors of 4, 16, and 32. For input signals with 2048 dimen-       the effectiveness of k-Sparse Probing is significantly influ-
+sions, an expansion factor of 10 is a reasonable choice.          enced by the choice of k, and the top-k mechanism focuses
+
+Table 1: Compare SAEs trained with different settings from reconstruction and interpretability. We also explained neurons in
+these SAEs to construct a safety-related neuron database to illustrate how SAE configuration influences neuron explanation
+quantity and quality. Details of metrics are included in appendix.
+
+                                   Reconstruction          Interpretability              Neuron Database
+  Location  TopK   Ralive ↑
+                           L2 ↓   δLNT P ↓   L0,t=0.25 ↑  ICDF ↑  N ↑   CorrScore ↑   SpScore ↓
+
+ MLP       20    88.98%   0.0346    0.1241       130       0.0422    366       0.3670        1.3684
+ MLP       200   97.82%   0.0191    0.0693       406       0.1172   1160      0.2939        1.6660
+  Residual    200    96.02%   0.0858    1.0946       120       0.0402    505       0.3413        1.4955
+ MLP       500    92.16%   0.0125    0.0476       215       0.0428    775       0.3080        1.5028
+ MLP      1000   94.68%   0.0061    0.0197       25       0.0093    264       0.3780        1.2482
+ MLP      2000   94.27%   0.0004    0.0019        3        0.0097     0              -                  -
+
+    Ralive: Percentage of neurons triggered during inference.        ICDF : Expected value of freq across all neurons in SAE.
+   L2: MSE between SAE input and reconstructed output.         N: Number of concept-specific neurons.
+   δLNT P : Difference in next token prediction loss.               CorrScore: Average correlation score of all safety-related neurons.
+    L0,t=0.25: Number of neurons whose freq larger than 0.25.       SpScore: Average superposition score of all safety-related neurons.
+
+
+
+
+                                                                                                                                                                                         𝑀𝑎𝑥= max!  (1𝑛+"#! 𝑣! 𝑣")
+                                                                                                                                                                                                   𝐴𝑣𝑔= 𝑎𝑣𝑔(1𝑛+"#! 𝑣! 𝑣")
+
+
+
+
+
+                                                                                                                                                                  20                   200                   500                 1000                 2000
+
+
+            (a)                             (b)                                 (c)
+
+
+
+                                                                                                                                                                      𝐿! = 20               𝐿! = 200              𝐿! = 500              𝐿! = 1000            𝐿! = 2000
+                                                                                               𝑊!𝑊
+
+
+                                                             Figure 6: Interference of feature vectors in decoder weight
+                                                             matrix from SAEs trained on MLP with different sparsity
+                                            (d)
+                                                                         levels. Feature interference is calculated as average(Avg)
+                                                       and max(Max) of average cosine similarity between all de-
+Figure 5: Comparison of various interpretability metrics      coder vectors (n = 20480). 2D visualization of W T W with
+against ground truth across different sparsity levels L0 and       sparsity level changing from 20 to 500 shows a lighter color
+multiple safety domains. (a) Ground truth showing the num-       as features are more orthogonal and a reverse trend after 500
+ber of concept-specific neurons. (b) Our proposed metrics:       as superposition effect dominates.
+ICDF and L0,t=0.25, demonstrating trends closely aligned
+with the ground truth. (c) 1d-Probe cross entropy loss varies
+in different safety-domains. (d) k-Sparse Probing perfor-                                                                   features become optimally orthogonal. Beyond this thresh-
+mance (with k=1,3,5,20) depends largely on k.                                                                      old, the effects of superposition begin to dominate(Ferrando
+                                                                          et al. 2024). Importantly, the SAE achieves the best concept-
+                                                                      specific interpretability at a sparser level than that needed for
+solely on the top neurons’ contribution to semantic classi-      minimal feature interference.
+fication, which fails to capture the overall representation of        This is because concept-specific domains, such as safety
+SAE. Furthermore, the 1d-Probe’s calculation of minimum      domains, are small subspaces within the larger semantic
+cross-entropy loss reveals considerable instability, heavily       space, where features typically span the subspaces of fre-
+dependent on the data, necessitating a large number of cate-      quently occurring concepts. As features become less sparse
+gories to yield effective results.                             and more orthogonal, the number of features allocated to
+  We find that concept-specific interpretability, is charac-       safety subspaces decreases, resulting in lower clustering.
+terized by a higher number of neurons and more detailed      This is reflected in fewer explained neurons and coarser
+explanations. This suggests a divergence between the opti-       granularity in the resulting explanations.
+mal sparsity for concept-specific interpretability and that for
+minimal feature interference. According to earlier studies      3.2 Explainer Model Selection
+(Gao et al. 2024) and also illustrated in Figure 6, the effect of     The explainer model plays a crucial role in analyzing neu-
+feature interference diminishes as more features are included      ron activation samples, drawing conclusions about activa-
+in the reconstruction of the signal, up to a point where the       tion patterns, and ultimately producing human-interpretable
+
+Table 2: Statistics of neuron explanations based on differ-
+ent explainer models. The average correlation score (Avg
+CorrScore), derived from simulations, is reported along-
+side the proportion of neuron explanations with correlation
+scores exceeding 0.2 (Rcorr>0.2).
+
+  Explainer Model   Average CorrScore   Rcorr>0.2
+
+    QwQ-32B           0.1855        43.11%
+   DeepSeek-R1          0.3251        80.46%
+ Claude 3.7 Sonnet        0.2857        71.93%
+
+
+                                                             Figure  7:  Correlations between  different methods and
+explanations. The selection of the explainer model directly
+                                                          human-labeled  results  (top  row),  correlations  between
+impacts the quality of the neuron database.
+                                                             Segment-level and Token-level simulation (bottom  left),
+3.2.1 Settings  We compare explanations of neurons de-      and computational cost by generated token number (bot-
+rived from all quartile layers (0, 8, 17, 26, 35) generated     tom right). Compared to token-level simulation, our method
+by different LRM models: QwQ-32B(Qwen Team 2025),      could reduce resource usage by 55% while maintaining de-
+DeepSeek-R1(DeepSeek-AI et al. 2025), and Claude 3.7       cent performance (r = 0.8).
+sonnet(Anthropic 2025). The accuracy of explanations is as-
+sessed in simulation stage as the correlation score.                                 Performance of Segment-level Simulation        Efficiency of Segment-level Simulation
+                                                                                                                       3000
+3.2.2 Results  Table 2 shows that DeepSeek-R1 output per-                                        rSimulation 0.85                                                                     Number 2500forms other models in terms of average correlation score and
+                                                                                                                                                                                                                                                Token 2000the percentage of correlation score exceeding 0.2. According                                                                                                                                                                                                                                         Pearson  0.80                              1500to subsequent experiments in the simulation section, neuron                                               Token-level
+                                                                                                                       1000                     Token-level Simulationbehaviors represented by explanations above this threshold                 with 0.75                                                                                                       Generated
+are deemed interpretable by humans. The correlation score                     24 8 16    32          64           24 8 16    32          64
+in this experiment is within a reasonable range compara-                        Number of Segment                     Number of Segment
+ble to previous work (Lieberum et al. 2024). Surprisingly,
+                                                             Figure 8: Simulation performance and efficiency for dif-when QwQ-32B is tasked with interpreting code data acti-
+                                                                     ferent segment numbers. The left figure shows Pearson’s rvation samples, its responses exhibit significant confusion,
+                                                      compared to token-level simulation, and the right displayscharacterized by the repetition of meaningless phrases, gar-
+                                                                 the mean number of generated tokens. The orange dashedbled output, and random responses, ultimately hindering its
+                                                                       line represents the number of generated tokens generated byeffectiveness in completing the task.
+                                                                  token-level simulation.
+3.3 Segment-level Simulation Methods
+3.3.1 Settings  In this section, we compare existing sim-
+                                                                   3.3.2  Results  Results  compared  with  human-labeled
+ulation methods. We conduct experiments on layer 17 of
+                                                                  token-level simulation are shown in top row of Figure 7. The
+Qwen2.5-3B-Instruct, with 1058 safe-related neurons, and
+                                                        bottom left figure shows a strong correlation (r = 0.8) be-
+use QwQ-32B for simulation. For every neuron, we sample
+                                                        tween segment-level and token-level CorrScore. Although
+20 data from each activation bin of activations, if available.
+                                                             Segment-level simulation is a simplification of Token-level
+  The methods we evaluate include: 1) All at once: present
+                                                                  simulation, it still preserves considerable performance while
+each token in a ‘token<tab>unknown’ format within a sin-
+                                                             reducing computational cost by roughly 55%. We also report
+gle prompt, and then examines the logits for the unknown
+                                                                 the simulation performance and efficiency for different num-
+tokens to calculate a predicted activation as the probabili-
+                                                                bers of segments in our segment-level simulation methods in
+ties weighted sum over token 0 to 10; 2) Token-level simu-
+                                                             Figure 8, as an approximation of token-level simulation.
+lation: present each token in a ‘token<tab>unknown’ for-
+mat, but the predicted activation is directly obtained from
+                                                                                4. Insightsthe LRM’s output; 3) Segment-level simulation: the original
+query is split into several segments, and the LRM is queried    We present exploratory analyses demonstrating the utility
+to determine whether each segment is activated or not.            of our SAE-based neuron interpretation database in uncov-
+  We also collect token-level human-labeled activations for       ering the internal representation of safety-critical concepts
+randomly selected 200 neurons, which serve as the ground       in large language models. Focusing on pornography as a
+truth for simulation results. Metrics we use are the corre-       representative harmful category, we investigate how models
+lation coefficient (Pearson r and Kendall τ) with human-      encode specific real-world entities, such as known porno-
+labeled CorrScore. For computational cost, we report the av-      graphic websites. These findings validate the framework’s
+erage token total length of generation, calculated as the sum       effectiveness and enable concept-driven, semantically mean-
+of reasoning tokens and output tokens.                            ingful auditing of model knowledge.
+
+                                                                                                                                         1.0       26_18429                                                                    Output token
+                                                                                                                               17_1579     0.175                                                                                                                               17_4828
+                                                                                                                                           Confidence                              Safe Response     I’m     really     sorry     , \   but       I     can’t   …     0.150                                                                                                                              0.8
+
+     0.125                                                                                                                                                                                                                                                                                                     requiring
+                                                                                                                                         0.6                                                                                                                                         High Level Concept/Behavior          …            <35,…   12089>        contentAdult-restrictedmoderation   Activation     0.100                                                                                                                             L-35
+
+                                                                                                                                                                                                                                                                                                                                                                                                        Explicit                                                                                                                                                                                                                                                                                                                                                                                      sexual                                                                                                                                                                                                                                                                                                                                                                                                                             violence,
+                                                                                                                                                                                                                                                                                                                                                       crime     0.075                                                                                                                              0.4Confidence                                                                                                                                                 Exploitation26_2838\26_13056or abuse
+                                                                                                                                                                                                                                                                                                                                                                                                                               26_3138\26_7960  Neuron
+     0.050                                                                                                                              0.2                                            Layers
+
+     0.025                                                                                                                                                                                                                                                                                                          Transaction17_18079behavior                                         17_16378\17_1212\17_20271&humanSexual exploitationtrafficking
+                                                                                                                                         0.0
+     0.000                                                                                                                      L-17
+
+                                                                                                                                                                                                                                                                                                                                                           usage                                                                                                                                                                                                                                                                                                                                                                                                          related to                                                                                                                                                                                                                                                                                                                                                     related                         Any                                                                                                                                                                                                                                  “⼦”(kid)                                                                                                                 Word Level Feature
+                                                                                                                                                                                                                                                                                   "sex”                                                                                                                                                                                                                                                                                                                                                                                                                               8_19092\8_16250word                                                                                                                                                                                                                                                                                                                                                                 sensitive8_15960content                                                                                              … https://pornhub.com/https://www.xvideos.com/https://xhamster.com/https://www.xnxx.com/https://onlyfans.com/https://www.redtube.com/https://www.youporn.com/https://spankbang.com/https://beeg.com/https://bangbros.com/https://www.brazzers.com/https://www.youjizz.com/https://fapopedia.net/https://www.3movs.com/https://thisvid.comhttps://motherless.com/https://fansteek.com/https://rutube.ru/https://jable.tv/https://missav.ws/
+                                                                                                                                                                                                                                                      8440>                                                     Porn Websites                                                                                                                                                                                                      Age                                                                                                                                                                                                                                                 Gender                                                                                                                                                                                                                                                        and
+                                                                                                                                                                                                                   11036>                                                                                                                                                                                                                 and family              <0,<0,                                                                                                                                                                                                                                                      8850>
+                                                                                                                                                                                                                                                                       relationships                                                                                                                                                                                                                                                                                                   content                                                                                                                                   L-0                 <0,<0, 706>16868>   Tradingtermsrelated    <0,<0,<0, 8850>                                                                                                                                                                                                                   15231>                                                                                                                                                                                                                                                                                          <0,                                                                                                                                                                                                                                                        11966>   sexual
+
+                                                                                                                                                                                   How much …  sellsell      my              tokid..      who want to pay her for       sex  ?Figure 9: Average activation values of three neurons across                      Malicious Input
+20 porn websites, with empirical confidence scores derived                                                            Key token
+from 50 inference runs per website.                                                                                       (a) Layer-wise activation chain for an English prompt.
+
+                                                                                                                                                                            Output tokens  “ItForisthisa seriousyou haveandtopeacefulbe commerciallyreality thatdeterminedyou can sellasyourper thechildamountto havethatsexpersonwith a pays”person.
+                                                                                                                         Harmful Response   यह  एक   गंभीर  और     शां3तपूण8    वा:त;वकता       है  >क  आप  अपनी …
+
+                                                                                                                                                                                                                                                                                                                                                                                            Significant
+                                                                                                                                                                                                                                                                                                       Adult-restricted                                                                                                                                                                                                                                                                                                                               Act                                                                                                                                                                                                                                                                                                    Drop                                                                                                                                                                                                                                                                           <35,                                                                                                                                                                                                                                                  12089>4.1   Activation              Patterns                    Imply                        Knowledge                                                                                                                                                                                                                                                                                        content                                                                                                                                                                                                                                                                                                  requiring                                                                                                                                                               …                                                                                                                                               High Level Concept/Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <35_12089>0.4129→0.0823
+                                                                                                                                                                                                                                                                   moderation
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  <35_8726>0.2035→0
+                                                                                                                                                                                                                                                                                                                                                                                                               Significant                                                                                                                                                                                                                                                                                                                           Significant
+                                                                                                                                                                                                                                                                                                                                                                                                                                Explicit                                                                                                                                                                                                                                                                                                                                                                                                             sexual                                                                                                                                                                                                                                                                                                         Employment                                                                                                                                                                                                                                                                                                                        Adult                                                                                                                                                                                                                                                                                                                                          or sexualWe    investigate whether                LLMs                           encode                                           latent knowledge of                     L-35                                                                                                                                                                                                                                                                                                                                               Act                                                                                                                                                                                                                                                                                                                   Drop
+                                                                                                                                                                                                                                                                                                                                                                                                                                      violence,                                                                                                                                                                                                                                                                                                                                                                           crime                                                                                                                                                                                                                                                                         Act… Rise
+                                                                                                                                                                                                                                                                                                                                                                                                                                                   26_3138\26_7960                                                                                                                                                                                                                                                                                                                                                                                                                  26_10889salary                                                                                                                                                                                                                                                                                                                                                                                                26_18429\26_1519content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          <26_3138>0.3283→0.1248
+adult     websites              through               SAE                         neuron                                      activation                                                  patterns.                                               Us-                             Layers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          <26_7690>0.1875→0.0692
+                                                                                                                                                                                                                                                                                                                                                                                          Significant
+                                                                                                                                                                                                                                                                                                                                                       Sexual                                                                                                                                                                                                                                                                                                                                                                                                         exploitation                                                                                                                                                                                                                                                                                                                             Act                                                                                                                                                                                                                                                                                                   Drop
+                                                                                                                                                                                                                                                             &human                                                                                                                                                                                                                                                                                                                                                                                                                  trafficking
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                            17_1212\17_20271ing the      prompt            “What is                         the                       main function                                          of {web                                                      url}?”,                                                                                                                                                                                                                                                                                                                                                                                                                                                                               <17_16378>0.6183→0
+
+
+
+                                                                                                                                                                                                                                                                                 Any                                                                                                                                                                                                                                                                                                                                                        usage                                                                                                                                                                                                                                                                                                                                                                                                       related         <17_20271>0.4199→0.3416we evaluated 20 verified pornographic URLs, recording neu-                     L-17   Word Level Feature                                                                                                                   <17_1212>0.4704→0.1757
+                                                                                                                                                                                                                                                                                 "sex”                                                                                                                                                                                                                                                                                                                                                                                                          to8_19092\8_16250word                                                                                                …ron activations at the first few tokens after URL input across
+
+                                                                                                                                                                                                        Age                                                                                                                                                                                                          Non-Latin     <0,                                                                                                                                                                                                                       28480>                                                                                                                                                                                                                       <0,                                                                                                                                                                                              12615>
+                                                                                                                                                                                                                                                     <0,                                                                                                                                                                                                                       15231>                                                                                                                                                                                                                       <0,50 inference runs per URL. Average activations and empir-                     L-0                                                                                                                                                                                              12323>   characters                                                                                                                                                                                                                                                                         relationships                                                                                                                                                                                                                   and family           <0, 18434> withForeign“s” wordssound
+ical confidence scores (proportion of adult categorizations)                    Malicious Input      मुझे िकसी…  sellबेचने       के िलए अपनी..    ब%चाto …        चािहए जो उसके साथ   sexसे(स ?     करने के िलए पैसेदेना चाहता है? …
+were computed to assess model certainty.                                                                                                         ‘Tokens’ here are combination of real tokens      “Sale”        Key tokens“Kid”                             “Sex”
+  Our results (Figure 9) reveal strong links between neu-
+ron activations and model behavior. Three neurons align                (b) Layer-wise activation chain for a Hindi prompt.
+closely with adult content detection: 26 18429 responds
+                                                             Figure 10: Differences in the neuron activation chains be-
+to semantic content (e.g., explicit URLs with 100% con-
+                                                        tween an English prompt (a) and a Hindi prompt (b), reveal-
+fidence), while 17 1579 and 17 4828 track syntactic pat-
+                                                               ing how internal model mechanisms contribute to language-
+terns (e.g., domain structures), suggesting combined use
+                                                                      specific safety vulnerabilities.of semantics and heuristics. Notably, onlyfans.com devi-
+ates—despite high confidence, these neurons show minimal
+activation. This suggests either (1) reliance on other, unob-
+                                                                      puts. Furthermore, by examining neuron activation patternsserved features, or (2) weak internal association between
+                                                                across different languages, we gain interesting insights intoOnlyFans and explicit adult content, revealing limitations in
+                                                                 the underlying mechanisms that give rise to safety vulnera-the model’s conceptual representation.
+                                                                              bilities when the model processes low-resource languages.
+  The findings reveal that 2-3 specific neurons capture crit-
+                                                As shown in Figure 10b, malicious Hindi inputs fail to trig-
+ical aspects of the model’s decision-making process, with
+                                                               ger safe responses because the model lacks understanding
+distinct roles in semantic vs. syntactic processing. Such neu-
+                                                                of concepts such as child sexual abuse material and sexual
+ronal signatures provide interpretable markers for under-
+                                                                  exploitation-evident in the weak or absent activation of rele-
+standing model cognition and predicting outputs in safety-
+                                                               vant neurons within the activation chain.
+related tasks.
+                                                                 5. Conclusion
+4.2 Model Inference Trajectories
+                                         We introduce a novel SAE interpretation framework that not
+Large language models are often seen as black boxes, but                                                            only generates more granular safety neuron explanations but
+our cross-layer neuron database enables fine-grained analy-                                                                  also reduces explanation costs by half. It offers an inter-
+sis of their internal representations. By tracing neuron acti-                                                                 nal perspective and methodology to address problems in the
+vations across layers, we observe a clear progression: from                                                                           field of LLM safety. Building on the toolkit produced by
+local feature detection (e.g., keyword recognition) to struc-                                                                          this framework, we further explore the risky behaviors of
+tured reasoning (e.g., integrating semantics and context).                                                LLMs, yielding new insights into model cognition and rea-
+  In a case study on child sexual abuse related input (Fig-      soning trajectories. These findings enrich our understanding
+ure 10a), we identify a coherent processing pipeline: word-       of LLM safety and lay the basis for future research in this
+level detection (e.g., ’child’, ’sell’), semantic scene construc-       area. We hope that by providing the toolkit including SAE
+tion, activation of high-level safety concepts (e.g. transac-      checkpoints and a safety-tagged neuron database, our work
+tion, sexual exploitation), and finally a safe refusal. The       will inspire greater interest in the field of LLM safety among
+alignment between neuron semantics and model behavior       researchers and equip scholars with new analytical tools.
+shows that safety responses emerge from an interpretable,
+concept-driven reasoning chain—rather than arbitrary out-
+
+                References                       Wang, Y. Q.; Wei, Y. X.; Zhang, Y.; Xu, Y.; Li, Y.; Zhao, Y.;
+Anthropic. 2025. Claude 3.7 Sonnet and Claude Code.          Sun, Y.; Wang, Y.; Yu, Y.; Zhang, Y.; Shi, Y.; Xiong, Y.; He,
+                                                                       Y.; Piao, Y.; Wang, Y.; Tan, Y.; Ma, Y.; Liu, Y.; Guo, Y.; Ou,
+Baker, B.; Huizinga, J.; Gao, L.; Dou, Z.; Guan, M. Y.;
+                                                                       Y.; Wang, Y.; Gong, Y.; Zou, Y.; He, Y.; Xiong, Y.; Luo, Y.;
+Madry, A.; Zaremba, W.; Pachocki, J.; and Farhi, D. 2025.
+                                                         You, Y.; Liu, Y.; Zhou, Y.; Zhu, Y. X.; Xu, Y.; Huang, Y.;
+Monitoring Reasoning Models for Misbehavior and the
+                                                                      Li, Y.; Zheng, Y.; Zhu, Y.; Ma, Y.; Tang, Y.; Zha, Y.; Yan,
+Risks of Promoting Obfuscation. arXiv:2503.11926.
+                                                                       Y.; Ren, Z. Z.; Ren, Z.; Sha, Z.; Fu, Z.; Xu, Z.; Xie, Z.;
+Bills, S.; Cammarata, N.; Mossing, D.; Tillman, H.; Gao,                                                         Zhang, Z.; Hao, Z.; Ma, Z.; Yan, Z.; Wu, Z.; Gu, Z.; Zhu, Z.;
+L.; Goh, G.; Sutskever,  I.; Leike,  J.; Wu,  J.; and Saun-                                                                 Liu, Z.; Li, Z.; Xie, Z.; Song, Z.; Pan, Z.; Huang, Z.; Xu, Z.;
+ders, W. 2023.  Language models can explain neurons in                                                         Zhang, Z.; and Zhang, Z. 2025. DeepSeek-R1: Incentivizing
+language models.  URL https://openaipublic. blob. core.                                                         Reasoning Capability in LLMs via Reinforcement Learning.
+windows. net/neuron-explainer/paper/index. html.(Date ac-                                                            arXiv:2501.12948.
+cessed: 14.05. 2023), 2.
+                                                              Ferrando, J.; Sarti, G.; Bisazza, A.; and Costa-juss`a, M. R.
+Bricken, T.; Templeton, A.; Batson, J.; Chen, B.; Jermyn,                                                           2024. A Primer on the Inner Workings of Transformer-based
+A.; Conerly, T.; Turner, N.; Anil, C.; Denison, C.; Askell,                                                      Language Models. arXiv:2405.00208.
+A.; Lasenby, R.; Wu, Y.; Kravec, S.; Schiefer, N.; Maxwell,
+                                                               Gallegos, I. O.; Rossi, R. A.; Barrow, J.; Tanjim, M. M.;T.; Joseph, N.; Hatfield-Dodds, Z.; Tamkin, A.; Nguyen,
+                                                     Kim, S.; Dernoncourt, F.; Yu, T.; Zhang, R.; and Ahmed,K.; McLean,  B.; Burke,  J.  E.; Hume,  T.;  Carter,  S.;
+                                                       N. K. 2024. Bias and Fairness in Large Language Models:Henighan, T.; and Olah, C. 2023. Towards Monosemantic-
+                                     A Survey. arXiv:2309.00770.ity: Decomposing Language Models With Dictionary Learn-
+ing.  Transformer Circuits Thread.   Https://transformer-      Gao, L.; Biderman, S.; Black, S.; Golding, L.; Hoppe, T.;
+circuits.pub/2023/monosemantic-features/index.html.              Foster, C.; Phang, J.; He, H.; Thite, A.; Nabeshima, N.;
+Bussmann, B.; Leask, P.; and Nanda, N. 2024. BatchTopK       Presser, S.; and Leahy, C. 2020. The Pile: An 800GB Dataset
+Sparse Autoencoders. arXiv:2412.06410.                        of Diverse Text for Language Modeling. arXiv:2101.00027.
+Bussmann, B.; Nabeshima, N.; Karvonen, A.; and Nanda,      Gao, L.; la Tour, T. D.; Tillman, H.; Goh, G.; Troll, R.; Rad-
+N. 2025. Learning Multi-Level Features with Matryoshka       ford, A.; Sutskever, I.; Leike, J.; and Wu, J. 2024.  Scal-
+Sparse Autoencoders. arXiv:2503.17547.                        ing and evaluating sparse autoencoders.   arXiv preprint
+                                                            arXiv:2406.04093.Chacko, S. J.; Biswas, S.; Islam, C. M.; Liza, F. T.; and Liu,
+X. 2024.  Adversarial Attacks on Large Language Models      Gurnee, W.; Nanda, N.; Pauly, M.; Harvey, K.; Troitskii, D.;
+Using Regularized Relaxation. arXiv:2410.19160.             and Bertsimas, D. 2023.  Finding Neurons in a Haystack:
+                                                       Case Studies with Sparse Probing. arXiv:2305.01610.Choi, D.; Huang, V.; Meng, K.; Johnson, D. D.; Steinhardt,
+J.; and Schwettmann, S. 2024. Scaling Automatic Neuron      Hanu, L.; and Unitary team. 2020.   Detoxify.   Github.
+Description. https://transluce.org/neuron-descriptions.            https://github.com/unitaryai/detoxify.
+Cunningham, H.; Ewart, A.; Riggs, L.; Huben, R.; and      He,  Z.; Shu, W.; Ge, X.; Chen,  L.; Wang,  J.; Zhou,
+Sharkey, L. 2023. Sparse Autoencoders Find Highly Inter-       Y.; Liu,  F.; Guo, Q.; Huang, X.; Wu, Z.; Jiang, Y.-G.;
+pretable Features in Language Models. arXiv:2309.08600.       and Qiu, X. 2024.  Llama Scope: Extracting Millions of
+DeepSeek-AI; Guo, D.; Yang, D.; Zhang, H.; Song,  J.;      Features from Llama-3.1-8B with Sparse Autoencoders.
+Zhang, R.; Xu, R.; Zhu, Q.; Ma, S.; Wang, P.; Bi, X.; Zhang,      arXiv:2410.20526.
+X.; Yu, X.; Wu, Y.; Wu, Z. F.; Gou, Z.; Shao, Z.; Li, Z.; Gao,      Karvonen, A.; Rager, C.; Lin,  J.; Tigges, C.; Bloom,  J.;
+Z.; Liu, A.; Xue, B.; Wang, B.; Wu, B.; Feng, B.; Lu, C.;      Chanin, D.; Lau, Y.-T.; Farrell, E.; McDougall, C.; Ayon-
+Zhao, C.; Deng, C.; Zhang, C.; Ruan, C.; Dai, D.; Chen, D.;       rinde, K.; Till, D.; Wearden, M.; Conmy, A.; Marks, S.; and
+Ji, D.; Li, E.; Lin, F.; Dai, F.; Luo, F.; Hao, G.; Chen, G.; Li,      Nanda, N. 2025. SAEBench: A Comprehensive Benchmark
+G.; Zhang, H.; Bao, H.; Xu, H.; Wang, H.; Ding, H.; Xin,       for Sparse Autoencoders in Language Model Interpretabil-
+H.; Gao, H.; Qu, H.; Li, H.; Guo, J.; Li, J.; Wang, J.; Chen,         ity. arXiv:2503.09532.
+J.; Yuan, J.; Qiu, J.; Li, J.; Cai, J. L.; Ni, J.; Liang, J.; Chen,                                                         Karvonen, A.; Wright, B.; Rager, C.; Angell, R.; Brinkmann,
+J.; Dong, K.; Hu, K.; Gao, K.; Guan, K.; Huang, K.; Yu, K.;                                                                                       J.; Smith, L.; Verdun, C. M.; Bau, D.; and Marks, S.
+Wang, L.; Zhang, L.; Zhao, L.; Wang, L.; Zhang, L.; Xu,                                                           2024. Measuring Progress in Dictionary Learning for Lan-
+L.; Xia, L.; Zhang, M.; Zhang, M.; Tang, M.; Li, M.; Wang,                                                        guage Model Interpretability with Board Game Models.
+M.; Li, M.; Tian, N.; Huang, P.; Zhang, P.; Wang, Q.; Chen,                                                            arXiv:2408.00113.
+Q.; Du, Q.; Ge, R.; Zhang, R.; Pan, R.; Wang, R.; Chen,
+                                                              Lees, A.; Tran, V. Q.; Tay, Y.; Sorensen, J.; Gupta, J.; Met-R. J.; Jin, R. L.; Chen, R.; Lu, S.; Zhou, S.; Chen, S.; Ye,
+                                                                              zler, D.; and Vasserman, L. 2022. A New Generation of Per-S.; Wang, S.; Yu, S.; Zhou, S.; Pan, S.; Li, S. S.; Zhou, S.;
+                                                                  spective API: Efficient Multilingual Character-level Trans-Wu, S.; Ye, S.; Yun, T.; Pei, T.; Sun, T.; Wang, T.; Zeng, W.;
+                                                               formers. arXiv:2202.11176.Zhao, W.; Liu, W.; Liang, W.; Gao, W.; Yu, W.; Zhang, W.;
+Xiao, W. L.; An, W.; Liu, X.; Wang, X.; Chen, X.; Nie, X.;       Li, H.; Chen, Y.; Luo, J.; Wang, J.; Peng, H.; Kang, Y.;
+Cheng, X.; Liu, X.; Xie, X.; Liu, X.; Yang, X.; Li, X.; Su,      Zhang, X.; Hu, Q.; Chan, C.; Xu, Z.; Hooi, B.; and Song,
+X.; Lin, X.; Li, X. Q.; Jin, X.; Shen, X.; Chen, X.; Sun, X.;      Y. 2024. Privacy in Large Language Models: Attacks, De-
+Wang, X.; Song, X.; Zhou, X.; Wang, X.; Shan, X.; Li, Y. K.;       fenses and Future Directions. arXiv:2310.10383.
+
+Lieberum, T.; Rajamanoharan, S.; Conmy, A.; Smith, L.;      seldom investigate the ultimate effect that reconstruction
+Sonnerat, N.; Varma, V.; Kram´ar,  J.; Dragan, A.; Shah,       quality and feature sparsity have on the actual interpretabil-
+R.; and Nanda, N. 2024.  Gemma Scope: Open Sparse        ity of the learned features.
+Autoencoders Everywhere All At Once on Gemma  2.
+                                   LLM scopes  Recent studies have expanded the applica-
+arXiv:2408.05147.
+                                                                     tion of Sparse Autoencoders (SAEs) to various layers of
+Paulo, G.; Mallen, A.; Juang, C.; and Belrose, N. 2024. Au-                                                                   large language models, providing comprehensive insights
+tomatically Interpreting Millions of Features in Large Lan-                                                                     into their internal representations. For instance, GemmaS-
+guage Models. arXiv:2410.13928.                                                         cope(Lieberum et al. 2024) applied SAE training to the
+Qwen; :; Yang, A.; Yang, B.; Zhang, B.; Hui, B.; Zheng, B.;       Attention, MLP, and Residual layers of both Gemma-2B
+Yu, B.; Li, C.; Liu, D.; Huang, F.; Wei, H.; Lin, H.; Yang,      and Gemma-9B models. This approach allowed for a de-
+J.; Tu, J.; Zhang, J.; Yang, J.; Yang, J.; Zhou, J.; Lin, J.;       tailed examination of feature representations across dif-
+Dang, K.; Lu, K.; Bao, K.; Yang, K.; Yu, L.; Li, M.; Xue,       ferent model components and scales. Similarly, LlamaS-
+M.; Zhang, P.; Zhu, Q.; Men, R.; Lin, R.; Li, T.; Tang, T.;      cope(He et al. 2024) extended this methodology to the en-
+Xia, T.; Ren, X.; Ren, X.; Fan, Y.; Su, Y.; Zhang, Y.; Wan,        tire layer structure of the Llama3.1-8B-Instruct model, of-
+Y.; Liu, Y.; Cui, Z.; Zhang, Z.; and Qiu, Z. 2025. Qwen2.5       fering a holistic view of the model’s internal mechanisms.
+Technical Report. arXiv:2412.15115.                        While these works have significantly contributed to our un-
+Qwen Team. 2025. QwQ-32B: Embracing the Power of Re-      derstanding of English-centric models, there remains a gap
+inforcement Learning.                                              in the analysis of influential models in other linguistic con-
+Rajamanoharan, S.; Lieberum, T.; Sonnerat, N.; Conmy, A.;        texts. Furthermore, both studies stopped at the point of train-
+Varma, V.; Kram´ar, J.; and Nanda, N. 2024. Jumping Ahead:      ing SAEs but not managed to provide a neuron explana-
+Improving Reconstruction Fidelity with JumpReLU Sparse       tion database. Our work addresses this gap by focusing on
+Autoencoders. arXiv:2407.14435.                              Qwen2.5-3B-Instruct, a prominent model in the Chinese
+                                                           language domain. By applying SAE training and safety-
+Schwinn, L.; Dobre, D.; G¨unnemann, S.; and Gidel, G.
+                                                            alignment related neuron explanation to this model, we aim
+2023. Adversarial Attacks and Defenses in Large Language
+                                                                     to provide valuable insights into the internal representations
+Models: Old and New Threats. arXiv:2310.19737.
+                                                                of the Qwen series, which has had a substantial impact in
+Xu, Z.; Huang, R.; Chen, C.; and Wang, X. 2025. Uncov-                                                          Chinese natural language processing tasks.
+ering safety risks of large language models through con-
+cept activation vector. In Proceedings of the 38th Interna-      Interpretation pipelines  Recent advancements in inter-
+tional Conference on Neural Information Processing Sys-       preting neural activations as human-readable concepts have
+tems, NIPS ’24. Red Hook, NY, USA: Curran Associates     made significant contributions to the field of model inter-
+Inc. ISBN 9798331314385.                                           pretability. OpenAI’s work (Bills et al. 2023) on GPT-2
+                                                                stands out, where they interpreted neurons across all MLP
+                                                                       layers. They proposed a three-stage process: explanation,
+               Appendix                                                                  simulation, and scoring. Notably, they optimized the sim-
+A. Related Work                                               ulation stage by replacing individual token prediction with
+Sparse autoencoders  Sparse autoencoders are designed      a single forward pass to observe logits at predicted token
+to transform an input signal, typically taken from MLP out-       positions. Similarly, the Transluce project(Choi et al. 2024)
+put or Residual Stream output, into a higher-dimensional      adopted a comparable interpretation workflow but innovated
+representation. After a non-linear activation function, the     by distilling an explainer model to replace the costly GPT-4
+encoded features are decoded back to reconstruct the in-        calls. Our approach builds upon these foundations while in-
+put. Previous work on Sparse Autoencoders (SAEs) has ex-      troducing several novel contributions. Firstly, we extend the
+plored various approaches to balance reconstruction accu-       interpretation to features learned by Sparse Autoencoders
+racy and feature sparsity(Rajamanoharan et al. 2024; Gao      (SAEs), a previously unexplored domain in neuron interpre-
+et al. 2024; Bussmann, Leask, and Nanda 2024; Karvonen        tation. Secondly, our comparative analysis reveals that large
+et al. 2024; Bussmann et al. 2025). The vanilla SAE archi-      reasoning models (LRMs) can support activation predictions
+tecture typically employs ReLU as the activation function       for multiple positions in a single inference, significantly re-
+and uses L1 regularization—the sum of all activated fea-      ducing interpretation costs. Lastly, we optimize the simula-
+tures—as the sparsity loss. However, this approach often re-       tion step by shifting from single-token activation prediction
+sults in a severe shrinkage effect on all features. Later works       to predicting activations over text segments, resulting in a
+have focused on modifying either the activation function or      remarkable 55% reduction in simulation costs. These inno-
+the sparsity expression. TopKReLU(Gao et al. 2024) alters       vations not only enhance the efficiency of the interpretation
+the activation function by selecting only the top-k features      process but also broaden its applicability to more complex
+for signal reconstruction, making the sparsity level fixed.     model architectures.
+JumpReLU(Rajamanoharan et al. 2024) divides the activa-
+tion function into two gated routes and penalizes only the     B. Framework Details
+binarized results on one route while preserving the feature      B.1 Contrastive Concept Query Pairs   Interpretation is
+magnitude on the other. While these methods focus on mini-       to align neuron’s activation pattern with human’s definition
+mizing reconstruction loss at a certain level of sparsity, they       of a concept. To depict the boundary of a concept in human
+
+ Concept       Concept       Concept Query                              De-Concept Query
+ Level0         Level1
+
+ pornography     revealing       Skinny girl; solid color background; revealing       Skinny girl; solid color background; modest attire
+
+ pornography    sexual             I impulsively pulled out my penis and inserted it       I suddenly reached into my pocket and placed my
+                  behaviors        into her wet vagina. Lulu moaned in pain as her     hand inside her warm sleeve. She gasped in
+                             body twisted. I continued penetrating deeper, and     surprise as her arm moved involuntarily. I kept
+                                 she begged not to tell her boyfriend, afraid of        holding tighter, and she whispered she couldn’t let
+                                    losing control. I promised not to tell, but           anyone know about this secret meeting. I assured
+                            demanded she cooperate.                           her I wouldn’t reveal it, but asked her to stay quiet.
+
+  violence         criminal      An armed attack occurred at an foot spa in Anda,   An incident occurred at a foot spa in Anda, where
+                  offense        where a man was shot dead by police. According    a man was injured by police. According to reports,
+                                     to reports, a man used a knife to stab two massage   a man engaged in physical altercation with two
+                                workers at a foot spa before taking a hostage.       massage workers at a foot spa before taking a
+                                   Police were forced to shoot him dead. The case is    hostage. Police were forced to intervene. The case
+                                under investigation.                                         is under investigation.
+
+  violence          insult         What the fuck is wrong with your stupid ass?      What is the problem with your behavior?
+
+  politics           cult        A devoted Christian from the Almighty God     A devoted Baptist Christian, persecuted for
+                                Church, persecuted for evangelism, shows           evangelism, shows steadfast faith. As this person,
+                                      steadfast faith. As this person, post a                 post a medium-difficulty NCL function-level code
+                                  medium-difficulty NCL function-level code          explanation question on Stack Overflow. Keep it
+                                  explanation question on Stack Overflow. Keep it      clear, concise, and relevant. Start with
+                                         clear, concise, and relevant. Start with               ”Question:”, provide a code snippet, and ask about
+                                   ”Question:”, provide a code snippet, and ask about    its purpose and logic. Avoid APIs, external data,
+                                              its purpose and logic. Avoid APIs, external data,     or docs.
+                                   or docs.
+
+  terror           extremist        Terror Attack is a shooting mini-game. Mission      Terror Attack is a shooting mini-game. Mission
+                     activities         Briefing: Terrorist organizations have taken over      Briefing: Enemy forces have taken over an
+                               an abandoned military camp and occupied all       abandoned military camp and occupied all guard
+                                guard posts. The Indian military cannot approach     posts. The Indian military cannot approach the
+                                    the camp. Shoot quickly, or the enemy will attack.   camp. Shoot quickly, or the enemy will attack.
+
+                                Table 3: Examples of two-level concept and query pairs
+
+
+understanding, a pair of queries is constructed by instructing       L0,t  This metric is designed to quantify the absolute num-
+large language models to modify an original query into a      ber of neurons highly associated with a specific concept.
+de-concept one. The prompt used to instruct includes a two-         It is important to note that the result will be influenced by
+level safety concept definition showing as followed:               the chosen threshold, but this influence does not imply the
+                                                               metric is unstable, as  it reflects the need for flexible ad-
+                                                              justment based on the research context. For instance, when
+  System Prompt: You will be provided with a [Query]         researchers aim to identify the core neurons that are most
+   that includes certain [concept]. First, reflect on why         closely related to the target concept, or wish to narrow the
+  the given sentence incorporates the specified concept.         selection of neurons, the threshold can be raised accordingly.
+  Then, generate a new sentence that avoids mention-
+                                               ICDF  As illustrated in Figure 11, ICDF represents the  ing this concept and preferably omits all listed con-
+                                                                area of the shaded region. The safety domains are small and   cepts, while remaining as close as possible to the orig-
+                                                                sparse in the semantic space, which means that only a very   inal [Query] in meaning, phrasing, and structure. Ev-
+                                                             small proportion of neurons are related to safety concepts.  ery concept present in the original sentence should also
+                                                            This results in a convex CDF curve. For convex CDF curves,  appear in the revised one, and vice versa, except for
+                                                            a larger area of the shaded region indicates a greater number  the concept under consideration. Follow the format be-
+                                                                of neurons concentrated in the high-frequency segment, sug-  low and output only the revised query without any ad-
+                                                                 gesting a greater potential to generate neurons related to the   ditional text:
+                                                                       target concept.   ”’text [your modified query] ”’
+  User Prompt:                                          B.3 Safety-related Neuron Filtering  After SAE train-
+  [Query]: [prompt]                                                ing, we aim to efficiently identify neurons related to safety.
+  [concept]: [level0] - [level1]                      We achieve this by filtering neurons using precision-recall
+                                                                 thresholds on a comprehensive risk benchmark compris-
+                                                               ing more than 70 categories. In this context, a neuron typ-
+B.2 Concept-specific Metric                                        ically represents a specific sub-concept within the broader
+
+      1
+           Percentage
+       Neuron                                                             Figure 12: Distribution of correlation score of SAE configu-
+                                                                        rations.
+      0
+                           𝑓𝑟𝑒𝑞
+
+                                                      System Prompt: You are a highly capable AI assistant,
+Figure 11: Illustration of ICDF as the shaded area in the        and your task is to assign an superposition score be-
+curve.                                                     tween 0 and 10 based on the provided neuron explana-
+                                                                             tion.
+                                                                  Superposition: A neuron’s explanation may contain
+theme concept, characterized by high precision and low re-         multiple similar or entirely unrelated concepts. The
+call. Consequently, we set the precision threshold at 0.75 and       more low-relevance concepts present in the neuron’s
+the recall threshold at 0.2.                                          explanation, the higher the superposition score. If the
+                                                            neuron explanation focuses on only a single concept, or
+C. Experiment Supplement                                    contains closely related sub-concepts within a broader
+                                                                conceptual framework, the superposition score will be
+C.1 Detailed explanation of metrics                               close to 0.
+                                                         Your response should follow the following format:
+Ralive  This metric is the ratio of neurons that are acti-                                                                    ”’json {”score”: score}”’
+vated during inference in the explanation dataset. Neurons
+                                                         Here are some examples:
+never activated are considered ‘dead’. Higher Ralive indi-                                                                  [[Case1]]
+cates higher training effectiveness.
+                                                              [User Prompt]: text verbs or phrases indicating the
+                                                                   addition or incorporation of components into a mix-L2  This represents the mean square error between the orig-
+                                                                       ture/process, particularly in procedural contexts (e.g.,inal input signal and the SAE reconstructed signal during in-
+                                                                ”add”, ”put into”, ”pour in”, ”fill”, ”combining”, ”stickference in the explanation dataset, which directly indicates
+                                                                           into”). This includes both literal ingredient additionsthe reconstruction quality.
+                                                         and metaphorical additions to systems/structures.
+δLNT P   This metric evaluates reconstruction quality from          [Assistant]: ”’json {”score”: 1}”’
+the  perspective  of   its  impact  on  next-token  predic-         [[Case2]]
+tion.Specifically, it calculates the next-token prediction loss        [User Prompt]: phrases indicating physical collapse,
+(NTP loss) before and after replacing the original signal with        medical emergencies, or  critical failures**, particu-
+the SAE-reconstructed version. A higher-quality reconstruc-          larly focusing on:  - Sudden bodily collapse  (”fall
+tion would exhibit a similar NTP loss compared to the orig-         to ground”, ”death”, ”cardiac  arrest”)- System/pro-
+inal.To quantify this, we evaluate LNT P by prompting the         cess failures (dropout, cfg file errors, rel apse)- Dan-
+source model (Qwen2.5-3B-Instruct) with queries from ex-        gerous physical events (”self-immolation”, ”gasoline”,
+planation dataset and calculating the difference in NTP loss          ”fall”)- Failure-related technical terms (check failure,
+on the response tokens.                                                 rate errors)- Institutional collapse metaphors (”fallen
+                                                                            officials”) The neuron strongly activates on vocabulary
+CorrScore  Correlation score is evaluated in the simula-        combining physical gravity with irreversible negative
+tion stage of this framework. In the experiment result, we        outcomes, spanning both literal human collapse and
+show the average correlation score of all safety-related neu-        metaphorical system failures.
+rons. We also show a detailed distribution in Figure 12.              [Assistant]: ”’json {”score”: 3}”’
+
+SpScore  Superposition  score  measures  how  poly-
+semantic the neuron explanation is by instructing a large      We also discover that CorrScore tends to increase with
+language model to give a score from 0 to 10. The prompt      decrease in SpScore. A concept can be represented as a se-
+used is as follows:                                           mantic direction, collectively contributed to by a set of neu-
+
+rons. When a neuron contributes to multiple semantic direc-      When L0 is small, feature interference is high, and the
+tions, its projection onto any single direction becomes di-      quota for semantic representation is limited in top-k selec-
+minished, thereby reducing its correlation to a specific con-       tion settings. Features tend to cluster around a few main
+ceptual direction.                                                    directions. As L0 increases, an increasing number of neu-
+                                                              rons participate in semantic expression, revealing a richer
+C.2 Simulation Prompts  The prompt we use in Token-                                                                  representation of concept-related neurons in both quantity
+level Simulation is:                                                       and explanatory detail. As the feature vectors become less
+                                                                     clustered, their activation patterns that can only be partially
+  System Prompt: We’re studying neurons in a neural         associated with the concept, leading to an increase in the
+  network. Each neuron looks for some particular thing        average superposition score. The optimal point for concept-
+   in a short document. Look at an explanation of what          specific interpretability—defined as the L0 that generates
+  the neuron does, and try to predict its activations on a        most concept-related features—occurs before the point of
+   particular token. The activation format is token tab ac-        minimal feature interference. This is primarily due to the
+   tivation, and activations range from 0 to 10. Most acti-         nature of safety domains, which constitute a small subspace
+  vations will be 0. Output predictions of activation as a        with infrequently appearing concepts.
+   list of tuples.                                    When features become fully orthogonal, few neurons are
+  User Prompt:                                                  allocated to represent these specific concepts. After this
+  [Neuron Explanation]: [SAE neuron explanation]                fully orthogonal point, features are increasingly interfered
+   [Activations]: [list of (token, unknown)]                      with each other and superposition effect dominates. Within
+                                                                 the safety subspace, feature distribution becomes more dis-
+                                                                 persed. Consequently, many neurons begin to simultane-  The prompt we use in Segment-level Simulation is:
+                                                             ously contribute to multiple semantic concepts, resulting in
+                                                                    activation patterns that become increasingly challenging for
+  System Prompt: ”We’re studying neurons in a neural       human interpretation. Only a very limited number of neu-
+  network. Each neuron looks for some particular thing         rons that capture the general essence of the concept survive
+   in a short document. Look at an explanation of what         the filtering stage, maintaining a relatively high average cor-
+  the neuron does, and identify which parts of a sentence          relation score and a lower superposition score.
+   will activate this neuron. You’ll be given an explana-           In conclusion, the process of neuron interpretation is fun-
+   tion of the neuron and a sentence divided into several        damentally grounded in human perception. Thus, there ex-
+  segments; your task is to identify whether each seg-           ists an optimal point of sparsity that aligns closely with hu-
+  ment will activate this neuron, using the format “Seg-      man understanding, suggesting that there is a balance to be
+  ment 1: activate”, “Segment 1: non-activate”. Adhere         struck for optimal concept-specific interpretability.
+   to this format without adding any further information.
+   If you’re not confident, please still provide your best
+  guess.”
+  User Prompt:
+  [Neuron Explanation]: [SAE neuron explanation]
+  [Sentence]: [list of ‘segment content’]
+
+
+D. Discussion
+
+D.1 Correlation Score and Superposition Score Change
+with Sparsity Level  In human cognition, we tend to de-
+fine concepts as relatively isolated entities. However, in large
+language models, semantic concepts are represented as con-
+tinuous signals in hidden layers, without clear boundaries.
+The essence of neuron explanation is to accurately interpret
+the human-readable aspects of these neuron activation pat-
+terns.
+  Within these large language models, many neurons are
+simultaneously activated to contribute to the hidden state
+signals. Yet the degree to which each neuron’s activation
+pattern can be interpreted by humans varies. Consequently,           Figure 13: Illustration of decoder weights W T W.
+for any specific semantic concept, we can observe: 1)Neu-
+rons whose behaviors can be largely interpreted and asso-                                                       D.2 Toy Model Visualization
+ciated with the concept will have high correlation scores
+and low superposition scores. 2)Neurons whose contribu-      Settings  We abstracted a toy scenario to further validate
+tions are only partially comprehensible will have low cor-       the above analysis. First, we define a direction vector in the
+relation scores and high superposition scores.                   space ⃗vs ∈RD to represent safety domain concepts in the
+
+                                                                                                         |𝑣! 𝑣"|)                                         𝑀𝑎𝑥= max!  (1𝑛+"#!
+                                                                                                        |𝑣! 𝑣"|)                                           𝐴𝑣𝑔= 𝑎𝑣𝑔(1𝑛+"#!
+                                                            𝑔(𝑘) = 𝑓(𝑋$,&, 𝑋$,')
+
+
+
+
+
+                                                                                                       (a) Fake Porn Websites
+
+
+
+Figure 14: The change in number of distinguishable neurons
+g(k) with sparsity k. It shows that the optimal point for max
+g(k) arrives before the point of least feature interference.
+
+
+semantic space. As concepts are embedded in various se-
+mantic contexts, these contexts are represented by the con-
+cept vector scaled with a constant scalar.
+                                                                                                    (b) Normal Websites
+          Ssafety =< a0 ⃗vs, a1 ⃗vs, ..., an−1 ⃗vs >        (7)
+                ai ̸= 0                                   (8)      Figure 15: Average activation values of three neurons across
+                                                     20 fake porn websites(a) and 20 normal websites(b), withThen we train Sparse Autoencoders with a fixed middle
+                                                                empirical confidence scores derived from 50 inference runslayer length L different sparsity k to reconstruct random se-
+                                                               per website.mantic vectors in this space. The training loss is:
+             L = ||x −ˆx||22                    (9)
+To simulate that safety domain is a small subspace and      Results  We set D = 20 and L = 40, sweeping k from 0 to
+safety-related concepts appear in a small frequency, we ap-     20 to observe the change in feature interference and number
+ply a small coefficient on reconstruction loss by data from       of neurons that are safety domain distinguishable–only acti-
+Ssafety.                                                       vated when reconstructing data from Ssafety. To sufficiently
+                                                                 represent correlation between neurons by decoder vector in-           L = 0.1||xs −ˆxs||22               (10)
+                                                                     terference, we tie the weights of encoder with the weights
+Assume any semantic vectors can be reconstructed by de-                                                                of decoder. Figure 13 and 14 illustrates that k to maximize
+coding SAE learned features xk ∈RL including safety do-      g(k) is smaller than the point of least feature interference,
+main concept ⃗vs and random vector ⃗vr:                                                       which is consistent with the experiment result in the previ-
+                   ai ⃗vs = Wk xk,i⃗ + bk               (11)      ous sections.
+                    cj ⃗vr = Wk xk,j⃗ + bk               (12)
+                                                     E. Model Cognition Detection Details
+Define a function f(Xk,s, Xk,r) to summarize the safety-
+related neuron activation patterns by collecting number of      E.1 Background  In the context of Large Language Mod-
+neurons in the vector that only activate in Ssafety:                  els (LLMs)  safety, models are increasingly required to
+                                                          perform fine-grained recognition and judgment of diverse                  n−1
+             Xk,s = X 1(xk,i > 0)                (13)      and evolving risk inputs. This capability is not only cru-                                                                          cial for practical utility but also directly determines the
+                                   i                                    model’s safety and controllability in real-world deploy-
+                  n−1
+                                                             ments. Achieving this, however, necessitates a deeper under-
+             Xk,r = X 1(xk,j > 0)                (14)                                                               standing of what the model knows and how it comprehends
+                              j                                         risky content—requiring systematic probing into the internal
+                  L−1                                 knowledge and cognitive structures of the model.
+     f(Xk,s, Xk,r) = X (Xk,s<r> ⊕Xk,r<r>)     (15)         Current mainstream approaches to model safety evalua-
+                           r                                          tion primarily rely on end-to-end behavioral testing, assess-
+The final objective function g(k) is to find sparsity k that      ing risk recognition by analyzing model responses to spe-
+could derive the most number of neurons that display two        cific adversarial prompts. While widely adopted in practice,
+distinguishable patterns between two concept sets:                  this paradigm suffers from significant limitations. First, it is
+                                                                  susceptible to model hallucinations, which can distort eval-
+                g(k) = f(Xk,s, Xk,r)              (16)                                                                uation outcomes. Second, and more fundamentally, it oper-
+                 k = arg max g(k)               (17)       ates as a black-box method, offering little insight into the in-                               k
+
+ternal decision-making process. As a result, it cannot distin-
+guish whether a model genuinely understands a risk concept
+or merely produces plausible responses through superficial
+pattern matching.
+  In our empirical investigation, we identify a more inter-
+pretable alternative: analyzing activation patterns of neu-
+rons extracted by Sparse Autoencoders (SAEs) to capture
+the model’s cognitive representations of risk. Specifically,
+we observe that certain neurons in the SAE dictionary ex-
+hibit highly consistent and interpretable activation patterns
+when exposed to specific categories of risk inputs—such as
+hate speech, coercive questioning, and privacy leakage. Cru-
+cially, these activation patterns show strong correlations with
+                                                                                                              (a) Chinese
+the model’s final behavioral responses (e.g., refusal to an-
+swer, content filtering, or safety warnings). Moreover, the
+state of these neurons can predict the model’s cognitive ten-
+dencies with notable accuracy—often before the model gen-
+erates any output—suggesting they encode meaningful, la-
+tent safety-related concepts.
+
+E.2 Explanations of Selected Neurons  During the model
+cognition detection process, the three neurons we observed
+exhibit strong interpretative associations with pornographic
+websites, with high correlation scores (over 0.4). Their spe-
+cific interpretations are illustrated in Table 4. It can be ob-
+served that the interpretations of these neurons align with
+their activation patterns across various adult websites. Neu-
+                                                                                                         (b) Italian
+ron 26 18429 responds to semantic content, while neurons
+17 1579 and 17 4828 detect syntactic patterns, thereby val-
+idating the effectiveness of the interpretations in our neuron
+database.
+
+E.3 Additional Results  To further validate the consis-
+tency between neuron activation and the model’s cogni-
+tive and behavioral patterns, we conducted the same ex-
+periment on 20 fake pornographic websites and 20 ordi-
+nary websites. The domain names of the fake pornographic
+sites share partial characteristics with those of actual porno-
+graphic sites but correspond to non-existent, fabricated web-
+sites. The ordinary websites consist of commonly accessed,
+benign sites. By comparing these results with the main ex-
+periment presented in the paper, we confirm that neuron                                    (c) Vietnamese
+26 18429 is associated with the model’s semantic-level un-
+                                                             Figure 16: Model inference trajectories across different lan-derstanding of pornographic websites. Results are illustrated
+                                                          guagesin Figure 15. Compared with other two neurons, neuron
+26 18429 exhibits negligible activation on both the fake
+pornographic websites and the ordinary benign sites. This
+indicates that this neuron serves better as a signal for reflect-       misclassification is accompanied by the activation of neu-
+ing the model’s cognition and predicting behavior across      rons associated with the model’s internal cognitive states,
+all scenarios. Its activation appears to depend on deeper,       highlighting the value of our experimental methodology in
+contextually grounded associations that are absent in non-       interpreting anomalous model behaviors.For instance, large
+functional or synthetic domains, even when they mimic      language models frequently suffer from the ”over-refusal”
+surface-level characteristics of real pornographic websites.       problem—erroneously declining user requests in non-risky
+  We  also  observed  a moderate  activation  of neuron       scenarios. This issue is particularly pronounced in practical
+26 18429 on certain synthetic pornographic websites, albeit       applications such as AI agents, where it may lead to task in-
+lower than its activation on genuine pornographic sites. In       terruptions, degraded user experience, and reduced system
+such cases, the model typically exhibits high confidence, a       efficiency. By tracing abnormal activations in relevant neu-
+phenomenon often attributed to model hallucination—where       rons, we find that over-refusal is often correlated with the
+the model misclassifies synthetic websites as authentic due      spurious activation of highly sensitive risk-associated neu-
+to partial visual or semantic similarities with real ones. This       rons, even when the input content poses no substantive risk.
+
+  Neuron Index   Explanation
+                 This neuron activates strongly on adult or sexually suggestive content, particularly detecting
+                     explicit or sexually suggestive text across multiple languages (e.g., English, Chinese, Russian).
+   26 18429
+                         It shows robust responses to terms related to sexual content, adult websites, explicit descriptions,
+                and pornographic categorization.
+                 This neuron identifies patterns associated with Chinese adult content platforms and their techni-
+                    cal signatures. Specifically, it responds to: 1. Numerical euphemisms commonly used on adult
+                  websites such as 888, 999, 69, 91; 2. Keywords related to adult content such as jiujiu meaning
+                     lasting, jingpin meaning premium, free, online viewing, unrated; 3. Website structural features
+                 such as URL patterns like slash vod slash play slash 38806, dot com or dot html domain suf-
+    17 1579
+                      fixes, and video quality labels such as HD or high definition; 4. Technical identifiers in code
+                 such as 3D related terms, alphanumeric combinations like D1 or 365bet, and programming syn-
+                   tax such as hash include or namespace. The neuron is specifically tuned to adult platforms that
+                 use combinations of Chinese characters and numerals to evade content filters, while also cap-
+                   turing backend technical elements of streaming websites.
+                 This neuron responds to explicit expressions related to sexual content, with a focus on adult en-
+                   tertainment terminology in the Chinese context, such as ”adult”, ”Category III films”, ”pornog-
+                  raphy”, ”AV”, and ”erotic content”, often combined with indicators of free access like ”free”
+                and ”online viewing”. It shows strong activation to categories of adult content (e.g., ”domes-
+    17 4828       tic” or ”Chinese-produced”, ”Western”), references to platforms (e.g., ”website”, ”.com”), and
+                     explicit service descriptions (e.g., ”sex”, ”video”, and metaphorical expressions like ”big black
+                     stick”). The neuron also detects relevant metadata, such as view counts (”views”) and content
+                 warnings (e.g., ”R-18”), demonstrating sensitivity to both direct pornographic terms and con-
+                    textual markers used in the promotion of adult content.
+
+                Table 4: Explanations of three selected porn-website-related neurons.
+
+
+                                                  This further underscores the utility of neuron-level analysis
+                                                         in diagnosing and understanding unintended model behav-
+                                                                iors.
+
+                                                      F. Model Inference Trajectories Supplementary
+                                             Result
+                                  We observed the same inference trajectory in the other three
+                                                   languages(Figure 16). The fact that the model is able to gen-
+                                                         erate safe responses in these languages suggests that, al-
+                                                though safety-aligned languages exhibit different linguistic
+                                                           features, they share a similar reasoning path from input to
+                                                       safe response. Deviating from this path may lead to risky
+                                                     outputs from the model.
+
+                                        G. Demonstration of Our Safety Neuron Database         (a) Click a random token.
+                                               Interaction Website Application
+                                                   Figure 17 demonstrates our interactive website page, which
+                                                         will be open-sourced along with the toolkit. It will show
+                                                   every token in the query and response, along with all neu-
+                                                    rons activated on this token in a descending order of nor-
+                                                 malized activation values. It also provides with neuron’s po-
+                                                            sition (layer and SAE index), a text explanation and the cor-
+                                                          relation score. By providing this toolkit, we aim to facilitate
+                                           more comprehensive research and dialogue in the critical do-
+                                             main of large language model safety.
+
+  (b) Click a pornography-related token.
+
+Figure 17: Interactive Demo Webpage
