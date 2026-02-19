@@ -70,9 +70,9 @@ DISPLAY_NAMES: dict[str, str] = {
     "sonnet": "Sonnet 4",
     "openrouter-deepseek-r1": "DS-R1",
     "openrouter-deepseek-v3": "DS-V3",
-    "openrouter-gemini": "Gemini",
-    "openrouter-mistral": "Mistral",
-    "openrouter-qwen": "Qwen",
+    "openrouter-gemini": "Gemini 3F",
+    "openrouter-mistral": "Mistral L",
+    "openrouter-qwen": "Qwen 3",
 }
 
 SUPPLEMENTARY_ANNOTATORS = {"openrouter-deepseek-r1"}
