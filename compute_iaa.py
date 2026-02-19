@@ -66,7 +66,7 @@ CALIBRATION_IDS = {"2211.00593", "2202.05262", "2301.05217", "2409.04478", "2601
 
 DISPLAY_NAMES: dict[str, str] = {
     "claude": "Claude",
-    "gpt5": "GPT-5",
+    "gpt5": "GPT-5.2",
     "sonnet": "Sonnet",
     "openrouter-deepseek-r1": "DS-R1",
     "openrouter-deepseek-v3": "DS-V3",
