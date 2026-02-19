@@ -6,7 +6,7 @@ Automated pipeline for detecting overclaiming in mechanistic interpretability pa
 
 This repository contains the code and data for the pilot study in:
 
-> **Causal Foundations of Mechanistic Interpretability: A Position Paper**
+> **Position: Causality is Key for Interpretability Claims to Generalise**
 > *Patrik Reizinger et al.* ([arXiv:2602.16698](https://arxiv.org/abs/2602.16698))
 
 ## Overview
@@ -157,7 +157,7 @@ uv run pytest tests/ -v --tb=short
 
 ```bibtex
 @article{reizinger2026causal,
-  title={Causal Foundations of Mechanistic Interpretability: A Position Paper},
+  title={Position: Causality is Key for Interpretability Claims to Generalise},
   author={Reizinger, Patrik and others},
   journal={arXiv preprint arXiv:2602.16698},
   year={2026}
