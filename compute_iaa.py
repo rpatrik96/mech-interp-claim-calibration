@@ -65,9 +65,9 @@ log = logging.getLogger(__name__)
 CALIBRATION_IDS = {"2211.00593", "2202.05262", "2301.05217", "2409.04478", "2601.11516"}
 
 DISPLAY_NAMES: dict[str, str] = {
-    "claude": "Claude",
+    "claude": "Opus 4.5",
     "gpt5": "GPT-5.2",
-    "sonnet": "Sonnet",
+    "sonnet": "Sonnet 4",
     "openrouter-deepseek-r1": "DS-R1",
     "openrouter-deepseek-v3": "DS-V3",
     "openrouter-gemini": "Gemini",
