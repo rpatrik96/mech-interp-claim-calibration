@@ -7,7 +7,7 @@ Automated pipeline for detecting overclaiming in mechanistic interpretability pa
 This repository contains the code and data for the pilot study in:
 
 > **Position: Causality is Key for Interpretability Claims to Generalise**
-> *Patrik Reizinger et al.* ([arXiv:2602.16698](https://arxiv.org/abs/2602.16698))
+> *Shruti Joshi, Aaron Mueller, David Klindt, Wieland Brendel, Patrik Reizinger\*, Dhanya Sridhar\** ([arXiv:2602.16698](https://arxiv.org/abs/2602.16698))
 
 ## Overview
 
@@ -158,7 +158,7 @@ uv run pytest tests/ -v --tb=short
 ```bibtex
 @article{reizinger2026causal,
   title={Position: Causality is Key for Interpretability Claims to Generalise},
-  author={Reizinger, Patrik and others},
+  author={Joshi, Shruti and Mueller, Aaron and Klindt, David and Brendel, Wieland and Reizinger, Patrik and Sridhar, Dhanya},
   journal={arXiv preprint arXiv:2602.16698},
   year={2026}
 }
